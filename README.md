@@ -58,13 +58,16 @@
 - ✅ Responsywne szablony CSS
 - ✅ Meta boxes z pełną konfiguracją produktów
 
-### Google Apps Script
-- ✅ Niestandardowe menu w Google Sheets
-- ✅ Automatyczny import produktów do WordPress
-- ✅ Synchronizacja dwukierunkowa
-- ✅ Logi wszystkich operacji
-- ✅ Analytics i statystyki
-- ✅ Web App endpoint dla webhooków
+### Google Apps Script - NOWA WERSJA! 🎉
+- ✅ **Automatyczna instalacja jednym skryptem** - setup.gs
+- ✅ **Zarządzanie wieloma stronami WordPress**
+- ✅ **Automatyczna instalacja Divi theme**
+- ✅ **Instalacja WAAS Product Manager plugin**
+- ✅ **Import i synchronizacja produktów Amazon**
+- ✅ **Automatyczne generowanie treści afiliacyjnych**
+- ✅ **System kolejki zadań (Task Queue)**
+- ✅ **Pełne logowanie operacji**
+- ✅ **Intuicyjne menu i dialogi**
 
 ### Amazon PA-API Features
 - ✅ GetItems - pobieranie pojedynczego produktu
@@ -236,26 +239,49 @@ LUKO-WAAS/
 3. W WordPress Admin → **Wtyczki** → Znajdź "LUKO-WAAS Product Manager"
 4. Kliknij **Aktywuj**
 
-### Krok 2: Skonfiguruj Google Sheets
+### Krok 2: Skonfiguruj Google Apps Script (Automatyczna Instalacja) ⚡
 
-1. Przejdź do [Google Sheets](https://sheets.google.com)
-2. Utwórz nowy arkusz, nazwij: **`AmazonAffiliateProductsDashboard`**
-3. Kliknij **Rozszerzenia** → **Apps Script**
-4. Skopiuj kod z `google-apps-script/Code.gs`
-5. Wklej do edytora Apps Script
-6. Zapisz projekt (Ctrl+S), nazwij: **WAAS Amazon Products Manager**
-7. Przejdź do **⚙️ Ustawienia projektu**
-8. Zaznacz **"Pokaż plik „appsscript.json" w edytorze"**
-9. Wróć do edytora, zastąp `appsscript.json` kodem z `google-apps-script/appsscript.json`
-10. Zapisz wszystko
+#### **NOWA METODA - Instalacja w 5 minut!**
 
-### Krok 3: Uruchom Konfigurację Początkową
+1. Wejdź na: https://script.google.com
+2. Kliknij: **Nowy projekt**
+3. Skopiuj zawartość pliku `google-apps-script/setup.gs`
+4. Wklej do edytora i zapisz (Ctrl+S)
+5. Wybierz funkcję: `installWAAS`
+6. Kliknij: **Uruchom** ▶️
+7. Autoryzuj dostęp (zgody Google)
+8. Poczekaj 30-60 sekund - gotowe! 🎉
 
-1. Odśwież Google Sheets (F5)
-2. Pojawi się menu **🚀 WAAS Amazon Products**
-3. Kliknij **WAAS Amazon Products** → **⚙️ Konfiguracja początkowa**
-4. Zaakceptuj uprawnienia (Google poprosi o dostęp)
-5. Poczekaj na **✅ Konfiguracja zakończona!**
+**Skrypt automatycznie:**
+- Utworzy arkusz Google Sheets ze wszystkimi kartami
+- Skonfiguruje kolumny i strukturę
+- Zainstaluje wszystkie moduły systemu
+- Utworzy menu WAAS
+
+**Szczegółowa instrukcja:** Zobacz `google-apps-script/README.md`
+
+**Szybki start:** Zobacz `google-apps-script/INSTALLATION_QUICKSTART.md`
+
+#### **STARA METODA** (dla zaawansowanych)
+Jeśli chcesz ręcznie skonfigurować system, zobacz dokumentację w `google-apps-script/README_GoogleAppsScript.md`
+
+### Krok 3: Skonfiguruj API Keys
+
+Po instalacji dodaj klucze API w Google Apps Script:
+
+1. Kliknij: **⚙️ Project Settings** (lewy panel)
+2. Przewiń do: **Script Properties**
+3. Dodaj właściwości:
+   - `DIVI_API_USERNAME` = `netanaliza`
+   - `DIVI_API_KEY` = `2abad7fcbcffa7ab2cab87d44d31f5b16b8654e4`
+   - `PA_API_ACCESS_KEY` = [Twój klucz Amazon]
+   - `PA_API_SECRET_KEY` = [Twój sekret Amazon]
+   - `PA_API_PARTNER_TAG` = [Twój tag partnera]
+4. Zapisz
+
+### Krok 4: Gotowe!
+
+Otwórz utworzony arkusz i korzystaj z menu **⚡ WAAS**
 
 ---
 
