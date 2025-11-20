@@ -48,21 +48,26 @@ function installWAAS() {
     Logger.log('📋 Spreadsheet URL: ' + spreadsheet.getUrl());
     Logger.log('⚠️ IMPORTANT: Now set your API keys in Script Properties!');
 
-    // Pokazuje URL arkusza
-    SpreadsheetApp.getUi().alert(
-      'Installation Complete!\n\n' +
-      'Spreadsheet URL:\n' + spreadsheet.getUrl() + '\n\n' +
-      'NEXT STEPS:\n' +
-      '1. Open Project Settings (⚙️)\n' +
-      '2. Add Script Properties:\n' +
-      '   - DIVI_API_USERNAME\n' +
-      '   - DIVI_API_KEY\n' +
-      '   - PA_API_ACCESS_KEY\n' +
-      '   - PA_API_SECRET_KEY\n' +
-      '   - PA_API_PARTNER_TAG\n' +
-      '3. Reload the spreadsheet\n' +
-      '4. Use WAAS menu to start!'
-    );
+    // Pokazuje URL arkusza - tylko jeśli UI jest dostępne
+    try {
+      SpreadsheetApp.getUi().alert(
+        'Installation Complete!\n\n' +
+        'Spreadsheet URL:\n' + spreadsheet.getUrl() + '\n\n' +
+        'NEXT STEPS:\n' +
+        '1. Open Project Settings (⚙️)\n' +
+        '2. Add Script Properties:\n' +
+        '   - DIVI_API_USERNAME\n' +
+        '   - DIVI_API_KEY\n' +
+        '   - PA_API_ACCESS_KEY\n' +
+        '   - PA_API_SECRET_KEY\n' +
+        '   - PA_API_PARTNER_TAG\n' +
+        '3. Reload the spreadsheet\n' +
+        '4. Use WAAS menu to start!'
+      );
+    } catch (e) {
+      // UI nie jest dostępne (wywołanie z edytora) - informacje są już w logach
+      Logger.log('ℹ️ Installation info logged above (UI not available in this context)');
+    }
 
     return spreadsheet;
   } catch (error) {
