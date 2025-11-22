@@ -1,0 +1,81 @@
+/*
+ Theme Name:   Divi Child - WAAS
+ Theme URI:    https://github.com/LUKOAI/LUKO-WAAS
+ Description:  Divi child theme with WAAS patronage support and conditional branding
+ Author:       LUKO AI
+ Author URI:   https://github.com/LUKOAI
+ Template:     Divi
+ Version:      1.0.0
+ License:      GPL v2 or later
+ License URI:  https://www.gnu.org/licenses/gpl-2.0.html
+ Text Domain:  divi-child-waas
+*/
+
+/* ==========================================================================
+   Child Theme Styles
+   ========================================================================== */
+
+/* Import parent theme styles */
+@import url("../Divi/style.css");
+
+/* ==========================================================================
+   Patronage Mode Customizations
+   ========================================================================== */
+
+/* Patron Header Branding */
+.waas-patronage-active #main-header {
+    /* Adjust main header when patron branding is shown */
+}
+
+.waas-patronage-active.waas-feature-logo #logo {
+    /* Hide or modify default logo when patron logo is shown */
+}
+
+/* Patron Product Filtering Active */
+.waas-patronage-active.waas-feature-exclusive_products .products-grid {
+    /* Customize product grid for patron-only products */
+}
+
+/* ==========================================================================
+   Product Display Customizations
+   ========================================================================== */
+
+/* Amazon Product Single Page */
+.single-waas_product .entry-content {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.waas-product-single-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    margin: 40px 0;
+}
+
+.waas-product-image-gallery {
+    position: sticky;
+    top: 100px;
+}
+
+.waas-product-details {
+    /* Product details column */
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .waas-product-single-container {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+
+    .waas-product-image-gallery {
+        position: static;
+    }
+}
+
+/* ==========================================================================
+   Custom Styles
+   ========================================================================== */
+
+/* Add your custom styles here */

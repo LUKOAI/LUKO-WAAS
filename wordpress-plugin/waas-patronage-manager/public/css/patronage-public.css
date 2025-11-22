@@ -1,0 +1,262 @@
+/**
+ * WAAS Patronage Manager - Public Styles
+ *
+ * @package WAAS_Patronage_Manager
+ */
+
+/* ==========================================================================
+   Patron Header Branding
+   ========================================================================== */
+
+.waas-patron-header-branding {
+    background: #f8f9fa;
+    border-bottom: 2px solid #e9ecef;
+    padding: 15px 0;
+    text-align: center;
+}
+
+.waas-patron-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+.waas-patron-logo {
+    max-width: 200px;
+    max-height: 60px;
+    height: auto;
+    vertical-align: middle;
+    margin-right: 15px;
+}
+
+.waas-patron-powered-by {
+    display: inline-block;
+    vertical-align: middle;
+    font-size: 14px;
+    color: #6c757d;
+}
+
+.waas-patron-powered-by strong {
+    color: #212529;
+    font-weight: 600;
+}
+
+/* ==========================================================================
+   Patron Footer Branding
+   ========================================================================== */
+
+.waas-patron-footer-branding {
+    background: #343a40;
+    color: #fff;
+    padding: 40px 0 30px;
+    margin-top: 60px;
+}
+
+.waas-patron-footer-branding .waas-patron-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+}
+
+/* Brand Story */
+.waas-patron-brand-story {
+    padding-right: 20px;
+}
+
+.waas-patron-brand-story h3 {
+    color: #fff;
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 15px 0;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #6c757d;
+}
+
+.waas-patron-brand-story p {
+    color: #adb5bd;
+    line-height: 1.7;
+    margin-bottom: 12px;
+}
+
+/* Contact Info */
+.waas-patron-contact-info {
+    padding-left: 20px;
+}
+
+.waas-patron-contact-info h4 {
+    color: #fff;
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 15px 0;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #6c757d;
+}
+
+.waas-patron-contact-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.waas-patron-contact-list li {
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.waas-patron-contact-list .dashicons {
+    color: #6c757d;
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+}
+
+.waas-patron-contact-list a {
+    color: #adb5bd;
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.waas-patron-contact-list a:hover {
+    color: #fff;
+}
+
+/* ==========================================================================
+   Patron Info Shortcode
+   ========================================================================== */
+
+.waas-patron-info-box {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 30px;
+    margin: 20px 0;
+    text-align: center;
+}
+
+.waas-patron-info-logo {
+    margin-bottom: 20px;
+}
+
+.waas-patron-info-logo img {
+    max-width: 250px;
+    max-height: 100px;
+    height: auto;
+}
+
+.waas-patron-info-brand-name {
+    color: #212529;
+    font-size: 24px;
+    font-weight: 700;
+    margin: 0 0 15px 0;
+}
+
+.waas-patron-info-brand-story {
+    color: #495057;
+    line-height: 1.7;
+    margin: 0 0 20px 0;
+    text-align: left;
+}
+
+.waas-patron-info-email,
+.waas-patron-info-phone,
+.waas-patron-info-website {
+    color: #495057;
+    margin: 8px 0;
+    text-align: left;
+}
+
+.waas-patron-info-box a {
+    color: #0073aa;
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.waas-patron-info-box a:hover {
+    color: #005177;
+    text-decoration: underline;
+}
+
+/* ==========================================================================
+   Responsive Design
+   ========================================================================== */
+
+/* Tablet */
+@media (max-width: 768px) {
+    .waas-patron-footer-branding .waas-patron-container {
+        grid-template-columns: 1fr;
+        gap: 30px;
+    }
+
+    .waas-patron-brand-story,
+    .waas-patron-contact-info {
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    .waas-patron-logo {
+        display: block;
+        margin: 0 auto 10px;
+    }
+
+    .waas-patron-powered-by {
+        display: block;
+    }
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+    .waas-patron-header-branding {
+        padding: 10px 0;
+    }
+
+    .waas-patron-logo {
+        max-width: 150px;
+        max-height: 40px;
+    }
+
+    .waas-patron-powered-by {
+        font-size: 12px;
+    }
+
+    .waas-patron-footer-branding {
+        padding: 30px 0 20px;
+        margin-top: 40px;
+    }
+
+    .waas-patron-brand-story h3,
+    .waas-patron-contact-info h4 {
+        font-size: 16px;
+    }
+
+    .waas-patron-info-box {
+        padding: 20px;
+    }
+
+    .waas-patron-info-brand-name {
+        font-size: 20px;
+    }
+}
+
+/* ==========================================================================
+   Body Class Utilities
+   ========================================================================== */
+
+/* When patronage is active, you can use these body classes to customize: */
+/* .waas-patronage-active - when patronage is active */
+/* .waas-patronage-inactive - when patronage is inactive */
+/* .waas-feature-logo - when logo feature is enabled */
+/* .waas-feature-contact - when contact feature is enabled */
+/* .waas-feature-brand_story - when brand story feature is enabled */
+/* .waas-feature-exclusive_products - when exclusive products feature is enabled */
+
+/* Example: Hide regular site logo when patron logo is shown */
+.waas-patronage-active.waas-feature-logo .site-logo {
+    /* Your custom styles here */
+}
+
+/* Example: Adjust layout when patron branding is active */
+.waas-patronage-active .site-header {
+    /* Your custom styles here */
+}

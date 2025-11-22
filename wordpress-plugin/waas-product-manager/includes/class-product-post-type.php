@@ -223,6 +223,15 @@ class WAAS_Product_Post_Type {
                 <span class="description"><?php _e('One feature per line (bullet points)', 'waas-pm'); ?></span>
             </p>
 
+            <p>
+                <label for="waas_seller_id"><strong><?php _e('Seller ID', 'waas-pm'); ?></strong></label><br>
+                <?php
+                $seller_id = get_post_meta($post->ID, '_waas_seller_id', true);
+                ?>
+                <input type="text" id="waas_seller_id" name="waas_seller_id" value="<?php echo esc_attr($seller_id); ?>" class="widefat" />
+                <span class="description"><?php _e('Amazon Seller ID or UUID (used for patronage filtering)', 'waas-pm'); ?></span>
+            </p>
+
             <?php if ($asin): ?>
             <p>
                 <button type="button" class="button button-secondary" id="waas_fetch_from_amazon">
@@ -357,6 +366,7 @@ class WAAS_Product_Post_Type {
             'waas_price' => 'sanitize_text_field',
             'waas_savings' => 'sanitize_text_field',
             'waas_availability' => 'sanitize_text_field',
+            'waas_seller_id' => 'sanitize_text_field',
         );
 
         foreach ($fields as $field => $sanitize_callback) {
