@@ -77,6 +77,9 @@ class WAAS_Product_Importer {
             wp_set_object_terms($post_id, $options['category'], 'product_category');
         }
 
+        // Fire action hook for integrations (e.g., WooCommerce sync)
+        do_action('waas_product_imported', $post_id, $product_data);
+
         return $post_id;
     }
 
@@ -246,6 +249,9 @@ class WAAS_Product_Importer {
         // Update sync timestamp
         update_post_meta($post_id, '_waas_last_sync', current_time('mysql'));
         update_post_meta($post_id, '_waas_sync_status', 'success');
+
+        // Fire action hook for integrations (e.g., WooCommerce sync)
+        do_action('waas_product_updated', $post_id, $product_data);
 
         return $post_id;
     }

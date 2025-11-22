@@ -357,6 +357,176 @@ function downloadPluginFromGitHub() {
 }
 
 // =============================================================================
+// INSTALACJA WOOCOMMERCE
+// =============================================================================
+
+function installWooCommerceOnSite(siteId) {
+  try {
+    const site = getSiteById(siteId);
+    if (!site) {
+      throw new Error(`Site not found: ${siteId}`);
+    }
+
+    logInfo('SiteManager', `Installing WooCommerce on site: ${site.name}`, siteId);
+
+    // 1. Zainstaluj WooCommerce z WordPress.org repository
+    const installed = installWooCommercePlugin(site);
+    if (!installed) {
+      throw new Error('Failed to install WooCommerce');
+    }
+
+    // 2. Aktywuj WooCommerce
+    const activated = activatePluginOnWordPress(site, 'woocommerce');
+    if (!activated) {
+      throw new Error('Failed to activate WooCommerce');
+    }
+
+    // 3. Konfiguruj podstawowe ustawienia WooCommerce
+    const configured = configureWooCommerce(site);
+    if (!configured) {
+      logWarning('SiteManager', 'WooCommerce installed but configuration may need manual review', siteId);
+    }
+
+    // 4. Aktualizuj status w Google Sheets (dodamy nową kolumnę)
+    updateSiteStatus(siteId, 'Active', {
+      notes: 'WooCommerce installed and activated'
+    });
+
+    logSuccess('SiteManager', `WooCommerce installed successfully on: ${site.name}`, siteId);
+
+    SpreadsheetApp.getUi().alert(
+      'Success',
+      `WooCommerce has been installed and activated on ${site.name}`,
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+
+    return true;
+  } catch (error) {
+    handleError(error, 'SiteManager.installWooCommerceOnSite', siteId);
+    return false;
+  }
+}
+
+function installWooCommercePlugin(site) {
+  try {
+    logInfo('WooCommerce', 'Installing WooCommerce plugin from WordPress.org');
+
+    // Użyj WordPress REST API do instalacji pluginu z repozytorium
+    const endpoint = `${site.wpUrl}/wp-json/wp/v2/plugins`;
+    const auth = Utilities.base64Encode(`${site.username}:${site.password}`);
+
+    const payload = {
+      slug: 'woocommerce',
+      status: 'active'
+    };
+
+    const options = {
+      method: 'post',
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/json'
+      },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    };
+
+    const response = UrlFetchApp.fetch(endpoint, options);
+    const statusCode = response.getResponseCode();
+
+    if (statusCode === 201 || statusCode === 200) {
+      logSuccess('WooCommerce', 'WooCommerce plugin installed');
+      return true;
+    } else {
+      logError('WooCommerce', `Installation failed with status: ${statusCode}`);
+      logError('WooCommerce', `Response: ${response.getContentText()}`);
+      return false;
+    }
+  } catch (error) {
+    logError('WooCommerce', `Failed to install WooCommerce: ${error.message}`);
+    return false;
+  }
+}
+
+function configureWooCommerce(site) {
+  try {
+    logInfo('WooCommerce', 'Configuring WooCommerce basic settings');
+
+    // Podstawowa konfiguracja WooCommerce przez REST API
+    const endpoint = `${site.wpUrl}/wp-json/wc/v3/settings/general/batch`;
+    const auth = Utilities.base64Encode(`${site.username}:${site.password}`);
+
+    // Podstawowe ustawienia dla affiliate site
+    const settings = {
+      update: [
+        {
+          id: 'woocommerce_store_address',
+          value: ''
+        },
+        {
+          id: 'woocommerce_currency',
+          value: 'EUR'
+        },
+        {
+          id: 'woocommerce_enable_guest_checkout',
+          value: 'no'  // Dla affiliate nie potrzebujemy checkout
+        }
+      ]
+    };
+
+    const options = {
+      method: 'post',
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/json'
+      },
+      payload: JSON.stringify(settings),
+      muteHttpExceptions: true
+    };
+
+    const response = UrlFetchApp.fetch(endpoint, options);
+    const statusCode = response.getResponseCode();
+
+    if (statusCode === 200) {
+      logSuccess('WooCommerce', 'WooCommerce configured');
+      return true;
+    } else {
+      logWarning('WooCommerce', `Configuration returned status: ${statusCode}`);
+      return false;
+    }
+  } catch (error) {
+    logWarning('WooCommerce', `Configuration may need manual review: ${error.message}`);
+    return false;
+  }
+}
+
+function checkWooCommerceInstallation(site) {
+  try {
+    // Sprawdź czy WooCommerce jest aktywny
+    const response = makeHttpRequest(
+      `${site.wpUrl}/wp-json/wp/v2/plugins`,
+      {
+        headers: {
+          'Authorization': 'Basic ' + Utilities.base64Encode(site.username + ':' + site.password)
+        }
+      }
+    );
+
+    if (response.success && response.data) {
+      const plugins = response.data;
+      return plugins.some(plugin =>
+        plugin.plugin.includes('woocommerce') &&
+        plugin.status === 'active'
+      );
+    }
+
+    return false;
+  } catch (error) {
+    logWarning('SiteManager', `Could not check WooCommerce installation: ${error.message}`, site.id);
+    return false;
+  }
+}
+
+// =============================================================================
 // HELPERS
 // =============================================================================
 

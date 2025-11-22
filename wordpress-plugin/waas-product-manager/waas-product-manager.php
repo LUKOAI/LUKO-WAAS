@@ -69,6 +69,11 @@ class WAAS_Product_Manager {
         require_once WAAS_PM_PLUGIN_DIR . 'includes/class-rest-api.php';
         require_once WAAS_PM_PLUGIN_DIR . 'includes/class-product-importer.php';
 
+        // WooCommerce integration (only if WooCommerce is active)
+        if (class_exists('WooCommerce')) {
+            require_once WAAS_PM_PLUGIN_DIR . 'includes/class-woocommerce-sync.php';
+        }
+
         // Admin functionality
         if (is_admin()) {
             require_once WAAS_PM_PLUGIN_DIR . 'admin/class-admin-dashboard.php';
