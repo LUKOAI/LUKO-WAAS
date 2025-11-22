@@ -1,0 +1,238 @@
+# LUKO-WAAS 2.0 PROJECT CONTEXT
+
+## WHAT IS THIS PROJECT?
+LUKO-WAAS (WordPress Affiliate Automation System) is a B2B SaaS platform that creates niche-focused affiliate websites, ranks them in search engines, then monetizes through:
+1. **Recurring subscriptions** from Amazon sellers (€50/month or €400/year)
+2. **Amazon Associates commissions** (upside, not guaranteed)
+
+## BUSINESS MODEL - COMPLETE FUNNEL
+
+### PHASE 1: Site Creation (Our Investment)
+1. **Research**: Find problems/needs with good Amazon products
+2. **Competition Analysis**: Check keyword competition, SERP saturation
+3. **Product Selection**: Choose specific products that solve the problem
+4. **Content Planning**: Guides, comparisons, checklists, Q&A, calculators
+5. **Site Build**: Create subdomain (keyword.lk24.shop), deploy WordPress/Divi
+6. **Content Creation**: AI-generated content (Claude API)
+7. **Traffic Building**: SEO, social media channels, other traffic sources
+
+### PHASE 2: Validation & Seller Outreach
+8. **Initial Success Metrics**: Rankings, first Amazon orders via our affiliate tags
+9. **Seller Identification**: Use scrapers + manual research for seller contacts
+10. **Outreach**: 
+    - **Existing clients**: Personal contact (manual)
+    - **Poland/Germany**: Personal contact if needed
+    - **Other countries**: AI cold calling (automated)
+
+### PHASE 3: Conversion to Patronage
+11. **Sales Funnel**:
+    - AI call → qualification
+    - Automated webinar (EverWebinar) - 10-15 min presentation
+    - Benefits explanation, pricing, urgency
+    - Payment page (Stripe/PayPal/Kartra)
+    - Automated invoice & onboarding
+
+### PHASE 4: Subscription Management
+12. **When Seller Pays** (€50/month or €400/year):
+    - ✅ Logo added
+    - ✅ Contact information displayed
+    - ✅ Brand story/about section
+    - ✅ Only their products (competitors removed)
+    - ✅ Their content materials used
+    - ✅ Coupon distribution capability
+    - ✅ Access to client dashboard (stats)
+
+13. **When Seller Doesn't Pay** (or subscription expires):
+    - ❌ Remove logo, contact, brand info
+    - ❌ Show multiple competing products
+    - ✅ Site continues generating Amazon commissions for us
+
+### PHASE 5: Client Dashboard & Reporting
+14. **What Client Sees** (simple dashboard):
+    - Clicks on their products (tracked via special Amazon tags)
+    - Estimated orders from Amazon Reports (manual weekly upload)
+    - Basic traffic metrics
+    - Subscription status & renewal date
+
+## TECH STACK
+
+### Core Platform
+- **Hosting**: Hostinger Business Cloud (100 subdomains)
+- **CMS**: WordPress + Divi Builder + WooCommerce
+- **Content**: Claude 3.5 Sonnet API
+- **Product Data**: Amazon PA-API 5.0
+- **Automation**: Google Cloud Functions + Apps Script
+
+### B2B SaaS Components
+- **CRM**: Google Sheets + BigQuery (seller database)
+- **Payments**: Stripe, PayPal, Kartra (flexible)
+- **Sales Funnel**: EverWebinar (webinars), Kartra (email automation)
+- **AI Calling**: Vapi.ai or Bland.ai (cold outreach)
+- **Scraping**: Custom scripts for seller contact discovery
+- **Client Portal**: Custom WordPress dashboard per seller
+- **Analytics**: Google Analytics 4 + custom tracking
+
+### Infrastructure
+- **Storage**: AWS S3 + CloudFront
+- **Database**: PostgreSQL (site data) + BigQuery (analytics)
+- **Monitoring**: Custom dashboard + alert system
+- **Crisis Management**: Status page + automated notifications
+
+## PROJECT STRUCTURE
+```
+luko-waas-2.0/
+├── core-platform/              # Original WAAS (site deployment)
+│   ├── cloud-functions/
+│   ├── wordpress-plugin/
+│   ├── scripts/
+│   └── templates/
+├── b2b-saas/                   # New B2B layer
+│   ├── seller-crm/            # Google Sheets + BigQuery integration
+│   ├── payment-integration/    # Stripe, PayPal, Kartra webhooks
+│   ├── client-dashboard/      # WordPress custom dashboard plugin
+│   ├── sales-funnel/          # EverWebinar scripts, AI calling
+│   ├── patronage-manager/     # Auto-enable/disable seller features
+│   └── crisis-management/     # Alert system, status pages
+├── research-tools/             # Site research automation
+│   ├── keyword-research/
+│   ├── competition-analysis/
+│   └── product-selection/
+├── outreach-automation/        # Seller contact & conversion
+│   ├── contact-scrapers/
+│   ├── ai-calling-scripts/
+│   └── webinar-automation/
+└── monitoring/                 # Central control & alerts
+    ├── site-health-monitor/
+    ├── subscription-tracker/
+    └── revenue-dashboard/
+```
+
+## KEY CONSTRAINTS & DECISIONS
+
+### Business Model
+- **Revenue Mix**: Subscriptions (base) + Amazon commissions (upside)
+- **Subscription independence**: Client pays same regardless of results
+- **Amazon risk**: 3-month payment delay, can terminate anytime
+- **Pricing**: €50/month or €400/year per country
+- **Multi-country**: €100/month flat for 3+ countries
+
+### Technical Constraints
+- **Amazon Associates**: No API for affiliate results (manual weekly report upload)
+- **Dashboard complexity**: Start simple (clicks + orders), expand later
+- **CRM**: Google Sheets only (no Pipedrive, no HubSpot)
+- **Payments**: Flexible (Stripe, PayPal, Kartra - whatever works)
+- **Outreach**: 90%+ automation (AI calling) except existing clients
+
+### Automation Levels
+- **Site creation**: 95% automated (2 min subdomain creation manual)
+- **Content generation**: 100% AI (Claude API)
+- **Seller outreach**: 90% automated (AI calling + webinar)
+- **Payment processing**: 100% automated (webhooks)
+- **Patronage activation**: 100% automated (on payment confirmation)
+- **Client reporting**: Semi-automated (weekly manual report upload)
+
+## CRITICAL WORKFLOWS
+
+### Workflow 1: New Site Launch
+```
+Research → Competition Check → Product Selection → Site Build → 
+Content Generation → Traffic Building → Ranking → First Orders → 
+Seller Contact
+```
+
+### Workflow 2: Seller Onboarding (Automated)
+```
+AI Cold Call → Qualification → EverWebinar Invitation → 
+Webinar Attended → Payment Page → Payment Received → 
+Invoice Generated → Patronage Activated → Dashboard Access Sent
+```
+
+### Workflow 3: Subscription Management
+```
+Payment Received → Enable Patronage Features (logo, contact, exclusive products) →
+Client Dashboard Access → Weekly Report Update → Renewal Reminder (if monthly)
+
+Subscription Expired → Remove Patronage Features → 
+Revert to Multi-Product Display → Site Continues Earning Commissions
+```
+
+### Workflow 4: Crisis Management
+```
+Issue Detected → Automated Alert → Site Temporarily Disabled (maintenance page) →
+Client Notification Email → Internal Dashboard Alert → Manual Review →
+Fix Applied → Site Re-enabled → Post-mortem Report
+```
+
+## CURRENT STATUS
+- ✅ **Phase 1 Complete**: Core WAAS platform (site deployment automation)
+- 🔄 **Phase 2 In Progress**: B2B SaaS layer (CRM, payments, dashboards)
+- ⏳ **Phase 3 Planned**: Sales automation (AI calling, webinars)
+- ⏳ **Phase 4 Planned**: Full monitoring & crisis management
+
+## HOW TO HELP ME
+
+### When I Ask About Site Creation
+- Focus on automation, scale (100+ sites)
+- Consider Divi template flexibility (patronage vs non-patronage modes)
+- Think about content quality (SEO, conversions)
+
+### When I Ask About B2B/SaaS Features
+- Prioritize simplicity (we're starting simple)
+- Consider seller perspective (what adds value for €50/month?)
+- Think about automation (reduce manual work)
+
+### When I Ask About CRM/Sales
+- Remember: Google Sheets only (no external CRM)
+- Focus on AI calling integration (Vapi, Bland)
+- Consider funnel automation (EverWebinar, Kartra)
+
+### When I Ask About Payments/Subscriptions
+- Flexible payment processors (Stripe, PayPal, Kartra)
+- Webhook-based automation
+- Automatic feature toggling (patronage on/off)
+
+### When I Ask About Client Dashboard
+- Keep it simple: clicks + estimated orders
+- Manual weekly upload of Amazon reports (no API)
+- Easy to understand for non-technical sellers
+
+### When I Ask About Monitoring/Alerts
+- Central dashboard for internal use
+- Automated alerts for critical issues
+- Easy manual override (maintenance mode)
+- Crisis communication templates ready
+
+## SECURITY & COMPLIANCE
+- All credentials in Google Secret Manager
+- Amazon Associates TOS compliance (24h cache, disclosures)
+- GDPR compliance (EU sellers, data privacy)
+- Secure client dashboard (per-seller authentication)
+- Payment security (PCI-compliant processors)
+
+## REVENUE PROJECTIONS
+- **Target**: 100 sites with 30% patronage rate = 30 paying clients
+- **Subscription revenue**: 30 × €50/month = €1,500/month guaranteed
+- **Amazon commissions**: Variable, potentially €500-€5,000/month
+- **Operating costs**: ~€2,000/month
+- **Break-even**: 40 paying clients
+- **Profit at scale**: 100 clients = €5,000-€8,000/month net
+
+## COMMON TASKS YOU'LL HELP WITH
+1. Building patronage toggle system (WordPress)
+2. Creating client dashboard (clicks + orders display)
+3. Integrating payment webhooks (Stripe, PayPal)
+4. Designing Google Sheets CRM structure
+5. Writing AI calling scripts (Vapi, Bland)
+6. Setting up EverWebinar automation
+7. Creating crisis management alert system
+8. Building seller contact scraper
+9. Designing email templates (Kartra)
+10. Creating internal monitoring dashboard
+
+When responding, always:
+- Consider the B2B SaaS model (not just affiliate)
+- Think about seller value proposition
+- Prioritize automation opportunities
+- Keep it simple (MVP first, expand later)
+- Remember Google Sheets is the CRM
+- Consider multi-country/language implications
