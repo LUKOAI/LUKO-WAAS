@@ -386,7 +386,16 @@ function createSettingsSheet(spreadsheet) {
 
 function setupMenusAndTriggers() {
   // Menu zostanie dodane automatycznie przy następnym otwarciu przez onOpen()
-  onOpen();
+  // Sprawdź czy UI jest dostępne przed wywołaniem onOpen()
+  try {
+    SpreadsheetApp.getUi();
+    // UI jest dostępne - możemy wywołać onOpen()
+    onOpen();
+  } catch (e) {
+    // UI nie jest dostępne (uruchomione z edytora)
+    // Menu zostanie utworzone automatycznie przy następnym otwarciu arkusza
+    Logger.log('ℹ️ UI not available - menu will be created on next spreadsheet open');
+  }
 }
 
 function initializeSettings() {
