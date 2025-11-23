@@ -12,14 +12,15 @@
  * 5. Zapisz (Ctrl+S)
  * 6. Uruchom funkcję: installWAAS()
  * 7. Autoryzuj aplikację (zgody Google)
- * 8. Po instalacji ustaw klucze API w Script Properties:
+ * 8. Po instalacji ustaw GLOBALNE klucze API w Script Properties:
  *    Extensions → Apps Script → Project Settings → Script Properties
- *    - DIVI_API_USERNAME = netanaliza
- *    - DIVI_API_KEY = 2abad7fcbcffa7ab2cab87d44d31f5b16b8654e4
- *    - PA_API_ACCESS_KEY = [Twój klucz Amazon]
- *    - PA_API_SECRET_KEY = [Twój secret Amazon]
- *    - PA_API_PARTNER_TAG = [Twój Associate Tag]
+ *    - DIVI_API_USERNAME = netanaliza (same for all sites)
+ *    - PA_API_ACCESS_KEY = [Twój klucz Amazon] (global)
+ *    - PA_API_SECRET_KEY = [Twój secret Amazon] (global)
  *    - HOSTINGER_API_KEY = [Opcjonalnie]
+ *
+ *    ⚠️ WAŻNE: Per-site credentials (Divi API Key, Amazon Associate Tag)
+ *    muszą być ustawione osobno dla każdej strony w zakładce Sites!
  *
  * 9. Przeładuj arkusz (F5)
  * 10. Użyj menu "⚡ WAAS" aby zacząć!
@@ -65,15 +66,17 @@ function installWAAS() {
       '2. Click: Project Settings (⚙️ icon)\n' +
       '3. Scroll to "Script Properties"\n' +
       '4. Click "Add script property"\n' +
-      '5. Add these properties:\n\n' +
+      '5. Add these GLOBAL properties:\n\n' +
       '   DIVI_API_USERNAME = netanaliza\n' +
-      '   DIVI_API_KEY = 2abad7fcbcffa7ab2cab87d44d31f5b16b8654e4\n' +
       '   PA_API_ACCESS_KEY = [Your Amazon Key]\n' +
-      '   PA_API_SECRET_KEY = [Your Amazon Secret]\n' +
-      '   PA_API_PARTNER_TAG = [Your Associate Tag]\n\n' +
+      '   PA_API_SECRET_KEY = [Your Amazon Secret]\n\n' +
       '6. Click "Save script properties"\n' +
       '7. Reload this spreadsheet (F5)\n' +
-      '8. Use "⚡ WAAS" menu to start!',
+      '8. Go to "Sites" sheet and add your sites\n' +
+      '   ⚠️ IMPORTANT: Each site needs its own:\n' +
+      '   - Divi API Key (get from Elegant Themes)\n' +
+      '   - Amazon Associate Tag\n\n' +
+      '9. Use "⚡ WAAS" menu to start!',
       ui.ButtonSet.OK
     );
 
@@ -124,10 +127,21 @@ function createSitesSheet(spreadsheet) {
 
   sheet = spreadsheet.insertSheet('Sites');
 
+  // POPRAWIONA STRUKTURA - per-site Divi API Keys!
   const headers = [
-    'ID', 'Site Name', 'Domain', 'WordPress URL', 'Admin Username',
-    'Admin Password', 'Status', 'Divi Installed', 'Plugin Installed',
-    'Last Check', 'Created Date', 'Notes'
+    'ID',                    // A
+    'Site Name',             // B
+    'Domain',                // C
+    'WordPress URL',         // D
+    'Admin Username',        // E
+    'Admin Password',        // F
+    'WP API Key',            // G - NOWA KOLUMNA!
+    'Divi API Key',          // H - NOWA KOLUMNA! (UNIKALNY dla każdej strony)
+    'Amazon Associate Tag',  // I - NOWA KOLUMNA!
+    'Status',                // J
+    'Divi Installed',        // K
+    'Plugin Installed',      // L
+    'Last Check'             // M
   ];
 
   const headerRange = sheet.getRange(1, 1, 1, headers.length);
@@ -136,20 +150,38 @@ function createSitesSheet(spreadsheet) {
   headerRange.setBackground('#4285f4');
   headerRange.setFontColor('#ffffff');
 
-  sheet.setColumnWidths(1, 1, 80);    // ID
+  // Szerokości kolumn
+  sheet.setColumnWidths(1, 1, 50);    // ID
   sheet.setColumnWidths(2, 1, 200);   // Site Name
   sheet.setColumnWidths(3, 1, 250);   // Domain
-  sheet.setColumnWidths(4, 1, 250);   // WordPress URL
+  sheet.setColumnWidths(4, 1, 300);   // WordPress URL
   sheet.setColumnWidths(5, 1, 150);   // Admin Username
   sheet.setColumnWidths(6, 1, 150);   // Admin Password
-  sheet.setColumnWidths(7, 1, 100);   // Status
-  sheet.setColumnWidths(8, 1, 120);   // Divi Installed
-  sheet.setColumnWidths(9, 1, 120);   // Plugin Installed
-  sheet.setColumnWidths(10, 1, 150);  // Last Check
-  sheet.setColumnWidths(11, 1, 120);  // Created Date
-  sheet.setColumnWidths(12, 1, 300);  // Notes
+  sheet.setColumnWidths(7, 1, 250);   // WP API Key
+  sheet.setColumnWidths(8, 1, 350);   // Divi API Key (40 chars hex)
+  sheet.setColumnWidths(9, 1, 200);   // Amazon Associate Tag
+  sheet.setColumnWidths(10, 1, 100);  // Status
+  sheet.setColumnWidths(11, 1, 100);  // Divi Installed
+  sheet.setColumnWidths(12, 1, 120);  // Plugin Installed
+  sheet.setColumnWidths(13, 1, 180);  // Last Check
 
   sheet.setFrozenRows(1);
+
+  // Walidacja dla kolumny Status (J)
+  const statusRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['pending', 'deploying', 'active', 'maintenance', 'error'], true)
+    .setAllowInvalid(false)
+    .build();
+  sheet.getRange('J2:J1000').setDataValidation(statusRule);
+
+  // Walidacja dla kolumn boolean (K, L)
+  const booleanRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['TRUE', 'FALSE'], true)
+    .setAllowInvalid(false)
+    .build();
+  sheet.getRange('K2:L1000').setDataValidation(booleanRule);
+
+  Logger.log('✅ Sites sheet created with per-site Divi API Key structure');
 
   return sheet;
 }
@@ -280,7 +312,7 @@ function createSettingsSheet(spreadsheet) {
 
   sheet = spreadsheet.insertSheet('Settings');
 
-  const headers = ['Setting Key', 'Setting Value', 'Description', 'Last Updated'];
+  const headers = ['Setting Key', 'Setting Value', 'Description'];
 
   const headerRange = sheet.getRange(1, 1, 1, headers.length);
   headerRange.setValues([headers]);
@@ -290,25 +322,30 @@ function createSettingsSheet(spreadsheet) {
 
   sheet.setColumnWidths(1, 1, 250);   // Setting Key
   sheet.setColumnWidths(2, 1, 300);   // Setting Value
-  sheet.setColumnWidths(3, 1, 400);   // Description
-  sheet.setColumnWidths(4, 1, 150);   // Last Updated
+  sheet.setColumnWidths(3, 1, 500);   // Description
 
   sheet.setFrozenRows(1);
 
-  // Domyślne ustawienia
+  // POPRAWIONE: TYLKO GLOBALNE PARAMETRY SYSTEMOWE!
+  // Per-site ustawienia (Divi API Key, Amazon Tag) są w zakładce Sites!
   const defaultSettings = [
-    ['auto_publish', 'false', 'Automatically publish content', new Date()],
-    ['content_generation_enabled', 'true', 'Enable AI content generation', new Date()],
-    ['max_posts_per_day', '5', 'Maximum posts to publish per day', new Date()],
-    ['default_post_status', 'draft', 'Default status for new posts (draft/publish)', new Date()],
-    ['error_notification_email', '', 'Email for error notifications', new Date()],
-    ['error_notifications_enabled', 'true', 'Send email notifications on errors', new Date()],
-    ['task_retry_attempts', '3', 'Number of retry attempts for failed tasks', new Date()],
-    ['product_sync_interval', '24', 'Hours between product data syncs', new Date()],
-    ['divi_default_template', '', 'Default Divi layout template ID', new Date()]
+    ['divi_api_username', 'netanaliza', 'Elegant Themes username (same for all sites)'],
+    ['hostinger_ssh_host', 'ssh.lk24.shop', 'Hostinger SSH host'],
+    ['hostinger_ssh_port', '65002', 'Hostinger SSH port'],
+    ['hostinger_ssh_username', '', 'Hostinger SSH username (FILL IN!)'],
+    ['system_notification_email', 'netanalizaltd@gmail.com', 'System-wide notification email'],
+    ['max_concurrent_deployments', '3', 'Max simultaneous site deployments'],
+    ['health_check_interval_hours', '24', 'Hours between automatic health checks'],
+    ['deployment_script_version', '1.0.0', 'Current deployment script version'],
+    ['', '', '⚠️ IMPORTANT: Amazon PA-API credentials should be in Script Properties!'],
+    ['', '', '⚠️ Go to: Project Settings → Script Properties → Add:'],
+    ['', '', '   PA_API_ACCESS_KEY, PA_API_SECRET_KEY'],
+    ['', '', '⚠️ Per-site settings (Divi API Key, Amazon Associate Tag) are in Sites sheet!']
   ];
 
-  sheet.getRange(2, 1, defaultSettings.length, 4).setValues(defaultSettings);
+  sheet.getRange(2, 1, defaultSettings.length, 3).setValues(defaultSettings);
+
+  Logger.log('✅ Settings sheet created with global parameters only');
 
   return sheet;
 }
@@ -323,14 +360,16 @@ function setupMenusAndTriggers() {
 }
 
 function initializeSettings() {
+  Logger.log('🔧 Initializing global settings...');
+
   const scriptProperties = PropertiesService.getScriptProperties();
 
+  // POPRAWIONE: DIVI_API_KEY został usunięty - jest per-site w arkuszu Sites!
+  // POPRAWIONE: PA_API_PARTNER_TAG został usunięty - jest per-site jako Amazon Associate Tag!
   const requiredKeys = [
-    'DIVI_API_USERNAME',
-    'DIVI_API_KEY',
-    'PA_API_ACCESS_KEY',
-    'PA_API_SECRET_KEY',
-    'PA_API_PARTNER_TAG'
+    'DIVI_API_USERNAME',      // Global - to samo dla wszystkich stron
+    'PA_API_ACCESS_KEY',      // Global - Amazon PA-API Access Key
+    'PA_API_SECRET_KEY'       // Global - Amazon PA-API Secret Key
   ];
 
   const missingKeys = [];
@@ -341,10 +380,260 @@ function initializeSettings() {
   });
 
   if (missingKeys.length > 0) {
-    Logger.log('⚠️ Missing API keys: ' + missingKeys.join(', '));
+    Logger.log('⚠️ WARNING: Missing global API keys in Script Properties:');
+    Logger.log('   ' + missingKeys.join(', '));
+    Logger.log('📝 Go to: Project Settings → Script Properties → Add:');
+    missingKeys.forEach(key => {
+      Logger.log(`   - ${key}`);
+    });
   } else {
-    Logger.log('✅ All API keys are configured');
+    Logger.log('✅ All global API keys are configured');
   }
+
+  // Sprawdź czy Divi username jest ustawiony
+  const diviUsername = scriptProperties.getProperty('DIVI_API_USERNAME');
+  if (diviUsername) {
+    Logger.log(`✅ Divi API Username: ${diviUsername}`);
+  }
+
+  Logger.log('⚠️ IMPORTANT: Per-site settings (Divi API Key, Amazon Associate Tag) must be set in Sites sheet!');
+  Logger.log('✅ Global settings initialized');
+}
+
+// =============================================================================
+// FUNKCJE ZARZĄDZANIA STRONAMI (SITE MANAGEMENT)
+// =============================================================================
+
+/**
+ * Walidacja Divi API Key
+ * Musi być dokładnie 40 znaków HEX (0-9, a-f)
+ *
+ * @param {string} apiKey - Klucz do walidacji
+ * @returns {boolean} - true jeśli poprawny
+ */
+function validateDiviApiKey(apiKey) {
+  if (!apiKey || typeof apiKey !== 'string') {
+    return false;
+  }
+
+  // Divi API Key = dokładnie 40 znaków hex (lowercase lub uppercase)
+  const hexPattern = /^[a-f0-9]{40}$/i;
+  return hexPattern.test(apiKey);
+}
+
+/**
+ * Dodaje nową stronę do systemu WAAS
+ *
+ * @param {Object} siteData - Dane nowej strony
+ * @param {string} siteData.siteName - Nazwa strony
+ * @param {string} siteData.domain - Domena (np. keyword.lk24.shop)
+ * @param {string} siteData.wpAdminUsername - WordPress admin username
+ * @param {string} siteData.wpAdminPassword - WordPress admin password
+ * @param {string} siteData.diviApiKey - UNIKALNY Divi API Key dla tej strony
+ * @param {string} siteData.amazonAssociateTag - Amazon Associate Tag (opcjonalnie)
+ * @returns {number} - ID nowo dodanej strony
+ */
+function addNewSite(siteData) {
+  Logger.log(`📝 Adding new site: ${siteData.siteName}`);
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sitesSheet = ss.getSheetByName('Sites');
+
+  if (!sitesSheet) {
+    throw new Error('Sites sheet not found!');
+  }
+
+  // Walidacja wymaganych pól
+  const required = ['siteName', 'domain', 'wpAdminUsername', 'wpAdminPassword', 'diviApiKey'];
+  for (const field of required) {
+    if (!siteData[field]) {
+      throw new Error(`Missing required field: ${field}`);
+    }
+  }
+
+  // Walidacja Divi API Key (musi być 40 znaków hex)
+  if (!validateDiviApiKey(siteData.diviApiKey)) {
+    throw new Error('Invalid Divi API Key format (must be 40 hex characters). Example: c12d038b32b1f2356c705ede89bf188b0abf6a51');
+  }
+
+  // Wygeneruj nowe Site ID
+  const lastRow = sitesSheet.getLastRow();
+  const newSiteId = lastRow > 1 ? sitesSheet.getRange(lastRow, 1).getValue() + 1 : 1;
+
+  // Wygeneruj WP API Key (unikalny dla tej strony)
+  const domainPrefix = siteData.domain.split('.')[0];
+  const wpApiKey = `waas-api-${domainPrefix}-${Date.now()}`;
+
+  // Konstruuj WordPress URL
+  const wpUrl = `https://${siteData.domain}`;
+
+  // Dodaj nowy wiersz (zgodnie z nową strukturą kolumn)
+  const newRow = [
+    newSiteId,                                    // A: ID
+    siteData.siteName,                            // B: Site Name
+    siteData.domain,                              // C: Domain
+    wpUrl,                                        // D: WordPress URL
+    siteData.wpAdminUsername,                     // E: Admin Username
+    siteData.wpAdminPassword,                     // F: Admin Password
+    wpApiKey,                                     // G: WP API Key
+    siteData.diviApiKey,                          // H: Divi API Key ← UNIKALNY!
+    siteData.amazonAssociateTag || '',            // I: Amazon Associate Tag
+    'pending',                                    // J: Status
+    'FALSE',                                      // K: Divi Installed
+    'FALSE',                                      // L: Plugin Installed
+    ''                                            // M: Last Check
+  ];
+
+  sitesSheet.appendRow(newRow);
+
+  Logger.log(`✅ Site added: ID=${newSiteId}, Name=${siteData.siteName}, Divi Key=${siteData.diviApiKey.substring(0, 8)}...`);
+
+  // Log do Logs sheet
+  logEvent('INFO', 'SITE_MANAGEMENT', `New site added: ${siteData.siteName}`, {
+    siteId: newSiteId,
+    domain: siteData.domain
+  }, newSiteId);
+
+  return newSiteId;
+}
+
+/**
+ * Pobiera dane strony po Site ID
+ *
+ * @param {number} siteId - ID strony
+ * @returns {Object|null} - Obiekt z danymi strony lub null
+ */
+function getSiteById(siteId) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sitesSheet = ss.getSheetByName('Sites');
+
+  if (!sitesSheet) {
+    throw new Error('Sites sheet not found!');
+  }
+
+  const data = sitesSheet.getDataRange().getValues();
+
+  // Szukaj wiersza z tym Site ID (kolumna A)
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === siteId) {
+      return {
+        id: data[i][0],                    // A
+        siteName: data[i][1],              // B
+        domain: data[i][2],                // C
+        wpUrl: data[i][3],                 // D
+        wpAdminUsername: data[i][4],       // E
+        wpAdminPassword: data[i][5],       // F
+        wpApiKey: data[i][6],              // G
+        diviApiKey: data[i][7],            // H ← UNIKALNY DLA TEJ STRONY
+        amazonAssociateTag: data[i][8],    // I
+        status: data[i][9],                // J
+        diviInstalled: data[i][10],        // K
+        pluginInstalled: data[i][11],      // L
+        lastCheck: data[i][12],            // M
+        rowIndex: i + 1
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Aktualizuje status strony
+ *
+ * @param {number} siteId - ID strony
+ * @param {string} newStatus - Nowy status (pending/deploying/active/maintenance/error)
+ */
+function updateSiteStatus(siteId, newStatus) {
+  const site = getSiteById(siteId);
+
+  if (!site) {
+    throw new Error(`Site not found: ID=${siteId}`);
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sitesSheet = ss.getSheetByName('Sites');
+
+  // Kolumna J (Status) = newStatus
+  sitesSheet.getRange(site.rowIndex, 10).setValue(newStatus);
+
+  // Kolumna M (Last Check) = teraz
+  sitesSheet.getRange(site.rowIndex, 13).setValue(new Date());
+
+  Logger.log(`✅ Site status updated: ID=${siteId}, Status=${newStatus}`);
+
+  logEvent('INFO', 'SITE_MANAGEMENT', `Site status changed to ${newStatus}`, {
+    siteId: siteId,
+    oldStatus: site.status,
+    newStatus: newStatus
+  }, siteId);
+}
+
+/**
+ * Aktualizuje status instalacji Divi dla strony
+ *
+ * @param {number} siteId - ID strony
+ * @param {boolean} installed - true = zainstalowany, false = nie
+ */
+function updateSiteDiviStatus(siteId, installed) {
+  const site = getSiteById(siteId);
+
+  if (!site) {
+    throw new Error(`Site not found: ID=${siteId}`);
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sitesSheet = ss.getSheetByName('Sites');
+
+  // Kolumna K (Divi Installed) = TRUE/FALSE
+  sitesSheet.getRange(site.rowIndex, 11).setValue(installed ? 'TRUE' : 'FALSE');
+
+  // Kolumna M (Last Check) = teraz
+  sitesSheet.getRange(site.rowIndex, 13).setValue(new Date());
+
+  Logger.log(`✅ Divi status updated: ID=${siteId}, Installed=${installed}`);
+
+  logEvent('INFO', 'DEPLOYMENT', `Divi installation ${installed ? 'completed' : 'failed'}`, {
+    siteId: siteId
+  }, siteId);
+}
+
+/**
+ * Loguje zdarzenie do zakładki Logs
+ *
+ * @param {string} level - INFO, WARNING, ERROR
+ * @param {string} category - Kategoria (DEPLOYMENT, API, SITE_MANAGEMENT, etc.)
+ * @param {string} message - Wiadomość
+ * @param {Object} details - Dodatkowe szczegóły (będą przekonwertowane na JSON)
+ * @param {number|null} siteId - Opcjonalnie ID strony (null = global log)
+ */
+function logEvent(level, category, message, details = {}, siteId = null) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const logsSheet = ss.getSheetByName('Logs');
+
+  if (!logsSheet) {
+    Logger.log('⚠️ Logs sheet not found!');
+    return;
+  }
+
+  const timestamp = new Date();
+  const detailsJson = JSON.stringify(details);
+
+  // Struktura Logs: Timestamp, Site ID, Level, Category, Message, Task ID, User, Details
+  const logRow = [
+    timestamp,           // A: Timestamp
+    level,               // B: Level
+    category,            // C: Category
+    message,             // D: Message
+    siteId || '',        // E: Site ID (puste dla global logs)
+    '',                  // F: Task ID (opcjonalnie)
+    '',                  // G: User (opcjonalnie)
+    detailsJson          // H: Details (JSON)
+  ];
+
+  logsSheet.appendRow(logRow);
+
+  Logger.log(`📝 Log: [${level}] [${category}] ${message}`);
 }
 
 // =============================================================================

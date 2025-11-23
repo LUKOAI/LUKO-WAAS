@@ -439,23 +439,92 @@ Jeśli błąd:
 
 #### 4.2. Konfiguracja Script Properties
 
+⚠️ **WAŻNE:** Script Properties zawierają TYLKO parametry globalne!
+Per-site credentials (Divi API Key, Amazon Associate Tag) są w zakładce Sites!
+
 ```
 Apps Script → ⚙️ Project Settings (ikona koła zębatego) → Script Properties
 
 Dodaj właściwości (kliknij "Add script property"):
 
-Właściwość                 Wartość
-────────────────────────────────────────────────────────
-PA_API_ACCESS_KEY          [Twój Amazon Access Key]
-PA_API_SECRET_KEY          [Twój Amazon Secret Key]
-PA_API_PARTNER_TAG         [Twój Associate Tag - np. yoursite-20]
-DIVI_API_USERNAME          netanaliza
-DIVI_API_KEY               2abad7fcbcffa7ab2cab87d44d31f5b16b8654e4
+Właściwość                 Wartość                                 Opis
+──────────────────────────────────────────────────────────────────────────────
+PA_API_ACCESS_KEY          [Twój Amazon Access Key]               Global (wspólny dla wszystkich stron)
+PA_API_SECRET_KEY          [Twój Amazon Secret Key]               Global (wspólny dla wszystkich stron)
+DIVI_API_USERNAME          netanaliza                             Global (username Elegant Themes)
 
 → Save script properties
 ```
 
-#### 4.3. Konfiguracja arkusza Settings
+**NIE dodawaj tych parametrów do Script Properties:**
+- ❌ `DIVI_API_KEY` - jest **per-site** w zakładce Sites (kolumna H)!
+- ❌ `PA_API_PARTNER_TAG` - jest **per-site** jako Amazon Associate Tag (kolumna I)!
+
+#### 4.3. Konfiguracja zakładki Sites (KRYTYCZNE!)
+
+⚠️ **NOWA ARCHITEKTURA WAAS 2.0:** Każda strona ma własne credentials!
+
+```
+Google Sheets → karta "Sites"
+
+Struktura kolumn:
+A: ID                        (auto-generated)
+B: Site Name                 (np. "Magnetbohrmaschine")
+C: Domain                    (np. "magnetbohrmaschine.lk24.shop")
+D: WordPress URL             (np. "https://magnetbohrmaschine.lk24.shop")
+E: Admin Username            (np. "netanaliza")
+F: Admin Password            (WordPress admin password)
+G: WP API Key                (auto-generated podczas dodawania strony)
+H: Divi API Key              (⚠️ UNIKALNY dla KAŻDEJ strony - 40 hex chars!)
+I: Amazon Associate Tag      (np. "magnetbohr-21")
+J: Status                    (pending/deploying/active/maintenance/error)
+K: Divi Installed            (TRUE/FALSE)
+L: Plugin Installed          (TRUE/FALSE)
+M: Last Check                (timestamp ostatniego sprawdzenia)
+```
+
+**Przykładowy wiersz (Row 2 - pierwsza strona):**
+
+```
+A2: 1
+B2: Magnetbohrmaschine
+C2: magnetbohrmaschine.lk24.shop
+D2: https://magnetbohrmaschine.lk24.shop
+E2: netanaliza
+F2: [your WordPress admin password]
+G2: waas-api-magnetbohr-2025
+H2: c12d038b32b1f2356c705ede89bf188b0abf6a51    ← UNIKALNY DIVI KEY!
+I2: magnetbohr-21
+J2: active
+K2: TRUE
+L2: TRUE
+M2: 2025-11-23 14:30:00
+```
+
+**Jak uzyskać Divi API Key (kolumna H):**
+
+1. Wejdź na: https://www.elegantthemes.com/members-area/api/
+2. Kliknij: "Add New API Key"
+3. Wpisz nazwę: [nazwa twojej strony, np. "magnetbohrmaschine"]
+4. Kliknij: "Generate API Key"
+5. **SKOPIUJ 40-znakowy klucz** (np. `c12d038b32b1f2356c705ede89bf188b0abf6a51`)
+6. **WKLEJ do Google Sheets** → Sites → kolumna H dla tej strony
+
+⚠️ **WAŻNE:** Każda subdomena MUSI mieć własny, unikalny Divi API Key!
+
+**Dowód:** Screenshot z Elegant Themes API (rzeczywiste dane użytkownika):
+```
+Site URL                              | API Key
+--------------------------------------|----------------------------------------
+https://gadsjo.de                     | f6f26eb86b780f2caf47dbc74f11c6854f7e70af
+https://rhetovox.de                   | b693821aa7d8e62c62e27a32b77fa55fff61ba10
+https://forplus24.de                  | 3e9df5c1f143861dd8098436731bc2e35e32702c
+magnetbohrmaschine.lk24.shop          | c12d038b32b1f2356c705ede89bf188b0abf6a51
+```
+
+Jak widać, **każda strona ma INNY klucz API!**
+
+#### 4.4. Konfiguracja arkusza Settings
 
 ```
 Google Sheets → karta "Settings"

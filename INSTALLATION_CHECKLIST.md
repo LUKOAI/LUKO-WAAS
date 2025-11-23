@@ -64,25 +64,52 @@
 - [ ] Autoryzuj (popup Google) → **Zezwól**
 - [ ] Poczekaj 30-60 sekund
 
-### Skonfiguruj API Keys:
+### Skonfiguruj GLOBALNE API Keys:
+⚠️ **WAŻNE:** Tylko parametry globalne! Per-site credentials (Divi Key, Amazon Tag) są w Sites!
+
 - [ ] Apps Script → ⚙️ **Project Settings** → **Script Properties**
-- [ ] Dodaj property: `PA_API_ACCESS_KEY` = `[Twój Access Key]`
-- [ ] Dodaj property: `PA_API_SECRET_KEY` = `[Twój Secret Key]`
-- [ ] Dodaj property: `PA_API_PARTNER_TAG` = `[Twój Associate Tag]`
-- [ ] Dodaj property: `DIVI_API_USERNAME` = `netanaliza`
-- [ ] Dodaj property: `DIVI_API_KEY` = `2abad7fcbcffa7ab2cab87d44d31f5b16b8654e4`
+- [ ] Dodaj property: `PA_API_ACCESS_KEY` = `[Twój Access Key]` (global)
+- [ ] Dodaj property: `PA_API_SECRET_KEY` = `[Twój Secret Key]` (global)
+- [ ] Dodaj property: `DIVI_API_USERNAME` = `netanaliza` (global username)
 - [ ] Kliknij: **Save script properties**
 
-### Skonfiguruj arkusz Settings:
+⚠️ **NIE dodawaj:**
+- ❌ `DIVI_API_KEY` - jest per-site w zakładce Sites!
+- ❌ `PA_API_PARTNER_TAG` - jest per-site jako Amazon Associate Tag!
+
+### Skonfiguruj zakładkę Sites (KRYTYCZNE!):
+⚠️ **WAAS 2.0:** Każda strona ma własne Divi API Key i Amazon Tag!
+
 - [ ] Otwórz utworzony arkusz: `AmazonAffiliateProductsDashboard`
+- [ ] Przejdź do karty: **Sites**
+- [ ] Dodaj swoją pierwszą stronę (Row 2):
+  - [ ] A2: `1` (ID)
+  - [ ] B2: `[Nazwa strony]` (np. "Moja strona affiliate")
+  - [ ] C2: `[Domena]` (np. "magnetbohrmaschine.lk24.shop")
+  - [ ] D2: `[WordPress URL]` (np. "https://magnetbohrmaschine.lk24.shop")
+  - [ ] E2: `[Admin Username]` (np. "netanaliza")
+  - [ ] F2: `[Admin Password]` (Twoje hasło WordPress)
+  - [ ] G2: `waas-api-[twoja-domena]-2025` (WP API Key - wymyśl własny)
+  - [ ] **H2: [DIVI API KEY - UNIKALNY!]** ← KRYTYCZNE! (40 hex chars)
+  - [ ] I2: `[Amazon Associate Tag]` (np. "yoursite-21")
+  - [ ] J2: `pending` (Status)
+  - [ ] K2: `FALSE` (Divi Installed)
+  - [ ] L2: `FALSE` (Plugin Installed)
+  - [ ] M2: _(puste)_ (Last Check)
+
+**Jak uzyskać Divi API Key (kolumna H2):**
+- [ ] Wejdź: https://www.elegantthemes.com/members-area/api/
+- [ ] Kliknij: **Add New API Key**
+- [ ] Wpisz nazwę: `[nazwa twojej strony]`
+- [ ] Kliknij: **Generate API Key**
+- [ ] Skopiuj 40-znakowy klucz hex (np. `c12d038b32b1f2356c705ede89bf188b0abf6a51`)
+- [ ] Wklej do kolumny H2
+
+⚠️ **KAŻDA strona MUSI mieć własny, unikalny Divi API Key!**
+
+### Skonfiguruj arkusz Settings (opcjonalnie):
 - [ ] Przejdź do karty: **Settings**
-- [ ] Wypełnij Row 2:
-  - [ ] A2: `https://twoja-domena.pl` (Twój WordPress URL)
-  - [ ] B2: `https://twoja-domena.pl/wp-json/waas/v1` (API endpoint)
-  - [ ] C2: `moj-tajny-klucz-2025` (wymyśl własny API key)
-  - [ ] D2: `electronics` (default kategoria)
-  - [ ] E2: `TRUE` (auto sync)
-  - [ ] F2: `24` (interval w godzinach)
+- [ ] Sprawdź globalne parametry (są już skonfigurowane automatycznie)
 
 ---
 
