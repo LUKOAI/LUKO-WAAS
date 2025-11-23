@@ -35,7 +35,14 @@
 
 function installWAAS() {
   try {
-    const ui = SpreadsheetApp.getUi();
+    // Sprawdź czy UI jest dostępne (uruchomione z arkusza vs edytora)
+    let ui = null;
+    try {
+      ui = SpreadsheetApp.getUi();
+    } catch (e) {
+      Logger.log('ℹ️ Running from Apps Script editor (UI not available)');
+    }
+
     Logger.log('🚀 Starting WAAS installation...');
 
     // WAŻNE: Używamy BIEŻĄCEGO arkusza, nie tworzymy nowego!
@@ -57,28 +64,51 @@ function installWAAS() {
     Logger.log('✅ Installation completed successfully!');
     Logger.log('📋 Spreadsheet URL: ' + spreadsheet.getUrl());
     Logger.log('⚠️ IMPORTANT: Now set your API keys in Script Properties!');
+    Logger.log('');
+    Logger.log('NEXT STEPS:');
+    Logger.log('1. Click: Extensions → Apps Script');
+    Logger.log('2. Click: Project Settings (⚙️ icon)');
+    Logger.log('3. Scroll to "Script Properties"');
+    Logger.log('4. Click "Add script property"');
+    Logger.log('5. Add these GLOBAL properties:');
+    Logger.log('   DIVI_API_USERNAME = netanaliza');
+    Logger.log('   PA_API_ACCESS_KEY = [Your Amazon Key]');
+    Logger.log('   PA_API_SECRET_KEY = [Your Amazon Secret]');
+    Logger.log('6. Click "Save script properties"');
+    Logger.log('7. Reload this spreadsheet (F5)');
+    Logger.log('8. Go to "Sites" sheet and add your sites');
+    Logger.log('   ⚠️ IMPORTANT: Each site needs its own:');
+    Logger.log('   - Divi API Key (get from Elegant Themes)');
+    Logger.log('   - Amazon Associate Tag');
+    Logger.log('9. Use "⚡ WAAS" menu to start!');
 
-    ui.alert(
-      '✅ Installation Complete!',
-      'WAAS has been installed in this spreadsheet!\n\n' +
-      'NEXT STEPS:\n' +
-      '1. Click: Extensions → Apps Script\n' +
-      '2. Click: Project Settings (⚙️ icon)\n' +
-      '3. Scroll to "Script Properties"\n' +
-      '4. Click "Add script property"\n' +
-      '5. Add these GLOBAL properties:\n\n' +
-      '   DIVI_API_USERNAME = netanaliza\n' +
-      '   PA_API_ACCESS_KEY = [Your Amazon Key]\n' +
-      '   PA_API_SECRET_KEY = [Your Amazon Secret]\n\n' +
-      '6. Click "Save script properties"\n' +
-      '7. Reload this spreadsheet (F5)\n' +
-      '8. Go to "Sites" sheet and add your sites\n' +
-      '   ⚠️ IMPORTANT: Each site needs its own:\n' +
-      '   - Divi API Key (get from Elegant Themes)\n' +
-      '   - Amazon Associate Tag\n\n' +
-      '9. Use "⚡ WAAS" menu to start!',
-      ui.ButtonSet.OK
-    );
+    // Pokaż alert tylko jeśli UI jest dostępne
+    if (ui) {
+      ui.alert(
+        '✅ Installation Complete!',
+        'WAAS has been installed in this spreadsheet!\n\n' +
+        'NEXT STEPS:\n' +
+        '1. Click: Extensions → Apps Script\n' +
+        '2. Click: Project Settings (⚙️ icon)\n' +
+        '3. Scroll to "Script Properties"\n' +
+        '4. Click "Add script property"\n' +
+        '5. Add these GLOBAL properties:\n\n' +
+        '   DIVI_API_USERNAME = netanaliza\n' +
+        '   PA_API_ACCESS_KEY = [Your Amazon Key]\n' +
+        '   PA_API_SECRET_KEY = [Your Amazon Secret]\n\n' +
+        '6. Click "Save script properties"\n' +
+        '7. Reload this spreadsheet (F5)\n' +
+        '8. Go to "Sites" sheet and add your sites\n' +
+        '   ⚠️ IMPORTANT: Each site needs its own:\n' +
+        '   - Divi API Key (get from Elegant Themes)\n' +
+        '   - Amazon Associate Tag\n\n' +
+        '9. Use "⚡ WAAS" menu to start!',
+        ui.ButtonSet.OK
+      );
+    } else {
+      Logger.log('');
+      Logger.log('✅ Installation complete! Check the Execution Log above for next steps.');
+    }
 
     return spreadsheet;
   } catch (error) {
