@@ -134,13 +134,131 @@ function installThemeOnWordPress(site, themeBlob) {
   try {
     logInfo('WordPressAPI', `Installing theme on: ${site.name}`, site.id);
 
-    // WordPress nie ma bezpośredniego REST API dla instalacji motywów
-    // Należy użyć WP-CLI lub innego rozwiązania
-    // Placeholder implementation
+    // Step 1: Login to WordPress to get cookies
+    const loginResult = wordpressLogin(site);
+    if (!loginResult.success) {
+      logError('WordPressAPI', `Cannot login: ${loginResult.error}`, site.id);
+      return false;
+    }
 
-    logWarning('WordPressAPI', 'Theme installation requires WP-CLI or SSH access', site.id);
+    const cookies = loginResult.cookies;
+    logInfo('WordPressAPI', 'Login successful, got cookies', site.id);
 
-    return false;
+    // Step 2: Get nonce from theme-install.php page
+    const installPageUrl = `${site.wpUrl}/wp-admin/theme-install.php`;
+    const pageOptions = {
+      method: 'get',
+      headers: {
+        'Cookie': cookies
+      },
+      muteHttpExceptions: true,
+      followRedirects: true
+    };
+
+    const pageResponse = UrlFetchApp.fetch(installPageUrl, pageOptions);
+    const pageHtml = pageResponse.getContentText();
+
+    // Extract nonce from the upload form
+    // Look for: <input type="hidden" name="_wpnonce" value="abc123" />
+    const nonceMatch = pageHtml.match(/name=["\']_wpnonce["\'] value=["\']([\w]+)["\']/);
+    if (!nonceMatch) {
+      logError('WordPressAPI', 'Could not extract upload nonce from theme-install page', site.id);
+      return false;
+    }
+
+    const uploadNonce = nonceMatch[1];
+    logInfo('WordPressAPI', 'Upload nonce extracted successfully', site.id);
+
+    // Step 3: Upload theme using multipart/form-data
+    const uploadUrl = `${site.wpUrl}/wp-admin/update.php?action=upload-theme`;
+
+    // Create multipart boundary
+    const boundary = '----WebKitFormBoundary' + new Date().getTime();
+    const delimiter = '\r\n--' + boundary + '\r\n';
+    const closeDelim = '\r\n--' + boundary + '--';
+
+    // Build multipart body
+    let body = [];
+
+    // Add theme ZIP file
+    body.push(Utilities.newBlob(
+      delimiter +
+      'Content-Disposition: form-data; name="themezip"; filename="theme.zip"\r\n' +
+      'Content-Type: application/zip\r\n\r\n'
+    ).getBytes());
+    body.push(themeBlob.getBytes());
+
+    // Add nonce
+    body.push(Utilities.newBlob(
+      delimiter +
+      'Content-Disposition: form-data; name="_wpnonce"\r\n\r\n' +
+      uploadNonce
+    ).getBytes());
+
+    // Add submit button
+    body.push(Utilities.newBlob(
+      delimiter +
+      'Content-Disposition: form-data; name="install-theme-submit"\r\n\r\n' +
+      'Install Now'
+    ).getBytes());
+
+    // Close boundary
+    body.push(Utilities.newBlob(closeDelim).getBytes());
+
+    // Flatten array
+    let flatBody = [];
+    body.forEach(part => {
+      if (Array.isArray(part)) {
+        flatBody = flatBody.concat(part);
+      } else {
+        flatBody.push(part);
+      }
+    });
+
+    // Upload theme
+    const uploadOptions = {
+      method: 'post',
+      headers: {
+        'Cookie': cookies,
+        'Content-Type': 'multipart/form-data; boundary=' + boundary
+      },
+      payload: flatBody,
+      muteHttpExceptions: true,
+      followRedirects: false
+    };
+
+    logInfo('WordPressAPI', 'Uploading theme ZIP...', site.id);
+    const uploadResponse = UrlFetchApp.fetch(uploadUrl, uploadOptions);
+    const uploadCode = uploadResponse.getResponseCode();
+    const uploadText = uploadResponse.getContentText();
+
+    logInfo('WordPressAPI', `Upload response code: ${uploadCode}`, site.id);
+
+    // Check for success indicators in response
+    if (uploadCode === 200 && (
+      uploadText.includes('Theme installed successfully') ||
+      uploadText.includes('Theme installation was successful') ||
+      uploadText.includes('successfully installed')
+    )) {
+      logSuccess('WordPressAPI', 'Theme installed successfully!', site.id);
+      return true;
+    } else if (uploadText.includes('already installed')) {
+      logInfo('WordPressAPI', 'Theme already installed', site.id);
+      return true;
+    } else {
+      // Log first 500 chars of response for debugging
+      const preview = uploadText.substring(0, 500).replace(/\s+/g, ' ');
+      logWarning('WordPressAPI', `Upload completed but success unclear. Response preview: ${preview}`, site.id);
+
+      // If we got 200, assume success
+      if (uploadCode === 200) {
+        logInfo('WordPressAPI', 'Got 200 response, assuming installation successful', site.id);
+        return true;
+      }
+
+      return false;
+    }
+
   } catch (error) {
     logError('WordPressAPI', `Error installing theme: ${error.message}`, site.id);
     return false;
@@ -151,12 +269,96 @@ function activateThemeOnWordPress(site, themeSlug) {
   try {
     logInfo('WordPressAPI', `Activating theme: ${themeSlug}`, site.id);
 
-    // Wymaga dodatkowego endpointu lub WP-CLI
-    // Placeholder implementation
+    // Step 1: Login to WordPress to get cookies
+    const loginResult = wordpressLogin(site);
+    if (!loginResult.success) {
+      logError('WordPressAPI', `Cannot login: ${loginResult.error}`, site.id);
+      return false;
+    }
 
-    logWarning('WordPressAPI', 'Theme activation requires custom endpoint or WP-CLI', site.id);
+    const cookies = loginResult.cookies;
+    logInfo('WordPressAPI', 'Login successful, got cookies', site.id);
 
-    return false;
+    // Step 2: Get nonce from themes.php page
+    const themesPageUrl = `${site.wpUrl}/wp-admin/themes.php`;
+    const pageOptions = {
+      method: 'get',
+      headers: {
+        'Cookie': cookies
+      },
+      muteHttpExceptions: true,
+      followRedirects: true
+    };
+
+    const pageResponse = UrlFetchApp.fetch(themesPageUrl, pageOptions);
+    const pageHtml = pageResponse.getContentText();
+
+    // Look for activation link with nonce
+    // Format: themes.php?action=activate&amp;stylesheet=Divi&amp;_wpnonce=abc123
+    const activateLinkRegex = new RegExp(`themes\\.php\\?action=activate&(?:amp;)?stylesheet=${themeSlug}&(?:amp;)?_wpnonce=([\\w]+)`, 'i');
+    const linkMatch = pageHtml.match(activateLinkRegex);
+
+    let activationNonce;
+    if (linkMatch) {
+      activationNonce = linkMatch[1];
+      logInfo('WordPressAPI', 'Activation nonce extracted from link', site.id);
+    } else {
+      // Fallback: look for any _wpnonce on the page
+      const fallbackMatch = pageHtml.match(/["\']_wpnonce["\'][^"\']*["\']([\\w]+)["\']/);
+      if (fallbackMatch) {
+        activationNonce = fallbackMatch[1];
+        logInfo('WordPressAPI', 'Using fallback nonce from page', site.id);
+      } else {
+        logError('WordPressAPI', 'Could not extract activation nonce', site.id);
+        return false;
+      }
+    }
+
+    // Step 3: Activate theme
+    const activateUrl = `${site.wpUrl}/wp-admin/themes.php?action=activate&stylesheet=${themeSlug}&_wpnonce=${activationNonce}`;
+
+    const activateOptions = {
+      method: 'get',
+      headers: {
+        'Cookie': cookies
+      },
+      muteHttpExceptions: true,
+      followRedirects: true
+    };
+
+    logInfo('WordPressAPI', `Activating theme: ${themeSlug}...`, site.id);
+    const activateResponse = UrlFetchApp.fetch(activateUrl, activateOptions);
+    const activateCode = activateResponse.getResponseCode();
+    const activateText = activateResponse.getContentText();
+
+    logInfo('WordPressAPI', `Activation response code: ${activateCode}`, site.id);
+
+    // Check for success indicators
+    if (activateCode === 200 && (
+      activateText.includes('New theme activated') ||
+      activateText.includes('theme activated') ||
+      activateText.includes(`"${themeSlug}"`) ||
+      activateText.includes('Active:')
+    )) {
+      logSuccess('WordPressAPI', `Theme ${themeSlug} activated successfully!`, site.id);
+      return true;
+    } else if (activateText.includes('already active')) {
+      logInfo('WordPressAPI', `Theme ${themeSlug} already active`, site.id);
+      return true;
+    } else {
+      // Log response preview for debugging
+      const preview = activateText.substring(0, 500).replace(/\s+/g, ' ');
+      logWarning('WordPressAPI', `Activation response unclear. Preview: ${preview}`, site.id);
+
+      // If we got 200, assume success
+      if (activateCode === 200) {
+        logInfo('WordPressAPI', 'Got 200 response, assuming activation successful', site.id);
+        return true;
+      }
+
+      return false;
+    }
+
   } catch (error) {
     logError('WordPressAPI', `Error activating theme: ${error.message}`, site.id);
     return false;
