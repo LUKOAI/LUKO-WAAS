@@ -319,7 +319,9 @@ Elegant Themes nie udostępnia publicznego API do pobierania Divi. Musisz:
 
 Przykład: `https://your-bucket.s3.amazonaws.com/Divi.zip` lub `https://www.dropbox.com/s/xxxxx/Divi.zip?dl=1`
 
-Szczegółowa instrukcja: [docs/AUTOMATION.md#divi-theme-configuration](docs/AUTOMATION.md#divi-theme-configuration)
+**📖 Szczegółowy przewodnik hosting:** [docs/DIVI_HOSTING_GUIDE.md](docs/DIVI_HOSTING_GUIDE.md) - rozwiązywanie problemów 403 Forbidden, konfiguracja różnych storage, testowanie URL
+
+Więcej informacji: [docs/AUTOMATION.md#divi-theme-configuration](docs/AUTOMATION.md#divi-theme-configuration)
 
 ### Krok 4: Gotowe!
 

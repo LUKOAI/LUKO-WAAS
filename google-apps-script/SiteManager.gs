@@ -298,12 +298,80 @@ function downloadDiviPackage(site) {
       return null;
     }
 
-    // Pobierz plik
-    const response = UrlFetchApp.fetch(downloadUrl);
-    const blob = response.getBlob();
+    logInfo('DiviAPI', `Download URL: ${downloadUrl}`, site.id);
 
-    logSuccess('DiviAPI', `Divi package downloaded for: ${site.name}`, site.id);
-    return blob;
+    // Retry logic: try up to 3 times
+    const maxRetries = 3;
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        logInfo('DiviAPI', `Download attempt ${attempt}/${maxRetries}...`, site.id);
+
+        // Fetch with proper headers to avoid being blocked by web servers
+        const response = UrlFetchApp.fetch(downloadUrl, {
+          method: 'GET',
+          muteHttpExceptions: true,
+          followRedirects: true,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/zip,application/octet-stream,*/*',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive'
+          }
+        });
+
+        const statusCode = response.getResponseCode();
+        logInfo('DiviAPI', `HTTP Response: ${statusCode}`, site.id);
+
+        if (statusCode === 200) {
+          const blob = response.getBlob();
+          const fileSize = blob.getBytes().length;
+
+          logSuccess('DiviAPI', `Divi package downloaded successfully (${(fileSize / 1024 / 1024).toFixed(2)} MB)`, site.id);
+          return blob;
+        } else if (statusCode === 403) {
+          // 403 Forbidden - likely web server configuration issue
+          const responseText = response.getContentText();
+          logError('DiviAPI', `403 Forbidden - Server is blocking access to the file`, site.id);
+          logError('DiviAPI', `Server response: ${responseText.substring(0, 200)}`, site.id);
+          logError('DiviAPI', ``, site.id);
+          logError('DiviAPI', `📋 TROUBLESHOOTING 403 FORBIDDEN:`, site.id);
+          logError('DiviAPI', `1. Check web server configuration (not file permissions)`, site.id);
+          logError('DiviAPI', `2. Ensure directory allows public access (.htaccess, nginx config, etc.)`, site.id);
+          logError('DiviAPI', `3. Try accessing the URL directly in a browser`, site.id);
+          logError('DiviAPI', `4. RECOMMENDED: Use alternative hosting (AWS S3, Dropbox, Google Drive)`, site.id);
+          logError('DiviAPI', ``, site.id);
+
+          throw new Error(`403 Forbidden - Web server blocking access. The file permissions may be correct (755), but the web server (openresty) is configured to deny access. Please use alternative hosting or reconfigure your web server.`);
+        } else if (statusCode === 404) {
+          throw new Error(`404 Not Found - File does not exist at: ${downloadUrl}`);
+        } else if (statusCode >= 500) {
+          // Server error - might be temporary, retry
+          lastError = new Error(`Server error ${statusCode} - Retrying...`);
+          logWarning('DiviAPI', lastError.message, site.id);
+
+          if (attempt < maxRetries) {
+            Utilities.sleep(2000 * attempt); // Exponential backoff: 2s, 4s, 6s
+            continue;
+          }
+        } else {
+          throw new Error(`Unexpected HTTP status: ${statusCode}`);
+        }
+      } catch (error) {
+        lastError = error;
+
+        if (attempt < maxRetries && !error.message.includes('403') && !error.message.includes('404')) {
+          logWarning('DiviAPI', `Attempt ${attempt} failed: ${error.message}. Retrying...`, site.id);
+          Utilities.sleep(2000 * attempt); // Exponential backoff
+          continue;
+        } else {
+          throw error; // Don't retry on 403/404 or final attempt
+        }
+      }
+    }
+
+    throw lastError || new Error('Download failed after all retry attempts');
   } catch (error) {
     logError('DiviAPI', `Failed to download Divi: ${error.message}`, site.id);
     return null;

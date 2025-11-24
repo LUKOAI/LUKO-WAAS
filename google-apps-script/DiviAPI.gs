@@ -98,7 +98,9 @@ function getDiviDownloadUrl(credentials) {
     logInfo('DiviAPI', '3. Set DIVI_DOWNLOAD_URL in Script Properties to your storage URL');
     logInfo('DiviAPI', '4. Automation will then download Divi automatically from your URL');
     logInfo('DiviAPI', '');
-    throw new Error('Divi download not available. Please configure DIVI_DOWNLOAD_URL in Script Properties with your own hosted Divi ZIP URL.');
+    logInfo('DiviAPI', '📖 See detailed hosting guide: docs/DIVI_HOSTING_GUIDE.md');
+    logInfo('DiviAPI', '');
+    throw new Error('Divi download not available. Please configure DIVI_DOWNLOAD_URL in Script Properties with your own hosted Divi ZIP URL. See docs/DIVI_HOSTING_GUIDE.md for detailed instructions.');
   } catch (error) {
     logError('DiviAPI', `Error getting download URL: ${error.message}`);
     throw error;
