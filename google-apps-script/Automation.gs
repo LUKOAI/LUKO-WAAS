@@ -20,8 +20,10 @@
  * 2. Install and activate Divi theme
  * 3. Install and activate WooCommerce
  * 4. Install and activate WAAS Product Manager plugin
- * 5. Import initial set of Amazon products (optional)
- * 6. Generate initial content (optional)
+ * 5. Install and activate WAAS Patronage Manager plugin
+ * 6. Install and activate Divi Child Theme
+ * 7. Import initial set of Amazon products (optional)
+ * 8. Generate initial content (optional)
  *
  * @param {number} siteId - Site ID from Sites sheet
  * @param {Object} options - Installation options
@@ -63,7 +65,7 @@ function installFullStack(siteId, options = {}) {
     };
 
     // STEP 1: Verify WordPress accessibility and setup authentication
-    logInfo('AUTOMATION', 'Step 1/7: Verifying WordPress site and setting up authentication...', siteId);
+    logInfo('AUTOMATION', 'Step 1/8: Verifying WordPress site and setting up authentication...', siteId);
     try {
       const wpCheck = checkWordPressAvailability(site);
 
@@ -104,7 +106,7 @@ function installFullStack(siteId, options = {}) {
     }
 
     // STEP 2: Install Divi theme
-    logInfo('AUTOMATION', 'Step 2/7: Installing Divi theme...', siteId);
+    logInfo('AUTOMATION', 'Step 2/8: Installing Divi theme...', siteId);
     try {
       const diviResult = installDiviOnSite(siteId);
       result.steps.push({
@@ -128,7 +130,7 @@ function installFullStack(siteId, options = {}) {
     }
 
     // STEP 3: Install WooCommerce
-    logInfo('AUTOMATION', 'Step 3/7: Installing WooCommerce plugin...', siteId);
+    logInfo('AUTOMATION', 'Step 3/8: Installing WooCommerce plugin...', siteId);
     try {
       const wooResult = installWooCommerceOnSite(siteId);
       result.steps.push({
@@ -151,7 +153,7 @@ function installFullStack(siteId, options = {}) {
     }
 
     // STEP 4: Install WAAS Product Manager plugin
-    logInfo('AUTOMATION', 'Step 4/7: Installing WAAS Product Manager plugin...', siteId);
+    logInfo('AUTOMATION', 'Step 4/8: Installing WAAS Product Manager plugin...', siteId);
     try {
       const pluginResult = installPluginOnSite(siteId);
       result.steps.push({
@@ -174,9 +176,55 @@ function installFullStack(siteId, options = {}) {
       logWarning('AUTOMATION', `Plugin installation issue (continuing): ${error.message}`, siteId);
     }
 
-    // STEP 5: Import initial products (optional)
+    // STEP 5: Install WAAS Patronage Manager plugin
+    logInfo('AUTOMATION', 'Step 5/8: Installing WAAS Patronage Manager plugin...', siteId);
+    try {
+      const patronageResult = installPatronageManagerOnSite(siteId);
+      result.steps.push({
+        step: 5,
+        name: 'WAAS Patronage Manager Installation',
+        status: patronageResult.success ? 'SUCCESS' : 'FAILED',
+        message: patronageResult.message,
+        timestamp: new Date()
+      });
+
+      if (!patronageResult.success) {
+        logWarning('AUTOMATION', `Patronage Manager installation issue (continuing): ${patronageResult.message}`, siteId);
+      }
+
+      // Wait for plugin to activate
+      Utilities.sleep(3000);
+    } catch (error) {
+      result.errors.push(`Step 5 failed: ${error.message}`);
+      logWarning('AUTOMATION', `Patronage Manager installation issue (continuing): ${error.message}`, siteId);
+    }
+
+    // STEP 6: Install Divi Child Theme
+    logInfo('AUTOMATION', 'Step 6/8: Installing Divi Child Theme...', siteId);
+    try {
+      const childThemeResult = installDiviChildThemeOnSite(siteId);
+      result.steps.push({
+        step: 6,
+        name: 'Divi Child Theme Installation',
+        status: childThemeResult.success ? 'SUCCESS' : 'FAILED',
+        message: childThemeResult.message,
+        timestamp: new Date()
+      });
+
+      if (!childThemeResult.success) {
+        logWarning('AUTOMATION', `Divi Child Theme installation issue (continuing): ${childThemeResult.message}`, siteId);
+      }
+
+      // Wait for theme to activate
+      Utilities.sleep(3000);
+    } catch (error) {
+      result.errors.push(`Step 6 failed: ${error.message}`);
+      logWarning('AUTOMATION', `Divi Child Theme installation issue (continuing): ${error.message}`, siteId);
+    }
+
+    // STEP 7: Import initial products (optional)
     if (config.importProducts && config.initialAsins.length > 0) {
-      logInfo('AUTOMATION', `Step 5/7: Importing ${config.initialAsins.length} initial products...`, siteId);
+      logInfo('AUTOMATION', `Step 7/8: Importing ${config.initialAsins.length} initial products...`, siteId);
       try {
         const importedProducts = [];
         for (const asin of config.initialAsins) {
@@ -193,7 +241,7 @@ function installFullStack(siteId, options = {}) {
         }
 
         result.steps.push({
-          step: 5,
+          step: 7,
           name: 'Product Import',
           status: importedProducts.length > 0 ? 'SUCCESS' : 'PARTIAL',
           message: `Imported ${importedProducts.length} of ${config.initialAsins.length} products`,
@@ -201,12 +249,12 @@ function installFullStack(siteId, options = {}) {
           timestamp: new Date()
         });
       } catch (error) {
-        result.errors.push(`Step 5 failed: ${error.message}`);
+        result.errors.push(`Step 7 failed: ${error.message}`);
         logWarning('AUTOMATION', `Product import issue (continuing): ${error.message}`, siteId);
       }
     } else {
       result.steps.push({
-        step: 5,
+        step: 7,
         name: 'Product Import',
         status: 'SKIPPED',
         message: 'No initial products specified',
@@ -214,12 +262,12 @@ function installFullStack(siteId, options = {}) {
       });
     }
 
-    // STEP 6: Generate initial content (optional)
+    // STEP 8: Generate initial content (optional)
     if (config.generateContent && config.importProducts && config.initialAsins.length > 0) {
-      logInfo('AUTOMATION', 'Step 6/7: Generating initial content...', siteId);
+      logInfo('AUTOMATION', 'Step 8/8: Generating initial content...', siteId);
       try {
         // Generate a review for the first product
-        const firstProductId = result.steps.find(s => s.step === 5)?.products?.[0]?.id;
+        const firstProductId = result.steps.find(s => s.step === 7)?.products?.[0]?.id;
         if (firstProductId) {
           const contentResult = generateContent(
             siteId,
@@ -229,7 +277,7 @@ function installFullStack(siteId, options = {}) {
           );
 
           result.steps.push({
-            step: 6,
+            step: 8,
             name: 'Content Generation',
             status: contentResult.success ? 'SUCCESS' : 'FAILED',
             message: contentResult.message || 'Initial content generated',
@@ -240,12 +288,12 @@ function installFullStack(siteId, options = {}) {
           throw new Error('No products available for content generation');
         }
       } catch (error) {
-        result.errors.push(`Step 6 failed: ${error.message}`);
+        result.errors.push(`Step 8 failed: ${error.message}`);
         logWarning('AUTOMATION', `Content generation issue (continuing): ${error.message}`, siteId);
       }
     } else {
       result.steps.push({
-        step: 6,
+        step: 8,
         name: 'Content Generation',
         status: 'SKIPPED',
         message: 'Content generation not requested',
@@ -259,7 +307,7 @@ function installFullStack(siteId, options = {}) {
 
     const successfulSteps = result.steps.filter(s => s.status === 'SUCCESS').length;
     const totalSteps = result.steps.filter(s => s.status !== 'SKIPPED').length;
-    result.success = successfulSteps >= 4; // At least core steps (WordPress, Divi, WooCommerce, Plugin)
+    result.success = successfulSteps >= 6; // At least core steps (WordPress, Divi, WooCommerce, Product Manager, Patronage Manager, Child Theme)
 
     if (result.success) {
       logSuccess('AUTOMATION', `Full stack installation completed: ${successfulSteps}/${totalSteps} steps successful (${result.duration}s)`, siteId);
@@ -379,6 +427,146 @@ function updateSiteStatus(siteId, updates) {
   } catch (error) {
     logError('SITE', `Failed to update site status: ${error.message}`, siteId);
     return false;
+  }
+}
+
+/**
+ * Install WAAS Patronage Manager plugin on a WordPress site
+ *
+ * @param {number} siteId - Site ID from Sites sheet
+ * @returns {Object} Result with success status and message
+ */
+function installPatronageManagerOnSite(siteId) {
+  try {
+    const site = getSiteById(siteId);
+    if (!site) {
+      throw new Error(`Site with ID ${siteId} not found`);
+    }
+
+    logInfo('PATRONAGE', `Installing WAAS Patronage Manager on ${site.name}`, siteId);
+
+    // Get custom plugin URL from Script Properties
+    const scriptProperties = PropertiesService.getScriptProperties();
+    const pluginUrl = scriptProperties.getProperty('PATRONAGE_MANAGER_DOWNLOAD_URL');
+
+    if (!pluginUrl) {
+      logWarning('PATRONAGE', 'No custom Patronage Manager download URL configured', siteId);
+      return {
+        success: false,
+        message: 'Patronage Manager download URL not configured in Script Properties'
+      };
+    }
+
+    logInfo('PATRONAGE', `Downloading Patronage Manager from: ${pluginUrl}`, siteId);
+
+    // Download plugin package
+    const response = UrlFetchApp.fetch(pluginUrl, {
+      muteHttpExceptions: true,
+      followRedirects: true
+    });
+
+    const statusCode = response.getResponseCode();
+    if (statusCode !== 200) {
+      throw new Error(`Failed to download plugin: HTTP ${statusCode}`);
+    }
+
+    const pluginBlob = response.getBlob();
+    logSuccess('PATRONAGE', `Patronage Manager package downloaded successfully (${(pluginBlob.getBytes().length / 1024).toFixed(2)} KB)`, siteId);
+
+    // Install plugin via WordPress admin panel
+    const installed = installPluginOnWordPress(site, pluginBlob);
+    if (!installed) {
+      throw new Error('Plugin installation failed');
+    }
+
+    // Activate plugin
+    const activated = activatePluginOnWordPress(site, 'waas-patronage-manager/waas-patronage-manager.php');
+    if (!activated) {
+      logWarning('PATRONAGE', 'Plugin activation may have failed, but installation succeeded', siteId);
+    }
+
+    logSuccess('PATRONAGE', 'WAAS Patronage Manager installed successfully', siteId);
+    return {
+      success: true,
+      message: 'WAAS Patronage Manager installed and activated'
+    };
+
+  } catch (error) {
+    logError('PATRONAGE', `Failed to install Patronage Manager: ${error.message}`, siteId);
+    return {
+      success: false,
+      message: error.message
+    };
+  }
+}
+
+/**
+ * Install Divi Child Theme on a WordPress site
+ *
+ * @param {number} siteId - Site ID from Sites sheet
+ * @returns {Object} Result with success status and message
+ */
+function installDiviChildThemeOnSite(siteId) {
+  try {
+    const site = getSiteById(siteId);
+    if (!site) {
+      throw new Error(`Site with ID ${siteId} not found`);
+    }
+
+    logInfo('CHILD_THEME', `Installing Divi Child Theme on ${site.name}`, siteId);
+
+    // Get custom theme URL from Script Properties
+    const scriptProperties = PropertiesService.getScriptProperties();
+    const themeUrl = scriptProperties.getProperty('DIVI_CHILD_DOWNLOAD_URL');
+
+    if (!themeUrl) {
+      logWarning('CHILD_THEME', 'No custom Divi Child Theme download URL configured', siteId);
+      return {
+        success: false,
+        message: 'Divi Child Theme download URL not configured in Script Properties'
+      };
+    }
+
+    logInfo('CHILD_THEME', `Downloading Divi Child Theme from: ${themeUrl}`, siteId);
+
+    // Download theme package
+    const response = UrlFetchApp.fetch(themeUrl, {
+      muteHttpExceptions: true,
+      followRedirects: true
+    });
+
+    const statusCode = response.getResponseCode();
+    if (statusCode !== 200) {
+      throw new Error(`Failed to download theme: HTTP ${statusCode}`);
+    }
+
+    const themeBlob = response.getBlob();
+    logSuccess('CHILD_THEME', `Divi Child Theme package downloaded successfully (${(themeBlob.getBytes().length / 1024).toFixed(2)} KB)`, siteId);
+
+    // Install theme via WordPress admin panel
+    const installed = installThemeOnWordPress(site, themeBlob);
+    if (!installed) {
+      throw new Error('Theme installation failed');
+    }
+
+    // Activate child theme (Divi must be parent theme)
+    const activated = activateThemeOnWordPress(site, 'divi-child-waas');
+    if (!activated) {
+      logWarning('CHILD_THEME', 'Theme activation may have failed, but installation succeeded', siteId);
+    }
+
+    logSuccess('CHILD_THEME', 'Divi Child Theme installed and activated successfully', siteId);
+    return {
+      success: true,
+      message: 'Divi Child Theme installed and activated'
+    };
+
+  } catch (error) {
+    logError('CHILD_THEME', `Failed to install Divi Child Theme: ${error.message}`, siteId);
+    return {
+      success: false,
+      message: error.message
+    };
   }
 }
 
