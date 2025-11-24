@@ -58,7 +58,7 @@
 - ✅ Responsywne szablony CSS
 - ✅ Meta boxes z pełną konfiguracją produktów
 
-### Google Apps Script - NOWA WERSJA! 🎉
+### Google Apps Script - WERSJA 2.0! 🚀
 - ✅ **Automatyczna instalacja jednym skryptem** - setup.gs
 - ✅ **Zarządzanie wieloma stronami WordPress**
 - ✅ **Automatyczna instalacja Divi theme**
@@ -68,6 +68,24 @@
 - ✅ **System kolejki zadań (Task Queue)**
 - ✅ **Pełne logowanie operacji**
 - ✅ **Intuicyjne menu i dialogi**
+
+### 🤖 NOWOŚĆ: Complete Automation System (v2.0)
+- ✅ **Auto Install Checkbox** - zaznacz i zapomnij o instalacji
+- ✅ **Deploy Content Checkbox** - automatyczne wdrażanie treści
+- ✅ **Install Full Stack** - instalacja całego stosu jednym kliknięciem
+  - WordPress + Divi + WooCommerce + WAAS Plugin
+  - Import początkowych produktów
+  - Generowanie pierwszej treści
+- ✅ **Deploy Selected Content** - kompletny pipeline content:
+  - Import produktów z Amazon
+  - Generowanie treści przez Claude AI
+  - Publikacja do WordPress
+- ✅ **Automated Triggers** - automatyczne wykonywanie w tle:
+  - Codzienna synchronizacja Amazon (3:00 AM)
+  - Co godzinę sprawdzanie checkboxów
+- ✅ **Per-Site Credentials** - różne klucze API dla każdej strony
+
+📖 **[Pełna dokumentacja automatyzacji →](docs/AUTOMATION.md)**
 
 ### Amazon PA-API Features
 - ✅ GetItems - pobieranie pojedynczego produktu
