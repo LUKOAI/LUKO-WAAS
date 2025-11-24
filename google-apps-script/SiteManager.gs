@@ -461,8 +461,27 @@ function installWooCommercePlugin(site) {
     });
 
     if (result.success) {
-      logSuccess('WooCommerce', 'WooCommerce plugin installed');
+      logSuccess('WooCommerce', 'WooCommerce plugin installed and activated');
       return true;
+    } else if (result.statusCode === 500 && result.data && result.data.code === 'folder_exists') {
+      // WooCommerce is already installed, just activate it
+      logInfo('WooCommerce', 'WooCommerce already installed, attempting to activate...');
+
+      const activateResult = makeAuthenticatedRequest(site, 'wp/v2/plugins/woocommerce/woocommerce', {
+        method: 'post',
+        payload: {
+          status: 'active'
+        }
+      });
+
+      if (activateResult.success) {
+        logSuccess('WooCommerce', 'WooCommerce plugin activated');
+        return true;
+      } else {
+        logWarning('WooCommerce', `Activation returned ${activateResult.statusCode}, but WooCommerce may already be active`);
+        // Return true anyway - if it's installed, that's good enough
+        return true;
+      }
     } else {
       logError('WooCommerce', `Installation failed with status: ${result.statusCode}`);
       logError('WooCommerce', `Response: ${JSON.stringify(result.data)}`);

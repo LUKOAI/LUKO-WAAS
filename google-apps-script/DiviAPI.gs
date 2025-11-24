@@ -9,64 +9,77 @@
 
 function getDiviDownloadUrl(credentials) {
   try {
-    // Elegant Themes API endpoint for product downloads
-    // Uses POST method with API key and username in the body
-    const apiUrl = 'https://www.elegantthemes.com/api/downloads';
+    // Elegant Themes API - trying multiple possible endpoints
+    // Note: ET may not have a public download API, might require manual download
+    const apiEndpoints = [
+      'https://www.elegantthemes.com/api/downloads',
+      'https://www.elegantthemes.com/api/product/download',
+      'https://www.elegantthemes.com/api/account/downloads'
+    ];
 
-    const payload = {
-      'api_key': credentials.apiKey,
-      'username': credentials.username,
-      'product': 'Divi'
-    };
+    for (const apiUrl of apiEndpoints) {
+      logInfo('DiviAPI', `Trying endpoint: ${apiUrl}`);
 
-    logInfo('DiviAPI', `Requesting Divi download URL from: ${apiUrl}`);
+      const payload = {
+        'api_key': credentials.apiKey,
+        'username': credentials.username,
+        'product': 'Divi'
+      };
 
-    const response = UrlFetchApp.fetch(apiUrl, {
-      method: 'POST',
-      contentType: 'application/x-www-form-urlencoded',
-      payload: payload,
-      muteHttpExceptions: true,
-      followRedirects: true
-    });
-
-    const statusCode = response.getResponseCode();
-    const responseText = response.getContentText();
-
-    logInfo('DiviAPI', `API response status: ${statusCode}`);
-
-    if (statusCode === 200 && responseText) {
-      // Try to parse as JSON first
       try {
-        const data = JSON.parse(responseText);
+        const response = UrlFetchApp.fetch(apiUrl, {
+          method: 'POST',
+          contentType: 'application/x-www-form-urlencoded',
+          payload: payload,
+          muteHttpExceptions: true,
+          followRedirects: true
+        });
 
-        // Check various possible response formats
-        if (data.download_url) {
-          logSuccess('DiviAPI', 'Got Divi download URL from JSON response');
-          return data.download_url;
-        } else if (data.downloads && data.downloads.Divi) {
-          logSuccess('DiviAPI', 'Got Divi download URL from downloads.Divi');
-          return data.downloads.Divi;
-        } else if (data.url) {
-          logSuccess('DiviAPI', 'Got Divi download URL from url field');
-          return data.url;
-        } else if (typeof data === 'string' && data.startsWith('http')) {
-          logSuccess('DiviAPI', 'Got Divi download URL as string');
-          return data.trim();
-        } else {
-          logWarning('DiviAPI', `Unexpected JSON format: ${JSON.stringify(data)}`);
+        const statusCode = response.getResponseCode();
+        const responseText = response.getContentText();
+
+        logInfo('DiviAPI', `Response status: ${statusCode}`);
+
+        if (statusCode === 200 && responseText && !responseText.includes('<!doctype html>')) {
+          // Try to parse as JSON first
+          try {
+            const data = JSON.parse(responseText);
+
+            // Check various possible response formats
+            if (data.download_url) {
+              logSuccess('DiviAPI', `Got Divi download URL from: ${apiUrl}`);
+              return data.download_url;
+            } else if (data.downloads && data.downloads.Divi) {
+              logSuccess('DiviAPI', `Got Divi download URL from: ${apiUrl}`);
+              return data.downloads.Divi;
+            } else if (data.url) {
+              logSuccess('DiviAPI', `Got Divi download URL from: ${apiUrl}`);
+              return data.url;
+            } else if (typeof data === 'string' && data.startsWith('http')) {
+              logSuccess('DiviAPI', `Got Divi download URL from: ${apiUrl}`);
+              return data.trim();
+            }
+          } catch (e) {
+            // Not JSON, might be direct URL
+            if (responseText.startsWith('http')) {
+              logSuccess('DiviAPI', `Got Divi download URL from: ${apiUrl}`);
+              return responseText.trim();
+            }
+          }
+        } else if (statusCode === 404) {
+          logInfo('DiviAPI', `Endpoint ${apiUrl} not found, trying next...`);
         }
       } catch (e) {
-        // Not JSON, might be direct URL
-        if (responseText.startsWith('http')) {
-          logSuccess('DiviAPI', 'Got Divi download URL as plain text');
-          return responseText.trim();
-        }
+        logInfo('DiviAPI', `Failed to fetch ${apiUrl}: ${e.message}`);
       }
     }
 
-    logError('DiviAPI', `API returned ${statusCode}: ${responseText.substring(0, 200)}`);
+    // All endpoints failed
+    logError('DiviAPI', 'Failed to get Divi download URL from all API endpoints');
     logError('DiviAPI', `Credentials used - Username: ${credentials.username}, API Key: ${credentials.apiKey.substring(0, 10)}...`);
-    throw new Error('Failed to get Divi download URL - check API credentials');
+    logWarning('DiviAPI', 'Elegant Themes may not have a public download API');
+    logInfo('DiviAPI', 'Alternative: Manual upload - Download Divi from elegantthemes.com and upload via WordPress admin');
+    throw new Error('Divi download API not available - please upload Divi manually');
   } catch (error) {
     logError('DiviAPI', `Error getting download URL: ${error.message}`);
     throw error;
