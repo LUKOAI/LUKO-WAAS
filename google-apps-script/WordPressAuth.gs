@@ -739,13 +739,54 @@ function getWordPressVersion(site) {
 
     if (response.getResponseCode() === 200) {
       const data = JSON.parse(response.getContentText());
-      return data.version || '5.0'; // Default to 5.0 if not found
+
+      // WordPress REST API root endpoint returns version in different places
+      // Try multiple possible locations
+      if (data.version) {
+        return data.version;
+      }
+
+      // Check in 'gmt_offset' data structure (some WP versions)
+      if (data.namespaces && data.namespaces.includes('wp/v2')) {
+        // WP 4.7+ detected, try to get version from generator
+        try {
+          const siteInfoEndpoint = `${site.wpUrl}/wp-json/wp/v2/`;
+          const siteInfoResponse = UrlFetchApp.fetch(siteInfoEndpoint, { muteHttpExceptions: true });
+          if (siteInfoResponse.getResponseCode() === 200) {
+            const siteData = JSON.parse(siteInfoResponse.getContentText());
+            if (siteData.version) {
+              return siteData.version;
+            }
+          }
+        } catch (e) {
+          // Continue to other methods
+        }
+      }
+
+      // Try to get from home page generator meta tag as last resort
+      try {
+        const homeResponse = UrlFetchApp.fetch(site.wpUrl, { muteHttpExceptions: true });
+        if (homeResponse.getResponseCode() === 200) {
+          const html = homeResponse.getContentText();
+          const generatorMatch = html.match(/<meta name=["']generator["'] content=["']WordPress ([0-9.]+)["']/i);
+          if (generatorMatch && generatorMatch[1]) {
+            logInfo('AUTH', `WordPress version detected from meta tag: ${generatorMatch[1]}`, site.id);
+            return generatorMatch[1];
+          }
+        }
+      } catch (e) {
+        // Continue to default
+      }
+
+      logWarning('AUTH', 'Could not find WordPress version in API response, using default 6.0', site.id);
+      return '6.0'; // Default to 6.0 (safer assumption for modern WP)
     }
 
-    return '5.0'; // Default
+    logWarning('AUTH', `API endpoint returned ${response.getResponseCode()}, using default 6.0`, site.id);
+    return '6.0'; // Default
   } catch (error) {
     logWarning('AUTH', `Could not detect WordPress version: ${error.message}`, site.id);
-    return '5.0'; // Default
+    return '6.0'; // Default to 6.0 (modern WordPress)
   }
 }
 

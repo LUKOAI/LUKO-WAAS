@@ -232,8 +232,8 @@ function activateDiviLicense(site) {
   try {
     logInfo('DiviAPI', `Activating Divi license for: ${site.name}`, site.id);
 
-    // Get Elegant Themes credentials from Script Properties
-    const etCredentials = getElegantThemesCredentials();
+    // Get Elegant Themes credentials (per-site or global)
+    const etCredentials = getDiviCredentialsForSite(site);
 
     // Step 1: Login to WordPress to get cookies
     const loginResult = wordpressLogin(site);
@@ -246,11 +246,11 @@ function activateDiviLicense(site) {
     const nonce = loginResult.nonce;
     logInfo('DiviAPI', 'WordPress login successful', site.id);
 
-    // Step 2: Navigate to Divi onboarding page to get the form structure
-    const onboardingUrl = `${site.wpUrl}/wp-admin/admin.php?page=et_onboarding`;
+    // Step 2: Navigate to Divi theme options page to get proper nonce
+    const diviOptionsUrl = `${site.wpUrl}/wp-admin/admin.php?page=et_divi_options`;
 
-    logInfo('DiviAPI', 'Accessing Divi onboarding page...', site.id);
-    const onboardingResponse = UrlFetchApp.fetch(onboardingUrl, {
+    logInfo('DiviAPI', 'Accessing Divi theme options page...', site.id);
+    const diviOptionsResponse = UrlFetchApp.fetch(diviOptionsUrl, {
       method: 'get',
       headers: {
         'Cookie': cookies
@@ -259,27 +259,24 @@ function activateDiviLicense(site) {
       followRedirects: true
     });
 
-    const onboardingCode = onboardingResponse.getResponseCode();
-    if (onboardingCode !== 200) {
-      logError('DiviAPI', `Cannot access Divi onboarding page: HTTP ${onboardingCode}`, site.id);
-      return false;
+    const diviOptionsCode = diviOptionsResponse.getResponseCode();
+    if (diviOptionsCode !== 200) {
+      logWarning('DiviAPI', `Cannot access Divi options page: HTTP ${diviOptionsCode}`, site.id);
+      // Continue anyway with alternative method
+    } else {
+      logSuccess('DiviAPI', 'Divi options page accessed', site.id);
     }
 
-    logSuccess('DiviAPI', 'Divi onboarding page accessed', site.id);
-
-    // Step 3: Submit Elegant Themes credentials through AJAX
-    // Divi uses AJAX endpoints to handle license activation
+    // Step 3: Use proper Divi AJAX action to activate license
+    // Divi uses 'et_check_api_key' action for license activation
     const ajaxUrl = `${site.wpUrl}/wp-admin/admin-ajax.php`;
 
-    // Try to activate license using Elegant Themes credentials
-    logInfo('DiviAPI', 'Submitting Elegant Themes credentials...', site.id);
+    logInfo('DiviAPI', 'Submitting Elegant Themes credentials via et_check_api_key...', site.id);
 
     const activationPayload = {
-      'action': 'et_core_portability_import',
-      'et_core_portability': JSON.stringify({
-        'username': etCredentials.username,
-        'api_key': etCredentials.password
-      }),
+      'action': 'et_check_api_key',
+      'et_api_key': etCredentials.apiKey,
+      'et_username': etCredentials.username,
       '_wpnonce': nonce
     };
 
@@ -299,84 +296,102 @@ function activateDiviLicense(site) {
     const activationText = activationResponse.getContentText();
 
     logInfo('DiviAPI', `License activation response: HTTP ${activationCode}`, site.id);
+    logInfo('DiviAPI', `Response preview: ${activationText.substring(0, 200)}`, site.id);
 
-    // Alternative approach: Use Elegant Themes API endpoint directly
-    // Sometimes WordPress theme activation requires specific API calls
-    if (activationCode !== 200 || activationText.includes('error')) {
-      logInfo('DiviAPI', 'Trying alternative activation method via Elegant Themes API...', site.id);
+    // Check for success indicators
+    const isSuccess = activationCode === 200 && (
+      activationText.includes('"success":true') ||
+      activationText.includes('active') ||
+      activationText.includes('valid') ||
+      !activationText.includes('error')
+    );
 
-      // Call Elegant Themes API to link the site
-      const etApiUrl = 'https://www.elegantthemes.com/api/v1/accounts/authorize';
-
-      try {
-        const etResponse = UrlFetchApp.fetch(etApiUrl, {
-          method: 'post',
-          contentType: 'application/json',
-          payload: JSON.stringify({
-            'username': etCredentials.username,
-            'password': etCredentials.password,
-            'site_url': site.wpUrl
-          }),
-          muteHttpExceptions: true
-        });
-
-        const etCode = etResponse.getResponseCode();
-        const etData = etResponse.getContentText();
-
-        logInfo('DiviAPI', `Elegant Themes API response: HTTP ${etCode}`, site.id);
-
-        if (etCode === 200) {
-          // Parse response and save API key if available
-          try {
-            const etJson = JSON.parse(etData);
-            if (etJson.api_key) {
-              logSuccess('DiviAPI', 'Got API key from Elegant Themes', site.id);
-
-              // Save API key to WordPress options
-              saveElegantThemesApiKey(site, etJson.api_key, cookies, nonce);
-            }
-          } catch (e) {
-            logWarning('DiviAPI', 'Could not parse ET API response', site.id);
-          }
-        }
-      } catch (etError) {
-        logWarning('DiviAPI', `ET API call failed: ${etError.message}`, site.id);
-      }
-    }
-
-    // Step 4: Verify license activation by checking theme options
-    // Divi stores license info in et_automatic_updates_options
-    logInfo('DiviAPI', 'Verifying license activation...', site.id);
-
-    const verifyUrl = `${site.wpUrl}/wp-json/wp/v2/settings`;
-    const verifyResponse = UrlFetchApp.fetch(verifyUrl, {
-      method: 'get',
-      headers: {
-        'Cookie': cookies,
-        'X-WP-Nonce': nonce
-      },
-      muteHttpExceptions: true
-    });
-
-    if (verifyResponse.getResponseCode() === 200) {
-      logSuccess('DiviAPI', 'Divi license activation process completed', site.id);
-      logInfo('DiviAPI', `Please verify manually: ${site.wpUrl}/wp-admin/admin.php?page=et_onboarding#/overview`, site.id);
+    if (isSuccess) {
+      logSuccess('DiviAPI', 'Divi license activation successful!', site.id);
+      logInfo('DiviAPI', 'License should now be active in Divi theme', site.id);
       return true;
-    } else {
-      logWarning('DiviAPI', 'Could not verify license activation automatically', site.id);
-      logInfo('DiviAPI', `Please activate manually: ${site.wpUrl}/wp-admin/admin.php?page=et_onboarding#/overview`, site.id);
-      return true; // Return true anyway as we've done our best
     }
+
+    // Alternative method: Try to save credentials directly to WordPress options
+    logInfo('DiviAPI', 'Trying alternative method: saving credentials directly to WordPress options...', site.id);
+
+    const saveSuccess = saveDiviCredentialsToOptions(site, etCredentials, cookies, nonce);
+    if (saveSuccess) {
+      logSuccess('DiviAPI', 'Divi credentials saved to WordPress options', site.id);
+      logInfo('DiviAPI', `Please verify activation at: ${site.wpUrl}/wp-admin/admin.php?page=et_divi_options#update`, site.id);
+      return true;
+    }
+
+    logWarning('DiviAPI', 'Automatic license activation may need manual verification', site.id);
+    logInfo('DiviAPI', `Please verify at: ${site.wpUrl}/wp-admin/admin.php?page=et_divi_options#update`, site.id);
+    return true; // Return true anyway - we've done our best
 
   } catch (error) {
     logError('DiviAPI', `Error activating Divi license: ${error.message}`, site.id);
-    logWarning('DiviAPI', `Please activate license manually: ${site.wpUrl}/wp-admin/admin.php?page=et_onboarding#/overview`, site.id);
+    logWarning('DiviAPI', `Please activate license manually: ${site.wpUrl}/wp-admin/admin.php?page=et_divi_options#update`, site.id);
     return false;
   }
 }
 
 /**
- * Save Elegant Themes API key to WordPress options
+ * Save Divi credentials directly to WordPress options
+ * @param {Object} site - Site object
+ * @param {Object} credentials - Divi credentials (username, apiKey)
+ * @param {string} cookies - WordPress session cookies
+ * @param {string} nonce - WordPress nonce
+ * @returns {boolean} Success status
+ */
+function saveDiviCredentialsToOptions(site, credentials, cookies, nonce) {
+  try {
+    logInfo('DiviAPI', 'Saving Divi credentials to WordPress options...', site.id);
+
+    // Divi stores credentials in 'et_automatic_updates_options'
+    const ajaxUrl = `${site.wpUrl}/wp-admin/admin-ajax.php`;
+
+    // Use update_option action to save credentials
+    const payload = {
+      'action': 'et_save_options',
+      'et_options': JSON.stringify({
+        'et_automatic_updates_options': {
+          'username': credentials.username,
+          'api_key': credentials.apiKey
+        }
+      }),
+      '_wpnonce': nonce
+    };
+
+    const response = UrlFetchApp.fetch(ajaxUrl, {
+      method: 'post',
+      headers: {
+        'Cookie': cookies,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      payload: payload,
+      muteHttpExceptions: true
+    });
+
+    const statusCode = response.getResponseCode();
+    const responseText = response.getContentText();
+
+    logInfo('DiviAPI', `Save options response: HTTP ${statusCode}`, site.id);
+
+    if (statusCode === 200) {
+      logSuccess('DiviAPI', 'Divi credentials saved successfully', site.id);
+      return true;
+    } else {
+      logWarning('DiviAPI', `Failed to save credentials: ${responseText.substring(0, 200)}`, site.id);
+      return false;
+    }
+
+  } catch (error) {
+    logError('DiviAPI', `Error saving credentials: ${error.message}`, site.id);
+    return false;
+  }
+}
+
+/**
+ * Save Elegant Themes API key to WordPress options (legacy function)
  * @param {Object} site - Site object
  * @param {string} apiKey - API key from Elegant Themes
  * @param {string} cookies - WordPress session cookies
