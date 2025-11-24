@@ -225,22 +225,26 @@ function sha256Hex(message) {
 // Helper function: HMAC-SHA256 (returns byte array)
 // Note: In AWS4 signature, message is always a string, key can be string or byte array
 function hmacSha256(key, message) {
-  // Ensure key is properly formatted as byte array
-  let keyBytes;
+  // Convert key to string format (required by computeHmacSignature)
+  let keyString;
   if (typeof key === 'string') {
-    // Key is a string - convert to bytes
-    keyBytes = Utilities.newBlob(key).getBytes();
+    // Key is already a string - use directly
+    keyString = key;
   } else {
-    // Key is already a byte array - use it directly
-    keyBytes = key;
+    // Key is a byte array - convert to binary string (Latin-1 encoding)
+    // Each byte becomes a character with the same code point
+    // This preserves the binary data while converting to string format
+    keyString = key.map(function(byte) {
+      return String.fromCharCode(byte < 0 ? byte + 256 : byte);
+    }).join('');
   }
 
-  // Use computeHmacSignature which properly accepts byte array keys
+  // computeHmacSignature requires key to be a String, not byte array
   // This is required for chaining HMAC operations in AWS4 signature
   return Utilities.computeHmacSignature(
     Utilities.MacAlgorithm.HMAC_SHA_256,
     message,
-    keyBytes
+    keyString
   );
 }
 

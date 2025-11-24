@@ -679,6 +679,50 @@ function makeAuthenticatedRequest(site, endpoint, options = {}) {
 }
 
 /**
+ * Get authentication credentials for making WordPress requests
+ * This is useful for custom requests that can't use makeAuthenticatedRequest
+ *
+ * @param {Object} site - Site object
+ * @returns {Object|null} Auth credentials object or null if no auth available
+ */
+function getAuthCredentials(site) {
+  try {
+    const authType = getAuthType(site);
+
+    if (authType === 'application_password') {
+      const appPassword = getApplicationPassword(site);
+      if (appPassword) {
+        return {
+          type: 'application_password',
+          appPassword: appPassword,
+          username: site.adminUser
+        };
+      }
+    } else if (authType === 'cookie_auth' || authType === 'none' || !authType) {
+      const loginResult = wordpressLogin(site);
+      if (loginResult.success) {
+        return {
+          type: 'cookie_auth',
+          cookie: loginResult.cookies,
+          nonce: loginResult.nonce
+        };
+      }
+    } else if (authType === 'basic_auth_plugin' || authType === 'basic_auth_legacy') {
+      return {
+        type: 'basic_auth',
+        username: site.adminUser,
+        password: site.adminPass
+      };
+    }
+
+    return null;
+  } catch (error) {
+    logError('AUTH', `Failed to get auth credentials: ${error.message}`, site.id);
+    return null;
+  }
+}
+
+/**
  * Get authentication type for a site
  *
  * @param {Object} site - Site object
