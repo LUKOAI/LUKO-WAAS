@@ -232,12 +232,16 @@ function hmacSha256(key, message) {
     keyBytes = Utilities.newBlob(key).getBytes();
   } else {
     // Key is already a byte array - use it directly
-    // DO NOT wrap in Blob() as it expects string or byte[], not number[]
     keyBytes = key;
   }
 
-  // computeHmacSha256Signature(value, key) expects (string, byte[])
-  return Utilities.computeHmacSha256Signature(message, keyBytes);
+  // Use computeHmacSignature which properly accepts byte array keys
+  // This is required for chaining HMAC operations in AWS4 signature
+  return Utilities.computeHmacSignature(
+    Utilities.MacAlgorithm.HMAC_SHA_256,
+    message,
+    keyBytes
+  );
 }
 
 // Helper function: HMAC-SHA256 (returns hex string)
