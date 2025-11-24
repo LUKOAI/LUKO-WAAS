@@ -55,11 +55,40 @@ function getAPIKey(keyName) {
   return key;
 }
 
+/**
+ * Get global Divi credentials (fallback/default)
+ * @deprecated Use getDiviCredentialsForSite() for per-site credentials
+ */
 function getDiviCredentials() {
   return {
     username: getAPIKey('DIVI_API_USERNAME'),
     apiKey: getAPIKey('DIVI_API_KEY')
   };
+}
+
+/**
+ * Get Divi credentials for a specific site
+ * Falls back to global credentials if site-specific credentials are not set
+ * @param {Object} site - Site object from getSiteById()
+ * @returns {Object} - {username, apiKey}
+ */
+function getDiviCredentialsForSite(site) {
+  // Try to use per-site credentials first
+  if (site.diviApiUsername && site.diviApiKey) {
+    logInfo('DiviAPI', `Using per-site Divi credentials for: ${site.name}`, site.id);
+    return {
+      username: site.diviApiUsername,
+      apiKey: site.diviApiKey
+    };
+  }
+
+  // Fallback to global credentials
+  logWarning('DiviAPI', `No per-site Divi credentials for ${site.name}, using global credentials`, site.id);
+  try {
+    return getDiviCredentials();
+  } catch (error) {
+    throw new Error(`No Divi credentials available for site ${site.name}. Please set per-site credentials or global Script Properties.`);
+  }
 }
 
 function getAmazonPACredentials() {

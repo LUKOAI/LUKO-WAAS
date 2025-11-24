@@ -20,12 +20,14 @@ function getSiteById(siteId) {
         wpUrl: data[i][3],
         username: data[i][4],
         password: data[i][5],
-        status: data[i][6],
-        diviInstalled: data[i][7],
-        pluginInstalled: data[i][8],
-        lastCheck: data[i][9],
-        createdDate: data[i][10],
-        notes: data[i][11],
+        diviApiUsername: data[i][6],   // NEW: Per-site Divi username
+        diviApiKey: data[i][7],         // NEW: Per-site Divi API key
+        status: data[i][8],
+        diviInstalled: data[i][9],
+        pluginInstalled: data[i][10],
+        lastCheck: data[i][11],
+        createdDate: data[i][12],
+        notes: data[i][13],
         rowIndex: i + 1
       };
     }
@@ -44,20 +46,26 @@ function updateSiteStatus(siteId, status, updates = {}) {
   const row = site.rowIndex;
 
   // Aktualizuj status
-  sheet.getRange(row, 7).setValue(status);
+  sheet.getRange(row, 9).setValue(status);
 
   // Aktualizuj last check
-  sheet.getRange(row, 10).setValue(new Date());
+  sheet.getRange(row, 12).setValue(new Date());
 
   // Aktualizuj dodatkowe pola
+  if (updates.diviApiUsername !== undefined) {
+    sheet.getRange(row, 7).setValue(updates.diviApiUsername);
+  }
+  if (updates.diviApiKey !== undefined) {
+    sheet.getRange(row, 8).setValue(updates.diviApiKey);
+  }
   if (updates.diviInstalled !== undefined) {
-    sheet.getRange(row, 8).setValue(updates.diviInstalled);
+    sheet.getRange(row, 10).setValue(updates.diviInstalled);
   }
   if (updates.pluginInstalled !== undefined) {
-    sheet.getRange(row, 9).setValue(updates.pluginInstalled);
+    sheet.getRange(row, 11).setValue(updates.pluginInstalled);
   }
   if (updates.notes !== undefined) {
-    sheet.getRange(row, 12).setValue(updates.notes);
+    sheet.getRange(row, 14).setValue(updates.notes);
   }
 
   logInfo('SiteManager', `Site ${siteId} updated: ${status}`, siteId);
@@ -224,8 +232,8 @@ function installDiviOnSite(siteId) {
 
     logInfo('SiteManager', `Installing Divi on site: ${site.name}`, siteId);
 
-    // 1. Pobierz Divi przez API Elegant Themes
-    const diviPackage = downloadDiviPackage();
+    // 1. Pobierz Divi przez API Elegant Themes (using per-site credentials)
+    const diviPackage = downloadDiviPackage(site);
     if (!diviPackage) {
       throw new Error('Failed to download Divi package');
     }
@@ -263,10 +271,10 @@ function installDiviOnSite(siteId) {
   }
 }
 
-function downloadDiviPackage() {
+function downloadDiviPackage(site) {
   try {
-    const creds = getDiviCredentials();
-    logInfo('DiviAPI', 'Downloading Divi package');
+    const creds = getDiviCredentialsForSite(site);
+    logInfo('DiviAPI', `Downloading Divi package for site: ${site.name}`, site.id);
 
     // Pobierz link do pobrania Divi
     const downloadUrl = getDiviDownloadUrl(creds);
@@ -278,10 +286,10 @@ function downloadDiviPackage() {
     const response = UrlFetchApp.fetch(downloadUrl);
     const blob = response.getBlob();
 
-    logSuccess('DiviAPI', 'Divi package downloaded');
+    logSuccess('DiviAPI', `Divi package downloaded for: ${site.name}`, site.id);
     return blob;
   } catch (error) {
-    logError('DiviAPI', `Failed to download Divi: ${error.message}`);
+    logError('DiviAPI', `Failed to download Divi: ${error.message}`, site.id);
     return null;
   }
 }
@@ -536,14 +544,16 @@ function getAllActiveSites() {
 
   const sites = [];
   for (let i = 1; i < data.length; i++) {
-    if (data[i][6] === 'Active') {
+    if (data[i][8] === 'Active') {  // Updated index for Status
       sites.push({
         id: data[i][0],
         name: data[i][1],
         domain: data[i][2],
         wpUrl: data[i][3],
         username: data[i][4],
-        password: data[i][5]
+        password: data[i][5],
+        diviApiUsername: data[i][6],
+        diviApiKey: data[i][7]
       });
     }
   }

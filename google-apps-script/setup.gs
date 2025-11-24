@@ -116,6 +116,8 @@ function createSitesSheet(spreadsheet) {
     'WordPress URL',
     'Admin Username',
     'Admin Password',
+    'Divi API Username',  // NEW: Per-site Divi username
+    'Divi API Key',       // NEW: Per-site Divi API key
     'Status',
     'Divi Installed',
     'Plugin Installed',
@@ -138,12 +140,14 @@ function createSitesSheet(spreadsheet) {
   sheet.setColumnWidth(4, 250);  // WordPress URL
   sheet.setColumnWidth(5, 150);  // Admin Username
   sheet.setColumnWidth(6, 150);  // Admin Password
-  sheet.setColumnWidth(7, 100);  // Status
-  sheet.setColumnWidth(8, 120);  // Divi Installed
-  sheet.setColumnWidth(9, 120);  // Plugin Installed
-  sheet.setColumnWidth(10, 150); // Last Check
-  sheet.setColumnWidth(11, 120); // Created Date
-  sheet.setColumnWidth(12, 300); // Notes
+  sheet.setColumnWidth(7, 200);  // Divi API Username
+  sheet.setColumnWidth(8, 300);  // Divi API Key
+  sheet.setColumnWidth(9, 100);  // Status
+  sheet.setColumnWidth(10, 120); // Divi Installed
+  sheet.setColumnWidth(11, 120); // Plugin Installed
+  sheet.setColumnWidth(12, 150); // Last Check
+  sheet.setColumnWidth(13, 120); // Created Date
+  sheet.setColumnWidth(14, 300); // Notes
 
   // Zamrożenie pierwszego wiersza
   sheet.setFrozenRows(1);
@@ -156,6 +160,8 @@ function createSitesSheet(spreadsheet) {
     'https://example.com',
     'admin',
     '',
+    '',           // Divi API Username - fill in per site
+    '',           // Divi API Key - fill in per site
     'Active',
     'No',
     'No',
@@ -482,7 +488,10 @@ function onOpen() {
     .addSubMenu(ui.createMenu('🔧 Settings')
       .addItem('Configure API Keys', 'showAPIKeyInstructions')
       .addItem('Test Connections', 'testAllConnections')
-      .addItem('View Logs', 'viewLogs'))
+      .addItem('View Logs', 'viewLogs')
+      .addSeparator()
+      .addItem('🔄 Migrate to Per-Site Divi Keys', 'migrateToPerSiteDiviKeys')
+      .addItem('✅ Verify Migration', 'verifyMigration'))
     .addSeparator()
     .addItem('📖 Documentation', 'showDocumentation')
     .addItem('ℹ️ About', 'showAbout')
