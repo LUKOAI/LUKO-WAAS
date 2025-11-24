@@ -354,18 +354,33 @@ function installPluginOnSite(siteId) {
 
 function downloadPluginFromGitHub() {
   try {
-    const repoUrl = 'https://github.com/LUKOAI/-LukoAmazonAffiliateManager';
+    // GitHub repository URL for WAAS Product Manager plugin
+    // Note: Replace with actual repository URL when available
+    const repoUrl = 'https://github.com/LUKOAI/LukoAmazonAffiliateManager';
     const downloadUrl = `${repoUrl}/archive/refs/heads/main.zip`;
 
-    logInfo('PluginManager', 'Downloading plugin from GitHub');
+    logInfo('PluginManager', `Downloading plugin from: ${downloadUrl}`);
 
-    const response = UrlFetchApp.fetch(downloadUrl);
-    const blob = response.getBlob();
+    const response = UrlFetchApp.fetch(downloadUrl, {
+      muteHttpExceptions: true,
+      followRedirects: true
+    });
 
-    logSuccess('PluginManager', 'Plugin package downloaded');
-    return blob;
+    const statusCode = response.getResponseCode();
+
+    if (statusCode === 200) {
+      const blob = response.getBlob();
+      logSuccess('PluginManager', 'Plugin package downloaded successfully');
+      return blob;
+    } else {
+      logError('PluginManager', `GitHub returned ${statusCode} for ${downloadUrl}`);
+      logWarning('PluginManager', 'Plugin download failed - repository may not exist yet');
+      logInfo('PluginManager', 'Skipping plugin installation for now');
+      return null;
+    }
   } catch (error) {
     logError('PluginManager', `Failed to download plugin: ${error.message}`);
+    logInfo('PluginManager', 'To fix: Create the GitHub repository or provide direct plugin ZIP URL');
     return null;
   }
 }

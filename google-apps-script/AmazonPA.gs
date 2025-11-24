@@ -114,33 +114,34 @@ function makeAmazonPARequest(path, payload, credentials) {
   try {
     const timestamp = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
     const url = `https://${AMAZON_PA_CONFIG.endpoint}${path}`;
+    const payloadString = JSON.stringify(payload);
 
-    // Przygotuj nagłówki
+    // Przygotuj nagłówki (NIE dodawaj Host - UrlFetchApp dodaje automatycznie)
     const headers = {
       'Content-Type': 'application/json; charset=utf-8',
       'X-Amz-Date': timestamp,
-      'X-Amz-Target': 'com.amazon.paapi5.v1.ProductAdvertisingAPIv1.SearchItems',
-      'Host': AMAZON_PA_CONFIG.endpoint
+      'X-Amz-Target': 'com.amazon.paapi5.v1.ProductAdvertisingAPIv1.SearchItems'
     };
 
     // Utwórz podpis AWS4
-    const signature = createAWS4Signature(
+    const authHeader = createAWS4Signature(
       credentials.accessKey,
       credentials.secretKey,
       AMAZON_PA_CONFIG.region,
       AMAZON_PA_CONFIG.service,
       path,
-      payload,
-      timestamp
+      payloadString,
+      timestamp,
+      AMAZON_PA_CONFIG.endpoint
     );
 
-    headers['Authorization'] = signature;
+    headers['Authorization'] = authHeader;
 
     // Wykonaj request
     const response = UrlFetchApp.fetch(url, {
       method: 'POST',
       headers: headers,
-      payload: JSON.stringify(payload),
+      payload: payloadString,
       muteHttpExceptions: true
     });
 
@@ -163,26 +164,77 @@ function makeAmazonPARequest(path, payload, credentials) {
 // AWS4 SIGNATURE
 // =============================================================================
 
-function createAWS4Signature(accessKey, secretKey, region, service, path, payload, timestamp) {
-  // Simplified AWS4 signature
-  // W pełnej implementacji należy użyć kompletnego algorytmu AWS Signature Version 4
+function createAWS4Signature(accessKey, secretKey, region, service, path, payloadString, timestamp, host) {
+  // Full AWS Signature Version 4 implementation
+  // https://docs.aws.amazon.com/general/latest/gr/signature-version-4.html
 
-  const dateStamp = timestamp.substring(0, 8);
+  const method = 'POST';
+  const contentType = 'application/json; charset=utf-8';
+
+  // Extract date from timestamp (YYYYMMDD)
+  const dateStamp = timestamp.substring(0, 4) + timestamp.substring(5, 7) + timestamp.substring(8, 10);
+
+  // Step 1: Create canonical request
+  const canonicalUri = path;
+  const canonicalQueryString = '';
+  const canonicalHeaders =
+    `content-type:${contentType}\n` +
+    `host:${host}\n` +
+    `x-amz-date:${timestamp}\n` +
+    `x-amz-target:com.amazon.paapi5.v1.ProductAdvertisingAPIv1.SearchItems\n`;
+  const signedHeaders = 'content-type;host;x-amz-date;x-amz-target';
+
+  // Hash the payload
+  const payloadHash = sha256Hex(payloadString);
+
+  const canonicalRequest =
+    `${method}\n${canonicalUri}\n${canonicalQueryString}\n${canonicalHeaders}\n${signedHeaders}\n${payloadHash}`;
+
+  // Step 2: Create string to sign
+  const algorithm = 'AWS4-HMAC-SHA256';
   const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
+  const canonicalRequestHash = sha256Hex(canonicalRequest);
 
-  const authHeader = `AWS4-HMAC-SHA256 Credential=${accessKey}/${credentialScope}, SignedHeaders=content-type;host;x-amz-date, Signature=dummy_signature`;
+  const stringToSign = `${algorithm}\n${timestamp}\n${credentialScope}\n${canonicalRequestHash}`;
 
-  logWarning('AmazonPA', 'Using simplified AWS4 signature - implement full version for production');
+  // Step 3: Calculate signing key
+  const kDate = hmacSha256(`AWS4${secretKey}`, dateStamp);
+  const kRegion = hmacSha256(kDate, region);
+  const kService = hmacSha256(kRegion, service);
+  const kSigning = hmacSha256(kService, 'aws4_request');
+
+  // Step 4: Calculate signature
+  const signature = hmacSha256Hex(kSigning, stringToSign);
+
+  // Step 5: Build authorization header
+  const authHeader = `${algorithm} Credential=${accessKey}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
 
   return authHeader;
 }
 
-// Note: Pełna implementacja AWS4 Signature wymaga:
-// 1. Canonical Request
-// 2. String to Sign
-// 3. Signing Key
-// 4. Signature
-// Zobacz: https://docs.aws.amazon.com/general/latest/gr/signature-version-4.html
+// Helper function: SHA256 hash (returns hex string)
+function sha256Hex(message) {
+  const hash = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, message);
+  return hash.map(byte => {
+    const v = (byte < 0) ? 256 + byte : byte;
+    return ('0' + v.toString(16)).slice(-2);
+  }).join('');
+}
+
+// Helper function: HMAC-SHA256 (returns byte array)
+function hmacSha256(key, message) {
+  const keyBytes = typeof key === 'string' ? Utilities.newBlob(key).getBytes() : key;
+  return Utilities.computeHmacSha256Signature(message, keyBytes);
+}
+
+// Helper function: HMAC-SHA256 (returns hex string)
+function hmacSha256Hex(key, message) {
+  const hmac = hmacSha256(key, message);
+  return hmac.map(byte => {
+    const v = (byte < 0) ? 256 + byte : byte;
+    return ('0' + v.toString(16)).slice(-2);
+  }).join('');
+}
 
 // =============================================================================
 // PARSE AMAZON PRODUCT

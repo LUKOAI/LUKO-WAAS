@@ -9,25 +9,53 @@
 
 function getDiviDownloadUrl(credentials) {
   try {
-    const apiUrl = 'https://www.elegantthemes.com/api/downloads/';
+    // Elegant Themes API requires authentication via their members area
+    // The direct API endpoint for downloads is:
+    // https://www.elegantthemes.com/api/api_downloads.php
 
-    const response = makeHttpRequest(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + credentials.apiKey,
-        'Content-Type': 'application/json'
-      },
-      payload: JSON.stringify({
-        username: credentials.username,
-        api_key: credentials.apiKey,
-        product: 'Divi'
-      })
+    const apiUrl = 'https://www.elegantthemes.com/api/api_downloads.php';
+
+    // Prepare the request parameters
+    const params = {
+      'api_key': credentials.apiKey,
+      'username': credentials.username,
+      'product': 'Divi'
+    };
+
+    // Build query string
+    const queryString = Object.keys(params)
+      .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
+      .join('&');
+
+    const fullUrl = `${apiUrl}?${queryString}`;
+
+    const response = UrlFetchApp.fetch(fullUrl, {
+      method: 'GET',
+      muteHttpExceptions: true,
+      followRedirects: true
     });
 
-    if (response.success && response.data && response.data.download_url) {
-      return response.data.download_url;
+    const statusCode = response.getResponseCode();
+    const responseText = response.getContentText();
+
+    if (statusCode === 200) {
+      // Response should contain download URL or be a JSON with download info
+      try {
+        const data = JSON.parse(responseText);
+        if (data.download_url) {
+          return data.download_url;
+        } else if (data.downloads && data.downloads.Divi) {
+          return data.downloads.Divi;
+        }
+      } catch (e) {
+        // Response might be the download URL directly
+        if (responseText.startsWith('http')) {
+          return responseText.trim();
+        }
+      }
     }
 
+    logError('DiviAPI', `API returned ${statusCode}: ${responseText}`);
     throw new Error('Failed to get Divi download URL');
   } catch (error) {
     logError('DiviAPI', `Error getting download URL: ${error.message}`);

@@ -210,27 +210,24 @@ function installPluginOnWordPress(site, pluginBlob) {
 
 function activatePluginOnWordPress(site, pluginSlug) {
   try {
-    const apiUrl = `${site.wpUrl}/wp-json/wp/v2/plugins/${pluginSlug}`;
+    logInfo('WordPressAPI', `Activating plugin: ${pluginSlug}`, site.id);
 
-    const authHeader = getAuthHeader(site);
-
-    const response = makeHttpRequest(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': authHeader,
-        'Content-Type': 'application/json'
-      },
-      payload: JSON.stringify({
+    // Use the authenticated request helper that handles all auth types
+    const result = makeAuthenticatedRequest(site, `wp/v2/plugins/${pluginSlug}`, {
+      method: 'post',
+      payload: {
         status: 'active'
-      })
+      }
     });
 
-    if (response.success) {
+    if (result.success) {
       logSuccess('WordPressAPI', `Plugin activated: ${pluginSlug}`, site.id);
       return true;
+    } else {
+      logError('WordPressAPI', `Activation failed: ${result.statusCode} - ${JSON.stringify(result.data)}`, site.id);
+      return false;
     }
 
-    return false;
   } catch (error) {
     logError('WordPressAPI', `Error activating plugin: ${error.message}`, site.id);
     return false;
