@@ -62,28 +62,49 @@ function installFullStack(siteId, options = {}) {
       errors: []
     };
 
-    // STEP 1: Verify WordPress accessibility
-    logInfo('AUTOMATION', 'Step 1/6: Verifying WordPress site accessibility...', siteId);
+    // STEP 1: Verify WordPress accessibility and setup authentication
+    logInfo('AUTOMATION', 'Step 1/7: Verifying WordPress site and setting up authentication...', siteId);
     try {
-      const wpCheck = checkWordPressAvailability(site.wordpressUrl, site.adminUsername, site.adminPassword);
-      result.steps.push({
-        step: 1,
-        name: 'WordPress Accessibility Check',
-        status: wpCheck.available ? 'SUCCESS' : 'FAILED',
-        message: wpCheck.message,
-        timestamp: new Date()
-      });
+      const wpCheck = checkWordPressAvailability(site);
 
       if (!wpCheck.available) {
-        throw new Error(`WordPress site not accessible: ${wpCheck.message}`);
+        result.steps.push({
+          step: 1,
+          name: 'WordPress Accessibility Check',
+          status: 'FAILED',
+          message: wpCheck.error || 'WordPress site not accessible',
+          timestamp: new Date()
+        });
+        throw new Error(`WordPress site not accessible: ${wpCheck.error}`);
       }
+
+      // AUTOMATIC APPLICATION PASSWORD SETUP - NO MANUAL STEPS!
+      logInfo('AUTOMATION', 'Setting up WordPress authentication automatically...', siteId);
+      const authResult = setupWordPressAuth(site);
+
+      if (authResult.success) {
+        logSuccess('AUTOMATION', `Authentication setup: ${authResult.message}`, siteId);
+      } else {
+        logWarning('AUTOMATION', `Auth setup warning: ${authResult.error}. Trying with existing credentials...`, siteId);
+      }
+
+      // Re-load site with new auth credentials
+      site = getSiteById(siteId);
+
+      result.steps.push({
+        step: 1,
+        name: 'WordPress Accessibility & Authentication',
+        status: 'SUCCESS',
+        message: `WordPress accessible. Auth: ${authResult.authType || 'existing'}`,
+        timestamp: new Date()
+      });
     } catch (error) {
       result.errors.push(`Step 1 failed: ${error.message}`);
       throw error;
     }
 
     // STEP 2: Install Divi theme
-    logInfo('AUTOMATION', 'Step 2/6: Installing Divi theme...', siteId);
+    logInfo('AUTOMATION', 'Step 2/7: Installing Divi theme...', siteId);
     try {
       const diviResult = installDiviOnSite(siteId);
       result.steps.push({
@@ -107,7 +128,7 @@ function installFullStack(siteId, options = {}) {
     }
 
     // STEP 3: Install WooCommerce
-    logInfo('AUTOMATION', 'Step 3/6: Installing WooCommerce plugin...', siteId);
+    logInfo('AUTOMATION', 'Step 3/7: Installing WooCommerce plugin...', siteId);
     try {
       const wooResult = installWooCommerceOnSite(siteId);
       result.steps.push({
@@ -130,7 +151,7 @@ function installFullStack(siteId, options = {}) {
     }
 
     // STEP 4: Install WAAS Product Manager plugin
-    logInfo('AUTOMATION', 'Step 4/6: Installing WAAS Product Manager plugin...', siteId);
+    logInfo('AUTOMATION', 'Step 4/7: Installing WAAS Product Manager plugin...', siteId);
     try {
       const pluginResult = installPluginOnSite(siteId);
       result.steps.push({
@@ -155,7 +176,7 @@ function installFullStack(siteId, options = {}) {
 
     // STEP 5: Import initial products (optional)
     if (config.importProducts && config.initialAsins.length > 0) {
-      logInfo('AUTOMATION', `Step 5/6: Importing ${config.initialAsins.length} initial products...`, siteId);
+      logInfo('AUTOMATION', `Step 5/7: Importing ${config.initialAsins.length} initial products...`, siteId);
       try {
         const importedProducts = [];
         for (const asin of config.initialAsins) {
@@ -195,7 +216,7 @@ function installFullStack(siteId, options = {}) {
 
     // STEP 6: Generate initial content (optional)
     if (config.generateContent && config.importProducts && config.initialAsins.length > 0) {
-      logInfo('AUTOMATION', 'Step 6/6: Generating initial content...', siteId);
+      logInfo('AUTOMATION', 'Step 6/7: Generating initial content...', siteId);
       try {
         // Generate a review for the first product
         const firstProductId = result.steps.find(s => s.step === 5)?.products?.[0]?.id;

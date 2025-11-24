@@ -52,6 +52,10 @@ function onOpen() {
       .addItem('⚙️ System Settings', 'showSettingsDialog')
       .addItem('🧪 Test Connections', 'testAllConnections')
       .addSeparator()
+      .addItem('🔐 Migrate Auth for All Sites', 'migrateAllSitesToAutoAuth')
+      .addItem('🔐 Setup Auth for Site', 'showSetupAuthDialog')
+      .addItem('📊 View Auth Status', 'showAuthMigrationStatus')
+      .addSeparator()
       .addItem('📊 View Logs', 'focusLogs')
       .addItem('🗑️ Clear Old Logs', 'clearOldLogs'))
     .addSeparator()
@@ -637,6 +641,22 @@ function testAllConnections() {
     logInfo('Tests', 'Connection tests completed');
   } catch (error) {
     ui.alert('Error', 'Connection test failed: ' + error.message, ui.ButtonSet.OK);
+  }
+}
+
+function showSetupAuthDialog() {
+  const ui = SpreadsheetApp.getUi();
+  const result = ui.prompt(
+    'Setup Authentication',
+    'Enter Site ID to setup WordPress authentication:',
+    ui.ButtonSet.OK_CANCEL
+  );
+
+  if (result.getSelectedButton() === ui.Button.OK) {
+    const siteId = parseInt(result.getResponseText());
+    if (siteId) {
+      migrateAuthForSite(siteId);
+    }
   }
 }
 

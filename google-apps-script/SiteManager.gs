@@ -29,6 +29,8 @@ function getSiteById(siteId) {
         lastCheck: data[i][12],
         createdDate: data[i][13],
         notes: data[i][14],
+        appPassword: data[i][15],       // COLUMN 16: Application Password (auto-created)
+        authType: data[i][16],          // COLUMN 17: Auth type (application_password, basic_auth_plugin, basic_auth_legacy)
         rowIndex: i + 1
       };
     }

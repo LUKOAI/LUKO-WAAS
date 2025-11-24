@@ -11,7 +11,7 @@ function createWordPressPost(site, postData) {
   try {
     const apiUrl = `${site.wpUrl}/wp-json/wp/v2/posts`;
 
-    const authHeader = 'Basic ' + Utilities.base64Encode(site.username + ':' + site.password);
+    const authHeader = getAuthHeader(site);
 
     const response = makeHttpRequest(apiUrl, {
       method: 'POST',
@@ -44,7 +44,7 @@ function updateWordPressPost(site, postId, postData) {
   try {
     const apiUrl = `${site.wpUrl}/wp-json/wp/v2/posts/${postId}`;
 
-    const authHeader = 'Basic ' + Utilities.base64Encode(site.username + ':' + site.password);
+    const authHeader = getAuthHeader(site);
 
     const response = makeHttpRequest(apiUrl, {
       method: 'POST',
@@ -71,7 +71,7 @@ function deleteWordPressPost(site, postId) {
   try {
     const apiUrl = `${site.wpUrl}/wp-json/wp/v2/posts/${postId}`;
 
-    const authHeader = 'Basic ' + Utilities.base64Encode(site.username + ':' + site.password);
+    const authHeader = getAuthHeader(site);
 
     const response = makeHttpRequest(apiUrl, {
       method: 'DELETE',
@@ -106,7 +106,7 @@ function getWordPressPosts(site, params = {}) {
       apiUrl += '?' + queryParams.join('&');
     }
 
-    const authHeader = 'Basic ' + Utilities.base64Encode(site.username + ':' + site.password);
+    const authHeader = getAuthHeader(site);
 
     const response = makeHttpRequest(apiUrl, {
       method: 'GET',
@@ -167,7 +167,7 @@ function getActiveTheme(site) {
   try {
     const apiUrl = `${site.wpUrl}/wp-json/wp/v2/themes?status=active`;
 
-    const authHeader = 'Basic ' + Utilities.base64Encode(site.username + ':' + site.password);
+    const authHeader = getAuthHeader(site);
 
     const response = makeHttpRequest(apiUrl, {
       method: 'GET',
@@ -212,7 +212,7 @@ function activatePluginOnWordPress(site, pluginSlug) {
   try {
     const apiUrl = `${site.wpUrl}/wp-json/wp/v2/plugins/${pluginSlug}`;
 
-    const authHeader = 'Basic ' + Utilities.base64Encode(site.username + ':' + site.password);
+    const authHeader = getAuthHeader(site);
 
     const response = makeHttpRequest(apiUrl, {
       method: 'POST',
@@ -241,7 +241,7 @@ function getInstalledPlugins(site) {
   try {
     const apiUrl = `${site.wpUrl}/wp-json/wp/v2/plugins`;
 
-    const authHeader = 'Basic ' + Utilities.base64Encode(site.username + ':' + site.password);
+    const authHeader = getAuthHeader(site);
 
     const response = makeHttpRequest(apiUrl, {
       method: 'GET',
@@ -274,7 +274,7 @@ function uploadMediaToWordPress(site, imageUrl, title = '', altText = '') {
     // Upload do WordPress
     const apiUrl = `${site.wpUrl}/wp-json/wp/v2/media`;
 
-    const authHeader = 'Basic ' + Utilities.base64Encode(site.username + ':' + site.password);
+    const authHeader = getAuthHeader(site);
 
     const response = makeHttpRequest(apiUrl, {
       method: 'POST',
@@ -307,7 +307,7 @@ function updateMediaMeta(site, mediaId, meta) {
   try {
     const apiUrl = `${site.wpUrl}/wp-json/wp/v2/media/${mediaId}`;
 
-    const authHeader = 'Basic ' + Utilities.base64Encode(site.username + ':' + site.password);
+    const authHeader = getAuthHeader(site);
 
     const response = makeHttpRequest(apiUrl, {
       method: 'POST',
