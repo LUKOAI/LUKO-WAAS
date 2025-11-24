@@ -116,9 +116,10 @@ function makeAmazonPARequest(path, payload, credentials) {
     const url = `https://${AMAZON_PA_CONFIG.endpoint}${path}`;
     const payloadString = JSON.stringify(payload);
 
-    // Przygotuj nagłówki (NIE dodawaj Host - UrlFetchApp dodaje automatycznie)
+    // Przygotuj nagłówki
     const headers = {
       'Content-Type': 'application/json; charset=utf-8',
+      'Host': AMAZON_PA_CONFIG.endpoint,
       'X-Amz-Date': timestamp,
       'X-Amz-Target': 'com.amazon.paapi5.v1.ProductAdvertisingAPIv1.SearchItems'
     };

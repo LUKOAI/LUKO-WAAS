@@ -355,29 +355,45 @@ function installPluginOnSite(siteId) {
 function downloadPluginFromGitHub() {
   try {
     // GitHub repository URL for WAAS Product Manager plugin
-    // Note: Replace with actual repository URL when available
-    const repoUrl = 'https://github.com/LUKOAI/LukoAmazonAffiliateManager';
-    const downloadUrl = `${repoUrl}/archive/refs/heads/main.zip`;
+    // Trying multiple possible repository names
+    const possibleRepos = [
+      'https://github.com/LUKOAI/luko-amazon-affiliate-manager',
+      'https://github.com/LUKOAI/LukoAmazonAffiliateManager',
+      'https://github.com/LUKOAI/LUKO-WAAS'
+    ];
 
-    logInfo('PluginManager', `Downloading plugin from: ${downloadUrl}`);
+    for (const repoUrl of possibleRepos) {
+      const downloadUrl = `${repoUrl}/archive/refs/heads/main.zip`;
 
-    const response = UrlFetchApp.fetch(downloadUrl, {
-      muteHttpExceptions: true,
-      followRedirects: true
-    });
+      logInfo('PluginManager', `Trying to download plugin from: ${downloadUrl}`);
 
-    const statusCode = response.getResponseCode();
+      try {
+        const response = UrlFetchApp.fetch(downloadUrl, {
+          muteHttpExceptions: true,
+          followRedirects: true
+        });
 
-    if (statusCode === 200) {
-      const blob = response.getBlob();
-      logSuccess('PluginManager', 'Plugin package downloaded successfully');
-      return blob;
-    } else {
-      logError('PluginManager', `GitHub returned ${statusCode} for ${downloadUrl}`);
-      logWarning('PluginManager', 'Plugin download failed - repository may not exist yet');
-      logInfo('PluginManager', 'Skipping plugin installation for now');
-      return null;
+        const statusCode = response.getResponseCode();
+
+        if (statusCode === 200) {
+          const blob = response.getBlob();
+          logSuccess('PluginManager', `Plugin package downloaded successfully from: ${repoUrl}`);
+          return blob;
+        } else {
+          logInfo('PluginManager', `${repoUrl} returned ${statusCode}, trying next...`);
+        }
+      } catch (e) {
+        logInfo('PluginManager', `Failed to fetch ${repoUrl}: ${e.message}`);
+      }
     }
+
+    // If all repos failed, log and return null
+    logError('PluginManager', 'Plugin download failed from all repository URLs');
+    logWarning('PluginManager', 'Repository may not exist yet or plugin is not published');
+    logInfo('PluginManager', 'Skipping plugin installation - will continue with other setup steps');
+    logInfo('PluginManager', 'To fix: Ensure plugin repository exists at one of the tried URLs');
+    return null;
+
   } catch (error) {
     logError('PluginManager', `Failed to download plugin: ${error.message}`);
     logInfo('PluginManager', 'To fix: Create the GitHub repository or provide direct plugin ZIP URL');
@@ -398,16 +414,11 @@ function installWooCommerceOnSite(siteId) {
 
     logInfo('SiteManager', `Installing WooCommerce on site: ${site.name}`, siteId);
 
-    // 1. Zainstaluj WooCommerce z WordPress.org repository
+    // 1. Zainstaluj i aktywuj WooCommerce z WordPress.org repository
+    // Note: installWooCommercePlugin already activates the plugin (status:'active')
     const installed = installWooCommercePlugin(site);
     if (!installed) {
       throw new Error('Failed to install WooCommerce');
-    }
-
-    // 2. Aktywuj WooCommerce
-    const activated = activatePluginOnWordPress(site, 'woocommerce');
-    if (!activated) {
-      throw new Error('Failed to activate WooCommerce');
     }
 
     // 3. Konfiguruj podstawowe ustawienia WooCommerce

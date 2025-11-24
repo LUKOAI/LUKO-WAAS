@@ -9,28 +9,22 @@
 
 function getDiviDownloadUrl(credentials) {
   try {
-    // Elegant Themes API requires authentication via their members area
-    // The direct API endpoint for downloads is:
-    // https://www.elegantthemes.com/api/api_downloads.php
+    // Elegant Themes API endpoint for product downloads
+    // Uses POST method with API key and username in the body
+    const apiUrl = 'https://www.elegantthemes.com/api/downloads';
 
-    const apiUrl = 'https://www.elegantthemes.com/api/api_downloads.php';
-
-    // Prepare the request parameters
-    const params = {
+    const payload = {
       'api_key': credentials.apiKey,
       'username': credentials.username,
       'product': 'Divi'
     };
 
-    // Build query string
-    const queryString = Object.keys(params)
-      .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
-      .join('&');
+    logInfo('DiviAPI', `Requesting Divi download URL from: ${apiUrl}`);
 
-    const fullUrl = `${apiUrl}?${queryString}`;
-
-    const response = UrlFetchApp.fetch(fullUrl, {
-      method: 'GET',
+    const response = UrlFetchApp.fetch(apiUrl, {
+      method: 'POST',
+      contentType: 'application/x-www-form-urlencoded',
+      payload: payload,
       muteHttpExceptions: true,
       followRedirects: true
     });
@@ -38,25 +32,41 @@ function getDiviDownloadUrl(credentials) {
     const statusCode = response.getResponseCode();
     const responseText = response.getContentText();
 
-    if (statusCode === 200) {
-      // Response should contain download URL or be a JSON with download info
+    logInfo('DiviAPI', `API response status: ${statusCode}`);
+
+    if (statusCode === 200 && responseText) {
+      // Try to parse as JSON first
       try {
         const data = JSON.parse(responseText);
+
+        // Check various possible response formats
         if (data.download_url) {
+          logSuccess('DiviAPI', 'Got Divi download URL from JSON response');
           return data.download_url;
         } else if (data.downloads && data.downloads.Divi) {
+          logSuccess('DiviAPI', 'Got Divi download URL from downloads.Divi');
           return data.downloads.Divi;
+        } else if (data.url) {
+          logSuccess('DiviAPI', 'Got Divi download URL from url field');
+          return data.url;
+        } else if (typeof data === 'string' && data.startsWith('http')) {
+          logSuccess('DiviAPI', 'Got Divi download URL as string');
+          return data.trim();
+        } else {
+          logWarning('DiviAPI', `Unexpected JSON format: ${JSON.stringify(data)}`);
         }
       } catch (e) {
-        // Response might be the download URL directly
+        // Not JSON, might be direct URL
         if (responseText.startsWith('http')) {
+          logSuccess('DiviAPI', 'Got Divi download URL as plain text');
           return responseText.trim();
         }
       }
     }
 
-    logError('DiviAPI', `API returned ${statusCode}: ${responseText}`);
-    throw new Error('Failed to get Divi download URL');
+    logError('DiviAPI', `API returned ${statusCode}: ${responseText.substring(0, 200)}`);
+    logError('DiviAPI', `Credentials used - Username: ${credentials.username}, API Key: ${credentials.apiKey.substring(0, 10)}...`);
+    throw new Error('Failed to get Divi download URL - check API credentials');
   } catch (error) {
     logError('DiviAPI', `Error getting download URL: ${error.message}`);
     throw error;
