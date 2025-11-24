@@ -190,6 +190,7 @@ function createSitesSheet(spreadsheet) {
     'Status',
     'Divi Installed',
     'Plugin Installed',
+    'Auto Install',       // COLUMN 13: Checkbox for automated full stack installation
     'Last Check',
     'Created Date',
     'Notes'
@@ -215,9 +216,10 @@ function createSitesSheet(spreadsheet) {
   sheet.setColumnWidth(10, 100); // Status
   sheet.setColumnWidth(11, 120); // Divi Installed
   sheet.setColumnWidth(12, 120); // Plugin Installed
-  sheet.setColumnWidth(13, 150); // Last Check
-  sheet.setColumnWidth(14, 120); // Created Date
-  sheet.setColumnWidth(15, 300); // Notes
+  sheet.setColumnWidth(13, 120); // Auto Install
+  sheet.setColumnWidth(14, 150); // Last Check
+  sheet.setColumnWidth(15, 120); // Created Date
+  sheet.setColumnWidth(16, 300); // Notes
 
   // Zamrożenie pierwszego wiersza
   sheet.setFrozenRows(1);
@@ -236,12 +238,17 @@ function createSitesSheet(spreadsheet) {
     'Pending',
     'No',
     'No',
+    false,             // Auto Install - checkbox
     new Date(),
     new Date(),
     'Example site - replace with real data. Fill credentials (columns 7-9) for each site!'
   ]]);
 
-  Logger.log('✅ Sites sheet created with per-site credentials (columns 7-9: Divi + Amazon)');
+  // Set checkbox validation for Auto Install column (column 13)
+  const autoInstallColumn = sheet.getRange(2, 13, sheet.getMaxRows() - 1, 1);
+  autoInstallColumn.insertCheckboxes();
+
+  Logger.log('✅ Sites sheet created with per-site credentials (columns 7-9: Divi + Amazon) and Auto Install checkbox');
   return sheet;
 }
 
@@ -345,6 +352,7 @@ function createContentQueueSheet(spreadsheet) {
     'Title',
     'Status',
     'Product IDs',
+    'Deploy Content',  // COLUMN 7: Checkbox for automated deployment
     'Template',
     'Scheduled Date',
     'Published Date',
@@ -366,17 +374,22 @@ function createContentQueueSheet(spreadsheet) {
   sheet.setColumnWidth(4, 300);  // Title
   sheet.setColumnWidth(5, 100);  // Status
   sheet.setColumnWidth(6, 150);  // Product IDs
-  sheet.setColumnWidth(7, 150);  // Template
-  sheet.setColumnWidth(8, 150);  // Scheduled Date
-  sheet.setColumnWidth(9, 150);  // Published Date
-  sheet.setColumnWidth(10, 100); // Post ID
-  sheet.setColumnWidth(11, 300); // Post URL
-  sheet.setColumnWidth(12, 120); // Created Date
-  sheet.setColumnWidth(13, 300); // Notes
+  sheet.setColumnWidth(7, 120);  // Deploy Content
+  sheet.setColumnWidth(8, 150);  // Template
+  sheet.setColumnWidth(9, 150);  // Scheduled Date
+  sheet.setColumnWidth(10, 150); // Published Date
+  sheet.setColumnWidth(11, 100); // Post ID
+  sheet.setColumnWidth(12, 300); // Post URL
+  sheet.setColumnWidth(13, 120); // Created Date
+  sheet.setColumnWidth(14, 300); // Notes
 
   sheet.setFrozenRows(1);
 
-  Logger.log('✅ Content Queue sheet created');
+  // Set checkbox validation for Deploy Content column (column 7)
+  const deployContentColumn = sheet.getRange(2, 7, sheet.getMaxRows() - 1, 1);
+  deployContentColumn.insertCheckboxes();
+
+  Logger.log('✅ Content Queue sheet created with Deploy Content checkbox');
   return sheet;
 }
 
@@ -539,6 +552,18 @@ function onOpen() {
       .addItem('🗑️ Clear Completed Tasks', 'clearCompletedTasks')
       .addSeparator()
       .addItem('🔄 Retry Failed Tasks', 'retryFailedTasks'))
+    .addSubMenu(ui.createMenu('🤖 Automation')
+      .addItem('🚀 Install Full Stack', 'showInstallFullStackDialog')
+      .addItem('📤 Deploy Selected Content', 'showDeployContentDialog')
+      .addSeparator()
+      .addItem('⚡ Process Auto Install Sites', 'processAutoInstallSites')
+      .addItem('⚡ Process Content Deployment', 'processContentDeployment')
+      .addSeparator()
+      .addItem('⏰ Setup Automated Triggers', 'setupAutomatedTriggers')
+      .addItem('🗑️ Remove Automated Triggers', 'removeAutomatedTriggers')
+      .addSeparator()
+      .addItem('🔄 Run Daily Amazon Sync', 'dailyAmazonSync')
+      .addItem('🔄 Run Hourly Check', 'hourlyAutomationCheck'))
     .addSubMenu(ui.createMenu('🔧 Settings')
       .addItem('🔑 Configure API Keys', 'showAPIKeyInstructions')
       .addItem('⚙️ System Settings', 'showSettingsDialog')

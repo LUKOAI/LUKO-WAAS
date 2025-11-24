@@ -627,3 +627,244 @@ function testAllConnections() {
     ui.alert('Error', 'Connection test failed: ' + error.message, ui.ButtonSet.OK);
   }
 }
+
+// =============================================================================
+// DIALOGI - AUTOMATION
+// =============================================================================
+
+function showInstallFullStackDialog() {
+  const ui = SpreadsheetApp.getUi();
+
+  // Get list of sites
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Sites');
+  const data = sheet.getDataRange().getValues();
+
+  if (data.length <= 1) {
+    ui.alert('No Sites', 'No sites found. Please add a site first.', ui.ButtonSet.OK);
+    return;
+  }
+
+  // Build site list
+  let siteOptions = '';
+  for (let i = 1; i < data.length; i++) {
+    const siteId = data[i][0];
+    const siteName = data[i][1];
+    const status = data[i][9];
+    siteOptions += `<option value="${siteId}">${siteName} (ID: ${siteId}) - ${status}</option>`;
+  }
+
+  const html = HtmlService.createHtmlOutput(`
+    <style>
+      body { font-family: Arial, sans-serif; padding: 20px; }
+      .form-group { margin-bottom: 15px; }
+      label { display: block; margin-bottom: 5px; font-weight: bold; }
+      select, input, textarea { width: 100%; padding: 8px; box-sizing: border-box; }
+      button { background: #4285f4; color: white; padding: 10px 20px; border: none; cursor: pointer; margin-top: 10px; }
+      button:hover { background: #357ae8; }
+      .info { background: #e8f0fe; padding: 10px; border-radius: 4px; margin-bottom: 15px; }
+    </style>
+
+    <div class="info">
+      <strong>🚀 Install Full Stack</strong><br>
+      This will install everything on your WordPress site:<br>
+      • Divi Theme<br>
+      • WooCommerce<br>
+      • WAAS Product Manager Plugin<br>
+      • Optional: Import initial products<br>
+    </div>
+
+    <div class="form-group">
+      <label>Select Site:</label>
+      <select id="siteId">${siteOptions}</select>
+    </div>
+
+    <div class="form-group">
+      <label>Initial ASINs (comma-separated, optional):</label>
+      <input type="text" id="asins" placeholder="B08N5WRWNW, B07XJ8C8F7">
+    </div>
+
+    <div class="form-group">
+      <label>
+        <input type="checkbox" id="generateContent"> Generate initial content (review for first product)
+      </label>
+    </div>
+
+    <button onclick="installStack()">🚀 Install Full Stack</button>
+
+    <script>
+      function installStack() {
+        const siteId = parseInt(document.getElementById('siteId').value);
+        const asins = document.getElementById('asins').value
+          .split(',')
+          .map(s => s.trim())
+          .filter(s => s.length > 0);
+        const generateContent = document.getElementById('generateContent').checked;
+
+        google.script.run
+          .withSuccessHandler(() => {
+            alert('✅ Full stack installation started! Check the Logs sheet for progress.');
+            google.script.host.close();
+          })
+          .withFailureHandler((error) => {
+            alert('❌ Error: ' + error.message);
+          })
+          .runInstallFullStack(siteId, asins, generateContent);
+      }
+    </script>
+  `)
+    .setWidth(500)
+    .setHeight(400);
+
+  ui.showModalDialog(html, '🚀 Install Full Stack');
+}
+
+function runInstallFullStack(siteId, asins, generateContent) {
+  try {
+    logInfo('AUTOMATION', `Starting full stack installation for site ${siteId} (dialog)`, siteId);
+
+    const result = installFullStack(siteId, {
+      importProducts: asins.length > 0,
+      initialAsins: asins,
+      generateContent: generateContent
+    });
+
+    if (result.success) {
+      logSuccess('AUTOMATION', `Full stack installation completed for site ${siteId}`, siteId);
+    } else {
+      logError('AUTOMATION', `Full stack installation failed for site ${siteId}`, siteId);
+    }
+
+    return result;
+  } catch (error) {
+    logError('AUTOMATION', `Full stack installation error: ${error.message}`, siteId);
+    throw error;
+  }
+}
+
+function showDeployContentDialog() {
+  const ui = SpreadsheetApp.getUi();
+
+  // Get list of sites
+  const sitesSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Sites');
+  const sitesData = sitesSheet.getDataRange().getValues();
+
+  if (sitesData.length <= 1) {
+    ui.alert('No Sites', 'No sites found. Please add a site first.', ui.ButtonSet.OK);
+    return;
+  }
+
+  // Build site list
+  let siteOptions = '';
+  for (let i = 1; i < sitesData.length; i++) {
+    const siteId = sitesData[i][0];
+    const siteName = sitesData[i][1];
+    siteOptions += `<option value="${siteId}">${siteName} (ID: ${siteId})</option>`;
+  }
+
+  const html = HtmlService.createHtmlOutput(`
+    <style>
+      body { font-family: Arial, sans-serif; padding: 20px; }
+      .form-group { margin-bottom: 15px; }
+      label { display: block; margin-bottom: 5px; font-weight: bold; }
+      select, input, textarea { width: 100%; padding: 8px; box-sizing: border-box; }
+      button { background: #4285f4; color: white; padding: 10px 20px; border: none; cursor: pointer; margin-top: 10px; }
+      button:hover { background: #357ae8; }
+      .info { background: #e8f0fe; padding: 10px; border-radius: 4px; margin-bottom: 15px; }
+    </style>
+
+    <div class="info">
+      <strong>📤 Deploy Selected Content</strong><br>
+      This will automatically:<br>
+      • Import products from Amazon<br>
+      • Generate content with Claude AI<br>
+      • Publish to your WordPress site<br>
+    </div>
+
+    <div class="form-group">
+      <label>Select Site:</label>
+      <select id="siteId">${siteOptions}</select>
+    </div>
+
+    <div class="form-group">
+      <label>Content Type:</label>
+      <select id="contentType">
+        <option value="product_review">Product Review</option>
+        <option value="comparison">Product Comparison</option>
+        <option value="buying_guide">Buying Guide</option>
+        <option value="top_list">Top 10 List</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Amazon ASINs (comma-separated):</label>
+      <input type="text" id="asins" placeholder="B08N5WRWNW, B07XJ8C8F7" required>
+    </div>
+
+    <div class="form-group">
+      <label>Content Title (optional):</label>
+      <input type="text" id="title" placeholder="Auto-generated if left empty">
+    </div>
+
+    <div class="form-group">
+      <label>
+        <input type="checkbox" id="autoPublish" checked> Auto-publish (otherwise save as draft)
+      </label>
+    </div>
+
+    <button onclick="deployContent()">📤 Deploy Content</button>
+
+    <script>
+      function deployContent() {
+        const siteId = parseInt(document.getElementById('siteId').value);
+        const contentType = document.getElementById('contentType').value;
+        const asins = document.getElementById('asins').value
+          .split(',')
+          .map(s => s.trim())
+          .filter(s => s.length > 0);
+        const title = document.getElementById('title').value;
+        const autoPublish = document.getElementById('autoPublish').checked;
+
+        if (asins.length === 0) {
+          alert('Please enter at least one Amazon ASIN');
+          return;
+        }
+
+        google.script.run
+          .withSuccessHandler(() => {
+            alert('✅ Content deployment started! Check the Logs sheet for progress.');
+            google.script.host.close();
+          })
+          .withFailureHandler((error) => {
+            alert('❌ Error: ' + error.message);
+          })
+          .runDeployContent(siteId, contentType, asins, title, autoPublish);
+      }
+    </script>
+  `)
+    .setWidth(500)
+    .setHeight(500);
+
+  ui.showModalDialog(html, '📤 Deploy Selected Content');
+}
+
+function runDeployContent(siteId, contentType, asins, title, autoPublish) {
+  try {
+    logInfo('AUTOMATION', `Starting content deployment for site ${siteId} (dialog)`, siteId);
+
+    const result = deploySelectedContent(siteId, contentType, asins, {
+      autoPublish: autoPublish,
+      title: title || null
+    });
+
+    if (result.success) {
+      logSuccess('AUTOMATION', `Content deployment completed for site ${siteId}`, siteId);
+    } else {
+      logError('AUTOMATION', `Content deployment failed for site ${siteId}`, siteId);
+    }
+
+    return result;
+  } catch (error) {
+    logError('AUTOMATION', `Content deployment error: ${error.message}`, siteId);
+    throw error;
+  }
+}
