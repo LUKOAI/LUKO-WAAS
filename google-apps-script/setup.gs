@@ -2,22 +2,45 @@
  * WAAS - WordPress Affiliate Automation System
  * Installation Script
  *
+ * =====================================================================
  * INSTRUKCJA INSTALACJI:
- * 1. Skopiuj całą zawartość tego pliku
- * 2. Wejdź na https://script.google.com
- * 3. Kliknij "Nowy projekt"
- * 4. Wklej ten kod i zapisz
- * 5. Uruchom funkcję: installWAAS()
- * 6. Autoryzuj skrypt (zgody Google)
- * 7. Po instalacji ustaw klucze API w Script Properties:
- *    - DIVI_API_USERNAME
- *    - DIVI_API_KEY
+ * =====================================================================
+ * 1. Otwórz Google Sheets (nowy lub istniejący arkusz)
+ * 2. Kliknij: Extensions → Apps Script
+ * 3. Usuń domyślny kod
+ * 4. Skopiuj WSZYSTKIE pliki z folderu google-apps-script:
+ *    - setup.gs (ten plik)
+ *    - Core.gs
+ *    - Menu.gs
+ *    - SiteManager.gs
+ *    - ProductManager.gs
+ *    - TaskManager.gs
+ *    - ContentGenerator.gs
+ *    - DiviAPI.gs
+ *    - WordPressAPI.gs
+ *    - AmazonPA.gs
+ *    - Migration.gs
+ *    - appsscript.json
+ * 5. Zapisz projekt (Ctrl+S)
+ * 6. Uruchom funkcję: installWAAS()
+ * 7. Autoryzuj aplikację (zgody Google)
+ * 8. Po instalacji ustaw klucze API w Script Properties:
+ *    Extensions → Apps Script → Project Settings → Script Properties
+ *    - DIVI_API_USERNAME (global fallback)
+ *    - DIVI_API_KEY (global fallback)
  *    - PA_API_ACCESS_KEY
  *    - PA_API_SECRET_KEY
  *    - PA_API_PARTNER_TAG
  *    - HOSTINGER_API_KEY (opcjonalnie)
  *
- * @version 1.0.0
+ *    ⚠️ WAŻNE: Per-site Divi credentials (kolumny 7-8 w Sites)
+ *    powinny być wypełnione dla każdej strony osobno!
+ *
+ * 9. Przeładuj arkusz (F5)
+ * 10. Użyj menu "⚡ WAAS" aby zacząć!
+ *
+ * @version 2.0.0 - Per-Site Divi API Credentials
+ * =====================================================================
  */
 
 // =============================================================================
@@ -28,50 +51,60 @@ function installWAAS() {
   try {
     Logger.log('🚀 Starting WAAS installation...');
 
-    // 1. Tworzenie arkusza Google Sheets
+    // Użyj bieżącego arkusza lub utwórz nowy
+    let spreadsheet;
+    try {
+      spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+      spreadsheet.rename('WAAS - WordPress Affiliate Automation System');
+      Logger.log('✅ Using existing spreadsheet');
+    } catch (e) {
+      // Jeśli nie ma aktywnego arkusza, utwórz nowy
+      spreadsheet = SpreadsheetApp.create('WAAS - WordPress Affiliate Automation System');
+      Logger.log('✅ Created new spreadsheet');
+    }
+
+    // 1. Tworzenie struktury arkusza
     Logger.log('📊 Creating Google Sheets structure...');
-    const spreadsheet = createSpreadsheetsStructure();
+    createSheetsStructure(spreadsheet);
 
-    // 2. Instalacja wszystkich skryptów
-    Logger.log('📝 Installing script files...');
-    installAllScripts();
-
-    // 3. Konfiguracja menu i triggerów
-    Logger.log('⚙️ Setting up menus and triggers...');
-    setupMenusAndTriggers();
-
-    // 4. Inicjalizacja ustawień
+    // 2. Inicjalizacja ustawień
     Logger.log('🔧 Initializing settings...');
     initializeSettings();
 
     Logger.log('✅ Installation completed successfully!');
     Logger.log('📋 Spreadsheet URL: ' + spreadsheet.getUrl());
     Logger.log('⚠️ IMPORTANT: Now set your API keys in Script Properties!');
+    Logger.log('⚠️ IMPORTANT: Fill per-site Divi credentials in Sites sheet (columns 7-8)!');
 
     // Pokazuje URL arkusza - tylko jeśli UI jest dostępne
     try {
       SpreadsheetApp.getUi().alert(
-        'Installation Complete!\n\n' +
+        '✅ Installation Complete!',
         'Spreadsheet URL:\n' + spreadsheet.getUrl() + '\n\n' +
         'NEXT STEPS:\n' +
         '1. Open Project Settings (⚙️)\n' +
-        '2. Add Script Properties:\n' +
+        '2. Add Script Properties (global fallback):\n' +
         '   - DIVI_API_USERNAME\n' +
         '   - DIVI_API_KEY\n' +
         '   - PA_API_ACCESS_KEY\n' +
         '   - PA_API_SECRET_KEY\n' +
         '   - PA_API_PARTNER_TAG\n' +
-        '3. Reload the spreadsheet\n' +
-        '4. Use WAAS menu to start!'
+        '3. Fill per-site Divi credentials in Sites sheet:\n' +
+        '   - Column 7: Divi API Username\n' +
+        '   - Column 8: Divi API Key\n' +
+        '4. Reload the spreadsheet (F5)\n' +
+        '5. Use WAAS menu to start!',
+        SpreadsheetApp.getUi().ButtonSet.OK
       );
     } catch (e) {
-      // UI nie jest dostępne (wywołanie z edytora) - informacje są już w logach
+      // UI nie jest dostępne (wywołanie z edytora)
       Logger.log('ℹ️ Installation info logged above (UI not available in this context)');
     }
 
     return spreadsheet;
   } catch (error) {
     Logger.log('❌ Installation error: ' + error.message);
+    Logger.log(error.stack);
     throw error;
   }
 }
@@ -80,35 +113,69 @@ function installWAAS() {
 // TWORZENIE STRUKTURY ARKUSZA
 // =============================================================================
 
-function createSpreadsheetsStructure() {
-  // Tworzenie nowego arkusza
-  const spreadsheet = SpreadsheetApp.create('WAAS - WordPress Affiliate Automation System');
-  const spreadsheetId = spreadsheet.getId();
+function createSheetsStructure(spreadsheet) {
+  // Usuń domyślny arkusz jeśli istnieje
+  const sheets = spreadsheet.getSheets();
+  const defaultSheet = sheets.find(s => s.getName() === 'Sheet1' || s.getName() === 'Arkusz1');
 
-  // Usunięcie domyślnego arkusza
-  const defaultSheet = spreadsheet.getSheets()[0];
+  // Sprawdź które arkusze już istnieją
+  const existingSheets = sheets.map(s => s.getName());
 
-  // Tworzenie arkuszy
-  createSitesSheet(spreadsheet);
-  createProductsSheet(spreadsheet);
-  createTasksSheet(spreadsheet);
-  createContentQueueSheet(spreadsheet);
-  createLogsSheet(spreadsheet);
-  createSettingsSheet(spreadsheet);
+  // Twórz tylko te arkusze których nie ma
+  if (!existingSheets.includes('Sites')) {
+    createSitesSheet(spreadsheet);
+  } else {
+    Logger.log('ℹ️ Sites sheet already exists');
+  }
 
-  // Usunięcie domyślnego arkusza
-  spreadsheet.deleteSheet(defaultSheet);
+  if (!existingSheets.includes('Products')) {
+    createProductsSheet(spreadsheet);
+  } else {
+    Logger.log('ℹ️ Products sheet already exists');
+  }
 
-  // Ustawienie aktywnego arkusza na Sites
+  if (!existingSheets.includes('Tasks')) {
+    createTasksSheet(spreadsheet);
+  } else {
+    Logger.log('ℹ️ Tasks sheet already exists');
+  }
+
+  if (!existingSheets.includes('Content Queue')) {
+    createContentQueueSheet(spreadsheet);
+  } else {
+    Logger.log('ℹ️ Content Queue sheet already exists');
+  }
+
+  if (!existingSheets.includes('Logs')) {
+    createLogsSheet(spreadsheet);
+  } else {
+    Logger.log('ℹ️ Logs sheet already exists');
+  }
+
+  if (!existingSheets.includes('Settings')) {
+    createSettingsSheet(spreadsheet);
+  } else {
+    Logger.log('ℹ️ Settings sheet already exists');
+  }
+
+  // Usuń domyślny arkusz na końcu jeśli istnieje
+  if (defaultSheet) {
+    try {
+      spreadsheet.deleteSheet(defaultSheet);
+      Logger.log('✅ Removed default sheet');
+    } catch (e) {
+      Logger.log('ℹ️ Could not remove default sheet (may not exist)');
+    }
+  }
+
+  // Ustaw aktywny arkusz na Sites
   spreadsheet.getSheetByName('Sites').activate();
-
-  return spreadsheet;
 }
 
 function createSitesSheet(spreadsheet) {
   const sheet = spreadsheet.insertSheet('Sites');
 
-  // Nagłówki kolumn
+  // Nagłówki kolumn - KRYTYCZNE: kolumny 7-8 to Divi API Username/Key
   const headers = [
     'ID',
     'Site Name',
@@ -116,8 +183,8 @@ function createSitesSheet(spreadsheet) {
     'WordPress URL',
     'Admin Username',
     'Admin Password',
-    'Divi API Username',  // NEW: Per-site Divi username
-    'Divi API Key',       // NEW: Per-site Divi API key
+    'Divi API Username',  // COLUMN 7: Per-site Divi username
+    'Divi API Key',       // COLUMN 8: Per-site Divi API key
     'Status',
     'Divi Installed',
     'Plugin Installed',
@@ -159,17 +226,18 @@ function createSitesSheet(spreadsheet) {
     'example.com',
     'https://example.com',
     'admin',
-    '',
-    '',           // Divi API Username - fill in per site
-    '',           // Divi API Key - fill in per site
-    'Active',
+    '',                // Admin Password - fill in
+    '',                // Divi API Username - fill in per site
+    '',                // Divi API Key - fill in per site
+    'Pending',
     'No',
     'No',
     new Date(),
     new Date(),
-    'Example site - replace with real data'
+    'Example site - replace with real data. Fill Divi API Username/Key (columns 7-8) for each site!'
   ]]);
 
+  Logger.log('✅ Sites sheet created with per-site Divi credentials (columns 7-8)');
   return sheet;
 }
 
@@ -214,6 +282,7 @@ function createProductsSheet(spreadsheet) {
 
   sheet.setFrozenRows(1);
 
+  Logger.log('✅ Products sheet created');
   return sheet;
 }
 
@@ -258,6 +327,7 @@ function createTasksSheet(spreadsheet) {
 
   sheet.setFrozenRows(1);
 
+  Logger.log('✅ Tasks sheet created');
   return sheet;
 }
 
@@ -302,6 +372,7 @@ function createContentQueueSheet(spreadsheet) {
 
   sheet.setFrozenRows(1);
 
+  Logger.log('✅ Content Queue sheet created');
   return sheet;
 }
 
@@ -336,6 +407,7 @@ function createLogsSheet(spreadsheet) {
 
   sheet.setFrozenRows(1);
 
+  Logger.log('✅ Logs sheet created');
   return sheet;
 }
 
@@ -371,131 +443,14 @@ function createSettingsSheet(spreadsheet) {
     ['error_notification_email', '', 'Email for error notifications', new Date()],
     ['task_retry_attempts', '3', 'Number of retry attempts for failed tasks', new Date()],
     ['product_sync_interval', '24', 'Hours between product data syncs', new Date()],
-    ['divi_default_template', '', 'Default Divi layout template ID', new Date()]
+    ['divi_default_template', '', 'Default Divi layout template ID', new Date()],
+    ['use_per_site_divi_keys', 'true', 'Use per-site Divi API credentials (recommended)', new Date()]
   ];
 
   sheet.getRange(2, 1, defaultSettings.length, 4).setValues(defaultSettings);
 
+  Logger.log('✅ Settings sheet created');
   return sheet;
-}
-
-// =============================================================================
-// INSTALACJA SKRYPTÓW
-// =============================================================================
-
-function installAllScripts() {
-  Logger.log('Installing Core.gs...');
-  installCoreScript();
-
-  Logger.log('Installing SiteManager.gs...');
-  installSiteManagerScript();
-
-  Logger.log('Installing ProductManager.gs...');
-  installProductManagerScript();
-
-  Logger.log('Installing ContentGenerator.gs...');
-  installContentGeneratorScript();
-
-  Logger.log('Installing TaskManager.gs...');
-  installTaskManagerScript();
-
-  Logger.log('Installing DiviAPI.gs...');
-  installDiviAPIScript();
-
-  Logger.log('Installing WordPressAPI.gs...');
-  installWordPressAPIScript();
-
-  Logger.log('Installing AmazonPA.gs...');
-  installAmazonPAScript();
-
-  Logger.log('Installing Utils.gs...');
-  installUtilsScript();
-
-  Logger.log('Installing Menu.gs...');
-  installMenuScript();
-}
-
-function installCoreScript() {
-  // Ten plik zawiera główne funkcje konfiguracyjne
-  // Będzie utworzony jako osobny plik w projekcie
-}
-
-function installSiteManagerScript() {
-  // Zarządzanie stronami WordPress
-}
-
-function installProductManagerScript() {
-  // Zarządzanie produktami afiliacyjnymi
-}
-
-function installContentGeneratorScript() {
-  // Generowanie treści
-}
-
-function installTaskManagerScript() {
-  // Zarządzanie zadaniami
-}
-
-function installDiviAPIScript() {
-  // Integracja z Divi
-}
-
-function installWordPressAPIScript() {
-  // Integracja z WordPress
-}
-
-function installAmazonPAScript() {
-  // Integracja z Amazon Product Advertising API
-}
-
-function installUtilsScript() {
-  // Funkcje pomocnicze
-}
-
-function installMenuScript() {
-  // Menu i UI
-}
-
-// =============================================================================
-// KONFIGURACJA MENU I TRIGGERÓW
-// =============================================================================
-
-function setupMenusAndTriggers() {
-  // Menu zostanie dodane automatycznie przez onOpen()
-  // Triggery można dodać ręcznie lub tutaj programatically
-}
-
-function onOpen() {
-  const ui = SpreadsheetApp.getUi();
-  ui.createMenu('⚡ WAAS')
-    .addSubMenu(ui.createMenu('🌐 Sites')
-      .addItem('Add New Site', 'addNewSite')
-      .addItem('Check Site Status', 'checkSiteStatus')
-      .addItem('Install Divi on Site', 'installDiviOnSite')
-      .addItem('Install Plugin on Site', 'installPluginOnSite'))
-    .addSubMenu(ui.createMenu('📦 Products')
-      .addItem('Import Products from Amazon', 'importProductsFromAmazon')
-      .addItem('Update Product Data', 'updateProductData')
-      .addItem('Sync All Products', 'syncAllProducts'))
-    .addSubMenu(ui.createMenu('📝 Content')
-      .addItem('Generate Content', 'generateContent')
-      .addItem('Publish Scheduled Content', 'publishScheduledContent')
-      .addItem('View Content Queue', 'viewContentQueue'))
-    .addSubMenu(ui.createMenu('⚙️ Tasks')
-      .addItem('View Active Tasks', 'viewActiveTasks')
-      .addItem('Run Task Queue', 'runTaskQueue')
-      .addItem('Clear Completed Tasks', 'clearCompletedTasks'))
-    .addSubMenu(ui.createMenu('🔧 Settings')
-      .addItem('Configure API Keys', 'showAPIKeyInstructions')
-      .addItem('Test Connections', 'testAllConnections')
-      .addItem('View Logs', 'viewLogs')
-      .addSeparator()
-      .addItem('🔄 Migrate to Per-Site Divi Keys', 'migrateToPerSiteDiviKeys')
-      .addItem('✅ Verify Migration', 'verifyMigration'))
-    .addSeparator()
-    .addItem('📖 Documentation', 'showDocumentation')
-    .addItem('ℹ️ About', 'showAbout')
-    .addToUi();
 }
 
 // =============================================================================
@@ -506,100 +461,92 @@ function initializeSettings() {
   // Sprawdzenie czy klucze API są ustawione
   const scriptProperties = PropertiesService.getScriptProperties();
 
-  const requiredKeys = [
-    'DIVI_API_USERNAME',
-    'DIVI_API_KEY',
+  const recommendedKeys = [
     'PA_API_ACCESS_KEY',
     'PA_API_SECRET_KEY',
     'PA_API_PARTNER_TAG'
   ];
 
-  const missingKeys = [];
-  requiredKeys.forEach(key => {
+  const optionalKeys = [
+    'DIVI_API_USERNAME',  // Global fallback
+    'DIVI_API_KEY',       // Global fallback
+    'HOSTINGER_API_KEY'
+  ];
+
+  const missingRequired = [];
+  const missingOptional = [];
+
+  recommendedKeys.forEach(key => {
     if (!scriptProperties.getProperty(key)) {
-      missingKeys.push(key);
+      missingRequired.push(key);
     }
   });
 
-  if (missingKeys.length > 0) {
-    Logger.log('⚠️ Missing API keys: ' + missingKeys.join(', '));
-  } else {
+  optionalKeys.forEach(key => {
+    if (!scriptProperties.getProperty(key)) {
+      missingOptional.push(key);
+    }
+  });
+
+  if (missingRequired.length > 0) {
+    Logger.log('⚠️ Missing required API keys: ' + missingRequired.join(', '));
+  }
+
+  if (missingOptional.length > 0) {
+    Logger.log('ℹ️ Missing optional API keys (can use per-site instead): ' + missingOptional.join(', '));
+  }
+
+  if (missingRequired.length === 0 && missingOptional.length === 0) {
     Logger.log('✅ All API keys are configured');
   }
+
+  Logger.log('💡 Remember: Per-site Divi credentials should be set in Sites sheet (columns 7-8)');
 }
 
 // =============================================================================
-// FUNKCJE POMOCNICZE MENU
+// MENU
 // =============================================================================
 
-function showAPIKeyInstructions() {
+function onOpen() {
   const ui = SpreadsheetApp.getUi();
-  ui.alert(
-    'API Keys Configuration',
-    'To configure API keys:\n\n' +
-    '1. Click on Extensions > Apps Script\n' +
-    '2. Click on Project Settings (⚙️)\n' +
-    '3. Scroll to "Script Properties"\n' +
-    '4. Add the following properties:\n\n' +
-    'DIVI_API_USERNAME - Your Divi username\n' +
-    'DIVI_API_KEY - Your Divi API key\n' +
-    'PA_API_ACCESS_KEY - Amazon PA API Access Key\n' +
-    'PA_API_SECRET_KEY - Amazon PA API Secret Key\n' +
-    'PA_API_PARTNER_TAG - Amazon Associate Tag\n' +
-    'HOSTINGER_API_KEY - Hostinger API Key (optional)\n\n' +
-    '5. Click "Save script properties"',
-    ui.ButtonSet.OK
-  );
+  ui.createMenu('⚡ WAAS')
+    .addSubMenu(ui.createMenu('🌐 Sites')
+      .addItem('➕ Add New Site', 'showAddSiteDialog')
+      .addItem('✅ Check Site Status', 'showCheckSiteDialog')
+      .addItem('🎨 Install Divi on Site', 'showInstallDiviDialog')
+      .addItem('🔌 Install Plugin on Site', 'showInstallPluginDialog')
+      .addSeparator()
+      .addItem('🔄 Refresh All Sites', 'refreshAllSites'))
+    .addSubMenu(ui.createMenu('📦 Products')
+      .addItem('📥 Import from Amazon', 'showImportProductsDialog')
+      .addItem('🔄 Update Product Data', 'showUpdateProductsDialog')
+      .addItem('🔄 Sync All Products', 'syncAllProducts')
+      .addSeparator()
+      .addItem('📊 Product Statistics', 'showProductStats'))
+    .addSubMenu(ui.createMenu('📝 Content')
+      .addItem('✍️ Generate Content', 'showGenerateContentDialog')
+      .addItem('📤 Publish Scheduled Content', 'publishScheduledContent')
+      .addItem('📋 View Content Queue', 'focusContentQueue')
+      .addSeparator()
+      .addItem('🗑️ Clear Failed Content', 'clearFailedContent'))
+    .addSubMenu(ui.createMenu('⚙️ Tasks')
+      .addItem('👁️ View Active Tasks', 'focusActiveTasks')
+      .addItem('▶️ Run Task Queue', 'runTaskQueue')
+      .addItem('🗑️ Clear Completed Tasks', 'clearCompletedTasks')
+      .addSeparator()
+      .addItem('🔄 Retry Failed Tasks', 'retryFailedTasks'))
+    .addSubMenu(ui.createMenu('🔧 Settings')
+      .addItem('🔑 Configure API Keys', 'showAPIKeyInstructions')
+      .addItem('⚙️ System Settings', 'showSettingsDialog')
+      .addItem('🧪 Test Connections', 'testAllConnections')
+      .addSeparator()
+      .addItem('🔄 Migrate to Per-Site Divi Keys', 'migrateToPerSiteDiviKeys')
+      .addItem('✅ Verify Migration', 'verifyMigration')
+      .addSeparator()
+      .addItem('📊 View Logs', 'focusLogs')
+      .addItem('🗑️ Clear Old Logs', 'clearOldLogs'))
+    .addSeparator()
+    .addItem('📖 Documentation', 'showDocumentation')
+    .addItem('ℹ️ About WAAS', 'showAbout')
+    .addToUi();
 }
-
-function showDocumentation() {
-  const ui = SpreadsheetApp.getUi();
-  ui.alert(
-    'WAAS Documentation',
-    'Documentation and guides:\n\n' +
-    '• GitHub: https://github.com/LUKOAI/LUKO-WAAS\n' +
-    '• Product Manager: https://github.com/LUKOAI/-LukoAmazonAffiliateManager\n' +
-    '• Divi Documentation: https://www.elegantthemes.com/documentation/divi/\n' +
-    '• Amazon PA API: https://webservices.amazon.com/paapi5/documentation/\n\n' +
-    'For support, check the GitHub repository.',
-    ui.ButtonSet.OK
-  );
-}
-
-function showAbout() {
-  const ui = SpreadsheetApp.getUi();
-  ui.alert(
-    'About WAAS',
-    'WordPress Affiliate Automation System v1.0.0\n\n' +
-    '© 2024 LUKOAI\n' +
-    'https://github.com/LUKOAI/LUKO-WAAS\n\n' +
-    'Automated WordPress site management with:\n' +
-    '• Divi theme integration\n' +
-    '• Amazon affiliate products\n' +
-    '• Automated content generation\n' +
-    '• Multi-site management\n\n' +
-    'Developed with ❤️ for affiliate marketers',
-    ui.ButtonSet.OK
-  );
-}
-
-function testAllConnections() {
-  const ui = SpreadsheetApp.getUi();
-  ui.alert('Testing connections - this feature will be implemented in the full version.');
-}
-
-// Placeholder functions for menu items
-function addNewSite() { SpreadsheetApp.getUi().alert('This feature will be implemented in the full version.'); }
-function checkSiteStatus() { SpreadsheetApp.getUi().alert('This feature will be implemented in the full version.'); }
-function installDiviOnSite() { SpreadsheetApp.getUi().alert('This feature will be implemented in the full version.'); }
-function installPluginOnSite() { SpreadsheetApp.getUi().alert('This feature will be implemented in the full version.'); }
-function importProductsFromAmazon() { SpreadsheetApp.getUi().alert('This feature will be implemented in the full version.'); }
-function updateProductData() { SpreadsheetApp.getUi().alert('This feature will be implemented in the full version.'); }
-function syncAllProducts() { SpreadsheetApp.getUi().alert('This feature will be implemented in the full version.'); }
-function generateContent() { SpreadsheetApp.getUi().alert('This feature will be implemented in the full version.'); }
-function publishScheduledContent() { SpreadsheetApp.getUi().alert('This feature will be implemented in the full version.'); }
-function viewContentQueue() { SpreadsheetApp.getUi().alert('This feature will be implemented in the full version.'); }
-function viewActiveTasks() { SpreadsheetApp.getUi().alert('This feature will be implemented in the full version.'); }
-function runTaskQueue() { SpreadsheetApp.getUi().alert('This feature will be implemented in the full version.'); }
-function clearCompletedTasks() { SpreadsheetApp.getUi().alert('This feature will be implemented in the full version.'); }
-function viewLogs() { SpreadsheetApp.getUi().alert('This feature will be implemented in the full version.'); }

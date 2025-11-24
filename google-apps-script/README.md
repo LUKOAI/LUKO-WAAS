@@ -1,292 +1,414 @@
 # WAAS - WordPress Affiliate Automation System
-## Google Apps Script Installation Guide
+## Google Apps Script - Modular Architecture v2.0
 
-### 📋 Spis treści
-1. [Wymagania](#wymagania)
-2. [Instalacja krok po kroku](#instalacja-krok-po-kroku)
-3. [Konfiguracja API Keys](#konfiguracja-api-keys)
-4. [Pierwsze uruchomienie](#pierwsze-uruchomienie)
-5. [Rozwiązywanie problemów](#rozwiązywanie-problemów)
-
----
-
-## 🔧 Wymagania
-
-Przed instalacją upewnij się, że posiadasz:
-
-- Konto Google (Gmail)
-- Klucze API:
-  - **Divi API** (Elegant Themes):
-    - Username: `netanaliza`
-    - API Key: `2abad7fcbcffa7ab2cab87d44d31f5b16b8654e4`
-  - **Amazon Product Advertising API**:
-    - Access Key ID
-    - Secret Access Key
-    - Associate Tag (Partner ID)
-  - **Hostinger API Key** (opcjonalnie - do przyszłego użycia)
+### 📋 Table of Contents
+1. [Architecture Overview](#architecture-overview)
+2. [Installation](#installation)
+3. [Module Structure](#module-structure)
+4. [Per-Site Divi API Credentials](#per-site-divi-api-credentials)
+5. [API Keys Configuration](#api-keys-configuration)
+6. [Usage](#usage)
+7. [Troubleshooting](#troubleshooting)
 
 ---
 
-## 📥 Instalacja krok po kroku
+## 🏗️ Architecture Overview
 
-### Krok 1: Otwórz Google Apps Script
+WAAS uses a **modular architecture** with separate files for each functionality:
 
-1. Wejdź na: https://script.google.com
-2. Zaloguj się na swoje konto Google
-3. Kliknij: **"Nowy projekt"**
+```
+google-apps-script/
+├── setup.gs               # Installation script (creates sheets, menu)
+├── Core.gs                # Core functions, configuration, logging
+├── Menu.gs                # UI menu and dialogs
+├── SiteManager.gs         # WordPress site management
+├── ProductManager.gs      # Amazon product management
+├── TaskManager.gs         # Task queue system
+├── ContentGenerator.gs    # Content generation
+├── DiviAPI.gs             # Divi API integration
+├── WordPressAPI.gs        # WordPress REST API
+├── AmazonPA.gs            # Amazon Product Advertising API
+├── Migration.gs           # Migration tools (per-site credentials)
+└── appsscript.json        # Manifest file
 
-### Krok 2: Wklej skrypt instalacyjny
+TOTAL: 11 files
+```
 
-1. Usuń zawartość domyślnego pliku `Code.gs`
-2. Otwórz plik `setup.gs` z tego repozytorium
-3. Skopiuj **CAŁĄ** zawartość pliku
-4. Wklej do edytora Google Apps Script
-5. Kliknij: **Zapisz** (ikona dyskietki lub Ctrl+S)
-6. Nazwij projekt: `WAAS Installation`
+### ✨ Key Features
 
-### Krok 3: Uruchom instalację
-
-1. W menu funkcji wybierz: `installWAAS`
-2. Kliknij: **Uruchom** (▶️)
-3. **WAŻNE**: Zostaniesz poproszony o autoryzację:
-   - Kliknij: **Przejrzyj uprawnienia**
-   - Wybierz swoje konto Google
-   - Kliknij: **Zaawansowane**
-   - Kliknij: **Przejdź do WAAS Installation (niebezpieczne)**
-   - Kliknij: **Zezwól**
-
-### Krok 4: Poczekaj na zakończenie
-
-Instalacja zajmie 30-60 sekund. Zobaczysz:
-- Log w konsoli (dolny panel)
-- Po zakończeniu: okno dialogowe z URL do arkusza
+- **Per-Site Divi API Credentials** - Each site can have its own Divi API keys
+- **Multi-Site Management** - Manage multiple WordPress sites
+- **Amazon Affiliate Integration** - Import and sync products
+- **Automated Content Generation** - Create reviews, comparisons, guides
+- **Task Queue System** - Schedule and automate operations
+- **Comprehensive Logging** - Track all operations
 
 ---
 
-## 🔑 Konfiguracja API Keys
+## 📥 Installation
 
-### Metoda 1: Przez interfejs Google Apps Script (ZALECANE)
+### Step 1: Open Google Apps Script
 
-1. W projekcie Google Apps Script kliknij: **⚙️ Project Settings** (lewy panel)
-2. Przewiń do sekcji: **Script Properties**
-3. Kliknij: **Add script property**
-4. Dodaj następujące właściwości:
+1. Go to https://script.google.com
+2. Click "New project"
+3. Name your project: `WAAS`
 
+### Step 2: Copy All Module Files
+
+Copy **ALL 11 files** from this directory to your Google Apps Script project:
+
+1. Click `+` next to `Files`
+2. For each `.gs` file:
+   - Create a new script file
+   - Copy the entire content
+   - Save with the same name (without `.gs` extension)
+
+3. For `appsscript.json`:
+   - Click on Project Settings (⚙️)
+   - Enable "Show `appsscript.json` manifest file"
+   - Replace the content with the file from this repo
+
+**Required Files:**
+- setup.gs
+- Core.gs
+- Menu.gs
+- SiteManager.gs
+- ProductManager.gs
+- TaskManager.gs
+- ContentGenerator.gs
+- DiviAPI.gs
+- WordPressAPI.gs
+- AmazonPA.gs
+- Migration.gs
+- appsscript.json
+
+### Step 3: Run Installation
+
+1. Select function: `installWAAS`
+2. Click Run (▶️)
+3. Authorize the application:
+   - Click "Review permissions"
+   - Select your Google account
+   - Click "Advanced"
+   - Click "Go to WAAS (unsafe)"
+   - Click "Allow"
+
+4. Wait for installation to complete (30-60 seconds)
+
+### Step 4: Configure API Keys
+
+1. In Google Apps Script, click **Project Settings** (⚙️)
+2. Scroll to **Script Properties**
+3. Click **Add script property**
+4. Add the following properties:
+
+**Required (Amazon):**
 | Property Name | Value |
 |--------------|-------|
-| `DIVI_API_USERNAME` | `netanaliza` |
-| `DIVI_API_KEY` | `2abad7fcbcffa7ab2cab87d44d31f5b16b8654e4` |
-| `PA_API_ACCESS_KEY` | *Twój Amazon Access Key* |
-| `PA_API_SECRET_KEY` | *Twój Amazon Secret Key* |
-| `PA_API_PARTNER_TAG` | *Twój Amazon Associate Tag* |
-| `HOSTINGER_API_KEY` | *Opcjonalnie - dla przyszłego użytku* |
+| `PA_API_ACCESS_KEY` | Your Amazon PA API Access Key |
+| `PA_API_SECRET_KEY` | Your Amazon PA API Secret Key |
+| `PA_API_PARTNER_TAG` | Your Amazon Associate Tag |
 
-5. Po dodaniu każdej właściwości kliknij: **Save script properties**
+**Optional (Global Fallback):**
+| Property Name | Value |
+|--------------|-------|
+| `DIVI_API_USERNAME` | `netanaliza` (fallback for all sites) |
+| `DIVI_API_KEY` | Your global Divi API Key (fallback) |
+| `HOSTINGER_API_KEY` | Optional - for future use |
 
-### Metoda 2: Przez menu w arkuszu
+5. Click **Save script properties**
 
-1. Otwórz utworzony arkusz Google Sheets
-2. Kliknij: **⚡ WAAS → 🔧 Settings → 🔑 Configure API Keys**
-3. Postępuj zgodnie z instrukcjami w oknie dialogowym
+### Step 5: Fill Per-Site Divi Credentials
 
----
+⚠️ **IMPORTANT**: For each site in the **Sites** sheet:
 
-## 🚀 Pierwsze uruchomienie
+1. Open the created Google Sheet
+2. Go to the **Sites** tab
+3. Fill columns 7-8 for EACH site:
+   - **Column 7**: Divi API Username (e.g., `netanaliza`)
+   - **Column 8**: Divi API Key (unique per site)
 
-### 1. Otwórz arkusz
+**Why per-site credentials?**
+- Each WordPress site needs its own Divi license
+- Prevents license conflicts
+- Better security and control
 
-Po instalacji otrzymałeś URL do arkusza. Otwórz go.
+### Step 6: Start Using WAAS
 
-### 2. Sprawdź strukturę
-
-Arkusz zawiera następujące karty:
-- **Sites** - zarządzanie stronami WordPress
-- **Products** - produkty afiliacyjne z Amazon
-- **Tasks** - kolejka zadań
-- **Content Queue** - zaplanowana treść
-- **Logs** - logi systemowe
-- **Settings** - ustawienia systemu
-
-### 3. Przetestuj połączenia
-
-1. Kliknij: **⚡ WAAS → 🔧 Settings → 🧪 Test Connections**
-2. Sprawdź czy wszystkie API są skonfigurowane
-
-### 4. Dodaj pierwszą stronę
-
-1. Kliknij: **⚡ WAAS → 🌐 Sites → ➕ Add New Site**
-2. Wypełnij formularz:
-   - **Site Name**: Nazwa Twojej strony
-   - **Domain**: example.com
-   - **WordPress URL**: https://example.com
-   - **Admin Username**: admin
-   - **Admin Password**: hasło do WordPress
-3. Kliknij: **Add Site**
-
-### 5. Importuj produkty
-
-1. Kliknij: **⚡ WAAS → 📦 Products → 📥 Import from Amazon**
-2. Wpisz słowa kluczowe (np. "laptop")
-3. Wybierz kategorię
-4. Ustaw liczbę produktów (1-50)
-5. Kliknij: **Import Products**
+1. Reload the spreadsheet (F5)
+2. You should see **⚡ WAAS** menu
+3. Start managing your sites!
 
 ---
 
-## 🎯 Podstawowe operacje
+## 📦 Module Structure
 
-### Zarządzanie stronami
+### Core Modules
 
-```
-⚡ WAAS → 🌐 Sites
-```
+#### `setup.gs` - Installation Script
+- Creates Google Sheets structure
+- Initializes settings
+- Sets up menu
 
-- **Add New Site** - dodaj nową stronę WordPress
-- **Check Site Status** - sprawdź status strony
-- **Install Divi on Site** - zainstaluj motyw Divi
-- **Install Plugin on Site** - zainstaluj WAAS Product Manager
-- **Refresh All Sites** - sprawdź wszystkie strony
+**Key Functions:**
+- `installWAAS()` - Main installation function
+- `createSitesSheet()` - Creates Sites sheet with per-site Divi columns
+- `onOpen()` - Creates menu when sheet opens
 
-### Zarządzanie produktami
+#### `Core.gs` - Core Functionality
+- Configuration constants
+- API key getters with **per-site support**
+- Sheet access functions
+- Logging system
+- Helper functions
 
-```
-⚡ WAAS → 📦 Products
-```
+**Key Functions:**
+- `getDiviCredentialsForSite(site)` - **NEW:** Gets per-site Divi credentials
+- `getDiviCredentials()` - Global fallback
+- `getAPIKey(keyName)` - Get API keys from Script Properties
+- `logInfo/Warning/Error/Success()` - Logging functions
 
-- **Import from Amazon** - importuj produkty z Amazon
-- **Update Product Data** - zaktualizuj ceny i dostępność
-- **Sync All Products** - synchronizuj wszystkie produkty
-- **Product Statistics** - statystyki produktów
+#### `Menu.gs` - User Interface
+- Custom menu creation
+- Dialogs for user input
+- UI helpers
 
-### Generowanie treści
+**Key Functions:**
+- `onOpen()` - Creates WAAS menu
+- `showAddSiteDialog()` - Add new site form
+- `showImportProductsDialog()` - Import products form
 
-```
-⚡ WAAS → 📝 Content
-```
+#### `SiteManager.gs` - Site Management
+- WordPress site operations
+- Divi installation with **per-site credentials**
+- Plugin management
+- Site health checks
 
-- **Generate Content** - wygeneruj treść afiliacyjną
-- **Publish Scheduled Content** - opublikuj zaplanowaną treść
-- **View Content Queue** - zobacz kolejkę treści
+**Key Functions:**
+- `getSiteById(siteId)` - Get site data (includes Divi credentials)
+- `installDiviOnSite(siteId)` - Install Divi using per-site keys
+- `checkSiteStatus(siteId)` - Check site health
 
-### Zarządzanie zadaniami
+#### `ProductManager.gs` - Product Management
+- Amazon product import
+- Product data synchronization
+- Product database management
 
-```
-⚡ WAAS → ⚙️ Tasks
-```
+**Key Functions:**
+- `importProductsFromAmazon(data)` - Import products
+- `updateProductData()` - Sync product data
+- `getActiveProducts()` - Get active products
 
-- **View Active Tasks** - zobacz aktywne zadania
-- **Run Task Queue** - uruchom kolejkę zadań
-- **Clear Completed Tasks** - usuń zakończone zadania
-- **Retry Failed Tasks** - ponów nieudane zadania
+#### `TaskManager.gs` - Task Queue
+- Task creation and management
+- Task queue processing
+- Scheduled tasks
 
----
+**Key Functions:**
+- `createTask(type, siteId, ...)` - Create new task
+- `runTaskQueue()` - Process pending tasks
+- `executeTask(task)` - Execute single task
 
-## 📝 Struktura plików
+#### `ContentGenerator.gs` - Content Generation
+- Generate product reviews
+- Generate comparisons
+- Generate buying guides
+- Content templates
 
-Po pełnej instalacji projekt zawiera:
-
-```
-WAAS Project/
-├── setup.gs              # Skrypt instalacyjny (używany tylko raz)
-├── Core.gs               # Główne funkcje systemu
-├── Menu.gs               # Menu i interfejs użytkownika
-├── SiteManager.gs        # Zarządzanie stronami WordPress
-├── ProductManager.gs     # Zarządzanie produktami
-├── TaskManager.gs        # System kolejki zadań
-├── ContentGenerator.gs   # Generowanie treści
-├── DiviAPI.gs           # Integracja z Divi API
-├── WordPressAPI.gs      # Integracja z WordPress REST API
-└── AmazonPA.gs          # Integracja z Amazon PA API
-```
-
----
-
-## 🔍 Rozwiązywanie problemów
-
-### Problem: "Nie mogę autoryzować skryptu"
-
-**Rozwiązanie:**
-1. Kliknij "Zaawansowane"
-2. Kliknij "Przejdź do WAAS (niebezpieczne)"
-3. To Twój własny skrypt - jest bezpieczny
-
-### Problem: "API keys not configured"
-
-**Rozwiązanie:**
-1. Sprawdź czy dodałeś wszystkie Script Properties
-2. Upewnij się, że nazwy właściwości są dokładnie takie same
-3. Odśwież arkusz (F5)
-
-### Problem: "WordPress not accessible"
-
-**Rozwiązanie:**
-1. Sprawdź czy URL WordPress jest poprawny
-2. Upewnij się, że WordPress REST API jest włączone
-3. Sprawdź czy nazwa użytkownika i hasło są poprawne
-
-### Problem: "Amazon API error"
-
-**Rozwiązanie:**
-1. Sprawdź czy Twoje klucze Amazon PA API są ważne
-2. Upewnij się, że jesteś zarejestrowany w Amazon Associates
-3. Sprawdź czy przekroczyłeś limity API (1 request/sekundę)
-
-### Problem: "Skrypt działa wolno"
-
-**Rozwiązanie:**
-- Google Apps Script ma limity wykonania (6 min/wykonanie)
-- Zmniejsz liczbę równoczesnych operacji
-- Użyj Task Queue do rozłożenia pracy w czasie
+**Key Functions:**
+- `generateContent(data)` - Generate content
+- `publishScheduledContent()` - Publish content to WordPress
 
 ---
 
-## 📚 Dodatkowe zasoby
+## 🔑 Per-Site Divi API Credentials
 
-### Dokumentacja
+### Why Per-Site Credentials?
 
+Each WordPress site should have its own Divi API credentials because:
+
+1. **License Compliance** - Elegant Themes requires separate licenses per site
+2. **Security** - Isolate credentials per site
+3. **Flexibility** - Different sites can use different Divi accounts
+4. **No Conflicts** - Prevents license validation issues
+
+### How It Works
+
+#### Sites Sheet Structure (columns 7-8):
+
+| Column | Name | Purpose |
+|--------|------|---------|
+| 7 | Divi API Username | Per-site Divi username |
+| 8 | Divi API Key | Per-site Divi API key |
+
+#### Fallback System:
+
+1. **Primary**: Use per-site credentials from Sites sheet (columns 7-8)
+2. **Fallback**: If empty, use global Script Properties
+
+```javascript
+// In Core.gs
+function getDiviCredentialsForSite(site) {
+  // Try per-site credentials first
+  if (site.diviApiUsername && site.diviApiKey) {
+    return {
+      username: site.diviApiUsername,
+      apiKey: site.diviApiKey
+    };
+  }
+
+  // Fallback to global credentials
+  return getDiviCredentials();
+}
+```
+
+### Migration from Global Credentials
+
+If you have existing sites with global Divi credentials:
+
+1. Open your WAAS sheet
+2. Click: **⚡ WAAS → 🔧 Settings → 🔄 Migrate to Per-Site Divi Keys**
+3. Follow the prompts
+4. Verify: **⚡ WAAS → 🔧 Settings → ✅ Verify Migration**
+
+---
+
+## 🔧 API Keys Configuration
+
+### Script Properties (Global)
+
+Set in: **Project Settings → Script Properties**
+
+| Property | Required | Purpose |
+|----------|----------|---------|
+| `PA_API_ACCESS_KEY` | ✅ Yes | Amazon PA API Access Key |
+| `PA_API_SECRET_KEY` | ✅ Yes | Amazon PA API Secret Key |
+| `PA_API_PARTNER_TAG` | ✅ Yes | Amazon Associate Tag |
+| `DIVI_API_USERNAME` | ⚠️ Fallback | Global Divi username (fallback) |
+| `DIVI_API_KEY` | ⚠️ Fallback | Global Divi API key (fallback) |
+| `HOSTINGER_API_KEY` | ❌ Optional | Hostinger API (future use) |
+
+### Per-Site Credentials (Recommended)
+
+Set in: **Sites sheet → Columns 7-8**
+
+For EACH site, fill:
+- **Column 7**: Divi API Username (e.g., `netanaliza`)
+- **Column 8**: Divi API Key (get from Elegant Themes dashboard)
+
+---
+
+## 🚀 Usage
+
+### Add a New Site
+
+1. **⚡ WAAS → 🌐 Sites → ➕ Add New Site**
+2. Fill in:
+   - Site Name
+   - Domain
+   - WordPress URL
+   - Admin credentials
+3. After creating, **manually fill Divi API credentials in columns 7-8**
+
+### Install Divi on Site
+
+1. **⚡ WAAS → 🌐 Sites → 🎨 Install Divi on Site**
+2. Enter Site ID
+3. System will use per-site Divi credentials from columns 7-8
+
+### Import Amazon Products
+
+1. **⚡ WAAS → 📦 Products → 📥 Import from Amazon**
+2. Enter search keywords
+3. Select category
+4. Choose number of products
+5. Click Import
+
+### Generate Content
+
+1. **⚡ WAAS → 📝 Content → ✍️ Generate Content**
+2. Select site
+3. Choose content type (review, comparison, guide)
+4. Select products
+5. Generate
+
+### View Logs
+
+**⚡ WAAS → 🔧 Settings → 📊 View Logs**
+
+---
+
+## 🔍 Troubleshooting
+
+### Installation Issues
+
+**Problem**: "Authorization required"
+**Solution**: Click "Advanced" → "Go to WAAS (unsafe)" → Allow
+
+**Problem**: "API keys not configured"
+**Solution**: Add Script Properties in Project Settings
+
+### Divi Installation Issues
+
+**Problem**: "No Divi credentials available"
+**Solution**: Fill columns 7-8 in Sites sheet for that specific site
+
+**Problem**: "Failed to download Divi package"
+**Solution**: Verify Divi API credentials are correct
+
+### Product Import Issues
+
+**Problem**: "Amazon API error"
+**Solution**: Check Amazon PA API keys in Script Properties
+
+**Problem**: "No products found"
+**Solution**: Try different search keywords or category
+
+### General Tips
+
+1. **Check Logs**: Always check the Logs sheet for detailed error messages
+2. **Test Connections**: Use **⚡ WAAS → 🔧 Settings → 🧪 Test Connections**
+3. **Verify Migration**: After migrating, run **✅ Verify Migration**
+
+---
+
+## 📚 Additional Resources
+
+### Documentation
 - **WAAS GitHub**: https://github.com/LUKOAI/LUKO-WAAS
 - **Product Manager Plugin**: https://github.com/LUKOAI/-LukoAmazonAffiliateManager
 - **Divi Documentation**: https://www.elegantthemes.com/documentation/divi/
 - **Divi API**: https://www.elegantthemes.com/developers/
 - **Amazon PA API**: https://webservices.amazon.com/paapi5/documentation/
-- **WordPress REST API**: https://developer.wordpress.org/rest-api/
 
-### Linki użyteczne
-
-- **Elegant Themes**: https://www.elegantthemes.com/
-- **Divi Layouts**: https://www.elegantthemes.com/layouts/category/online-store
-- **Divi 5 Beta**: https://www.elegantthemes.com/divi-5/
+### Support
+- **GitHub Issues**: https://github.com/LUKOAI/LUKO-WAAS/issues
+- **Documentation**: See `/docs` folder in repository
 
 ---
 
-## ⚡ Szybki start (TL;DR)
+## 📄 Version Information
 
-1. Otwórz: https://script.google.com
-2. Nowy projekt
-3. Wklej zawartość `setup.gs`
-4. Uruchom: `installWAAS()`
-5. Autoryzuj aplikację
-6. Dodaj API keys w Project Settings → Script Properties
-7. Otwórz utworzony arkusz
-8. Gotowe! 🎉
+**Version**: 2.0.0
+**Last Updated**: 2024-11-24
+**Architecture**: Modular (11 separate files)
+**Key Feature**: Per-Site Divi API Credentials
 
 ---
 
-## 📞 Wsparcie
+## ✅ Quick Start Checklist
 
-Jeśli napotkasz problemy:
-1. Sprawdź logi: **⚡ WAAS → 🔧 Settings → 📊 View Logs**
-2. Sprawdź dokumentację powyżej
-3. Otwórz issue na GitHubie
-
----
-
-## 📄 Licencja
-
-© 2024 LUKOAI
-https://github.com/LUKOAI
+- [ ] Copy all 11 files to Google Apps Script
+- [ ] Run `installWAAS()` function
+- [ ] Authorize application
+- [ ] Add Amazon API keys to Script Properties
+- [ ] (Optional) Add global Divi keys to Script Properties as fallback
+- [ ] **Fill per-site Divi credentials in Sites sheet (columns 7-8)**
+- [ ] Reload spreadsheet
+- [ ] Test with one site first
+- [ ] Check logs for any errors
 
 ---
 
-**Wersja:** 1.0.0
-**Ostatnia aktualizacja:** 2024-11-20
+**© 2024 LUKOAI**
+**Built with ❤️ for affiliate marketers**
