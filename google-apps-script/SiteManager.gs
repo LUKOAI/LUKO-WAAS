@@ -425,34 +425,21 @@ function installWooCommercePlugin(site) {
   try {
     logInfo('WooCommerce', 'Installing WooCommerce plugin from WordPress.org');
 
-    // Użyj WordPress REST API do instalacji pluginu z repozytorium
-    const endpoint = `${site.wpUrl}/wp-json/wp/v2/plugins`;
-    const auth = Utilities.base64Encode(`${site.adminUser}:${site.adminPass}`);
-
-    const payload = {
-      slug: 'woocommerce',
-      status: 'active'
-    };
-
-    const options = {
+    // Use authenticated request helper that handles auth automatically
+    const result = makeAuthenticatedRequest(site, 'wp/v2/plugins', {
       method: 'post',
-      headers: {
-        'Authorization': `Basic ${auth}`,
-        'Content-Type': 'application/json'
-      },
-      payload: JSON.stringify(payload),
-      muteHttpExceptions: true
-    };
+      payload: {
+        slug: 'woocommerce',
+        status: 'active'
+      }
+    });
 
-    const response = UrlFetchApp.fetch(endpoint, options);
-    const statusCode = response.getResponseCode();
-
-    if (statusCode === 201 || statusCode === 200) {
+    if (result.success) {
       logSuccess('WooCommerce', 'WooCommerce plugin installed');
       return true;
     } else {
-      logError('WooCommerce', `Installation failed with status: ${statusCode}`);
-      logError('WooCommerce', `Response: ${response.getContentText()}`);
+      logError('WooCommerce', `Installation failed with status: ${result.statusCode}`);
+      logError('WooCommerce', `Response: ${JSON.stringify(result.data)}`);
       return false;
     }
   } catch (error) {
@@ -465,46 +452,32 @@ function configureWooCommerce(site) {
   try {
     logInfo('WooCommerce', 'Configuring WooCommerce basic settings');
 
-    // Podstawowa konfiguracja WooCommerce przez REST API
-    const endpoint = `${site.wpUrl}/wp-json/wc/v3/settings/general/batch`;
-    const auth = Utilities.base64Encode(`${site.adminUser}:${site.adminPass}`);
-
-    // Podstawowe ustawienia dla affiliate site
-    const settings = {
-      update: [
-        {
-          id: 'woocommerce_store_address',
-          value: ''
-        },
-        {
-          id: 'woocommerce_currency',
-          value: 'EUR'
-        },
-        {
-          id: 'woocommerce_enable_guest_checkout',
-          value: 'no'  // Dla affiliate nie potrzebujemy checkout
-        }
-      ]
-    };
-
-    const options = {
+    // Use authenticated request helper
+    const result = makeAuthenticatedRequest(site, 'wc/v3/settings/general/batch', {
       method: 'post',
-      headers: {
-        'Authorization': `Basic ${auth}`,
-        'Content-Type': 'application/json'
-      },
-      payload: JSON.stringify(settings),
-      muteHttpExceptions: true
-    };
+      payload: {
+        update: [
+          {
+            id: 'woocommerce_store_address',
+            value: ''
+          },
+          {
+            id: 'woocommerce_currency',
+            value: 'EUR'
+          },
+          {
+            id: 'woocommerce_enable_guest_checkout',
+            value: 'no'  // Dla affiliate nie potrzebujemy checkout
+          }
+        ]
+      }
+    });
 
-    const response = UrlFetchApp.fetch(endpoint, options);
-    const statusCode = response.getResponseCode();
-
-    if (statusCode === 200) {
+    if (result.success) {
       logSuccess('WooCommerce', 'WooCommerce configured');
       return true;
     } else {
-      logWarning('WooCommerce', `Configuration returned status: ${statusCode}`);
+      logWarning('WooCommerce', `Configuration returned status: ${result.statusCode}`);
       return false;
     }
   } catch (error) {
