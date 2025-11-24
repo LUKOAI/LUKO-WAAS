@@ -520,24 +520,145 @@ function activatePluginOnWordPress(site, pluginSlug) {
   try {
     logInfo('WordPressAPI', `Activating plugin: ${pluginSlug}`, site.id);
 
-    // Use the authenticated request helper that handles all auth types
-    const result = makeAuthenticatedRequest(site, `wp/v2/plugins/${pluginSlug}`, {
-      method: 'post',
-      payload: {
-        status: 'active'
-      }
-    });
+    // Check WordPress version from site info to determine activation method
+    const siteInfo = getWordPressSiteInfo(site);
+    const wpVersion = siteInfo ? parseFloat(siteInfo.version) : 0;
 
-    if (result.success) {
-      logSuccess('WordPressAPI', `Plugin activated: ${pluginSlug}`, site.id);
+    // WordPress 5.5+ has REST API endpoint for plugin activation
+    // For older versions, use cookie-based activation
+    if (wpVersion >= 5.5) {
+      // Use REST API for WordPress 5.5+
+      const result = makeAuthenticatedRequest(site, `wp/v2/plugins/${pluginSlug}`, {
+        method: 'post',
+        payload: {
+          status: 'active'
+        }
+      });
+
+      if (result.success) {
+        logSuccess('WordPressAPI', `Plugin activated: ${pluginSlug}`, site.id);
+        return true;
+      } else {
+        logError('WordPressAPI', `REST API activation failed: ${result.statusCode} - ${JSON.stringify(result.data)}`, site.id);
+        // Fall back to cookie-based activation
+        logInfo('WordPressAPI', 'Trying cookie-based activation as fallback...', site.id);
+      }
+    }
+
+    // Cookie-based activation for WordPress < 5.5 or when REST API fails
+    return activatePluginViaCookies(site, pluginSlug);
+
+  } catch (error) {
+    logError('WordPressAPI', `Error activating plugin: ${error.message}`, site.id);
+    return false;
+  }
+}
+
+function activatePluginViaCookies(site, pluginSlug) {
+  try {
+    logInfo('WordPressAPI', `Activating plugin via cookies: ${pluginSlug}`, site.id);
+
+    // Step 1: Login to WordPress to get cookies
+    const loginResult = wordpressLogin(site);
+    if (!loginResult.success) {
+      logError('WordPressAPI', `Cannot login: ${loginResult.error}`, site.id);
+      return false;
+    }
+
+    const cookies = loginResult.cookies;
+    logInfo('WordPressAPI', 'Login successful, got cookies', site.id);
+
+    // Step 2: Get nonce from plugins.php page
+    const pluginsPageUrl = `${site.wpUrl}/wp-admin/plugins.php`;
+    const pageOptions = {
+      method: 'get',
+      headers: {
+        'Cookie': cookies
+      },
+      muteHttpExceptions: true,
+      followRedirects: true
+    };
+
+    const pageResponse = UrlFetchApp.fetch(pluginsPageUrl, pageOptions);
+    const pageHtml = pageResponse.getContentText();
+
+    // Look for activation link with nonce
+    // Format: plugins.php?action=activate&plugin=plugin-slug/plugin.php&_wpnonce=abc123
+    const activateLinkRegex = new RegExp(`plugins\\.php\\?action=activate&(?:amp;)?plugin=([^&"']+)&(?:amp;)?_wpnonce=([\\w]+)`, 'g');
+
+    let activationNonce = null;
+    let pluginPath = null;
+    let match;
+
+    // Find the matching plugin by checking if the slug is in the plugin path
+    while ((match = activateLinkRegex.exec(pageHtml)) !== null) {
+      const foundPluginPath = match[1];
+      if (foundPluginPath.includes(pluginSlug)) {
+        pluginPath = foundPluginPath;
+        activationNonce = match[2];
+        logInfo('WordPressAPI', `Found activation link for plugin: ${pluginPath}`, site.id);
+        break;
+      }
+    }
+
+    if (!activationNonce || !pluginPath) {
+      logWarning('WordPressAPI', `Could not find activation link for ${pluginSlug}. Plugin may already be active.`, site.id);
+      // Try to verify if plugin is already active by checking for "Deactivate" link
+      if (pageHtml.includes(`action=deactivate&amp;plugin=${pluginSlug}`) ||
+          pageHtml.includes(`action=deactivate&plugin=${pluginSlug}`)) {
+        logInfo('WordPressAPI', 'Plugin appears to be already active', site.id);
+        return true;
+      }
+      return false;
+    }
+
+    // Step 3: Activate plugin
+    const activateUrl = `${site.wpUrl}/wp-admin/plugins.php?action=activate&plugin=${encodeURIComponent(pluginPath)}&_wpnonce=${activationNonce}`;
+
+    const activateOptions = {
+      method: 'get',
+      headers: {
+        'Cookie': cookies
+      },
+      muteHttpExceptions: true,
+      followRedirects: true
+    };
+
+    logInfo('WordPressAPI', `Activating plugin: ${pluginPath}...`, site.id);
+    const activateResponse = UrlFetchApp.fetch(activateUrl, activateOptions);
+    const activateCode = activateResponse.getResponseCode();
+    const activateText = activateResponse.getContentText();
+
+    logInfo('WordPressAPI', `Activation response code: ${activateCode}`, site.id);
+
+    // Check for success indicators
+    if (activateCode === 200 && (
+      activateText.includes('Plugin activated') ||
+      activateText.includes('plugin activated') ||
+      activateText.includes('has been activated') ||
+      activateText.includes('Deactivate')
+    )) {
+      logSuccess('WordPressAPI', `Plugin ${pluginSlug} activated successfully!`, site.id);
+      return true;
+    } else if (activateText.includes('already active')) {
+      logInfo('WordPressAPI', `Plugin ${pluginSlug} already active`, site.id);
       return true;
     } else {
-      logError('WordPressAPI', `Activation failed: ${result.statusCode} - ${JSON.stringify(result.data)}`, site.id);
+      // Log response preview for debugging
+      const preview = activateText.substring(0, 500).replace(/\s+/g, ' ');
+      logWarning('WordPressAPI', `Activation response unclear. Preview: ${preview}`, site.id);
+
+      // If we got 200, assume success
+      if (activateCode === 200) {
+        logInfo('WordPressAPI', 'Got 200 response, assuming activation successful', site.id);
+        return true;
+      }
+
       return false;
     }
 
   } catch (error) {
-    logError('WordPressAPI', `Error activating plugin: ${error.message}`, site.id);
+    logError('WordPressAPI', `Error in cookie-based activation: ${error.message}`, site.id);
     return false;
   }
 }

@@ -465,7 +465,37 @@ function installPluginOnSite(siteId) {
 
 function downloadPluginFromGitHub() {
   try {
-    // GitHub repository URL for WAAS Product Manager plugin
+    // First, try to get custom plugin URL from Script Properties (preferred method)
+    const scriptProperties = PropertiesService.getScriptProperties();
+    const customPluginUrl = scriptProperties.getProperty('PRODUCT_MANAGER_DOWNLOAD_URL');
+
+    if (customPluginUrl) {
+      logInfo('PluginManager', `Trying custom download URL: ${customPluginUrl}`);
+
+      try {
+        const response = UrlFetchApp.fetch(customPluginUrl, {
+          muteHttpExceptions: true,
+          followRedirects: true,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          }
+        });
+
+        const statusCode = response.getResponseCode();
+
+        if (statusCode === 200) {
+          const blob = response.getBlob();
+          logSuccess('PluginManager', `Plugin package downloaded successfully from custom URL (${(blob.getBytes().length / 1024).toFixed(2)} KB)`);
+          return blob;
+        } else {
+          logWarning('PluginManager', `Custom URL returned ${statusCode}, trying GitHub fallback...`);
+        }
+      } catch (e) {
+        logWarning('PluginManager', `Custom URL failed: ${e.message}, trying GitHub fallback...`);
+      }
+    }
+
+    // Fallback: GitHub repository URL for WAAS Product Manager plugin
     // Trying multiple possible repository names
     const possibleRepos = [
       'https://github.com/LUKOAI/luko-amazon-affiliate-manager',
@@ -498,16 +528,20 @@ function downloadPluginFromGitHub() {
       }
     }
 
-    // If all repos failed, log and return null
+    // If all methods failed, log and return null
     logError('PluginManager', 'Plugin download failed from all repository URLs');
     logWarning('PluginManager', 'Repository may not exist yet or plugin is not published');
     logInfo('PluginManager', 'Skipping plugin installation - will continue with other setup steps');
-    logInfo('PluginManager', 'To fix: Ensure plugin repository exists at one of the tried URLs');
+    logInfo('PluginManager', '');
+    logInfo('PluginManager', '📋 TO FIX THIS ISSUE:');
+    logInfo('PluginManager', '1. Upload waas-product-manager.zip to a web-accessible location (e.g., lk24.shop/downloads/)');
+    logInfo('PluginManager', '2. Set Script Property: PRODUCT_MANAGER_DOWNLOAD_URL = https://your-domain.com/path/to/waas-product-manager.zip');
+    logInfo('PluginManager', '3. Alternatively, make GitHub repository public or provide GitHub token');
+    logInfo('PluginManager', '');
     return null;
 
   } catch (error) {
     logError('PluginManager', `Failed to download plugin: ${error.message}`);
-    logInfo('PluginManager', 'To fix: Create the GitHub repository or provide direct plugin ZIP URL');
     return null;
   }
 }
