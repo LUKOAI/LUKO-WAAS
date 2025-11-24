@@ -18,8 +18,8 @@ function getSiteById(siteId) {
         name: data[i][1],
         domain: data[i][2],
         wpUrl: data[i][3],
-        username: data[i][4],
-        password: data[i][5],
+        adminUser: data[i][4],
+        adminPass: data[i][5],
         diviApiUsername: data[i][6],   // COLUMN 7: Per-site Divi username
         diviApiKey: data[i][7],         // COLUMN 8: Per-site Divi API key
         partnerTag: data[i][8],         // COLUMN 9: Per-site Amazon Partner Tag
@@ -152,7 +152,7 @@ function checkDiviInstallation(site) {
       `${site.wpUrl}/wp-json/wp/v2/themes`,
       {
         headers: {
-          'Authorization': 'Basic ' + Utilities.base64Encode(site.username + ':' + site.password)
+          'Authorization': 'Basic ' + Utilities.base64Encode(site.adminUser + ':' + site.adminPass)
         }
       }
     );
@@ -178,7 +178,7 @@ function checkPluginInstallation(site) {
       `${site.wpUrl}/wp-json/wp/v2/plugins`,
       {
         headers: {
-          'Authorization': 'Basic ' + Utilities.base64Encode(site.username + ':' + site.password)
+          'Authorization': 'Basic ' + Utilities.base64Encode(site.adminUser + ':' + site.adminPass)
         }
       }
     );
@@ -427,7 +427,7 @@ function installWooCommercePlugin(site) {
 
     // Użyj WordPress REST API do instalacji pluginu z repozytorium
     const endpoint = `${site.wpUrl}/wp-json/wp/v2/plugins`;
-    const auth = Utilities.base64Encode(`${site.username}:${site.password}`);
+    const auth = Utilities.base64Encode(`${site.adminUser}:${site.adminPass}`);
 
     const payload = {
       slug: 'woocommerce',
@@ -467,7 +467,7 @@ function configureWooCommerce(site) {
 
     // Podstawowa konfiguracja WooCommerce przez REST API
     const endpoint = `${site.wpUrl}/wp-json/wc/v3/settings/general/batch`;
-    const auth = Utilities.base64Encode(`${site.username}:${site.password}`);
+    const auth = Utilities.base64Encode(`${site.adminUser}:${site.adminPass}`);
 
     // Podstawowe ustawienia dla affiliate site
     const settings = {
@@ -520,7 +520,7 @@ function checkWooCommerceInstallation(site) {
       `${site.wpUrl}/wp-json/wp/v2/plugins`,
       {
         headers: {
-          'Authorization': 'Basic ' + Utilities.base64Encode(site.username + ':' + site.password)
+          'Authorization': 'Basic ' + Utilities.base64Encode(site.adminUser + ':' + site.adminPass)
         }
       }
     );
@@ -556,8 +556,8 @@ function getAllActiveSites() {
         name: data[i][1],
         domain: data[i][2],
         wpUrl: data[i][3],
-        username: data[i][4],
-        password: data[i][5],
+        adminUser: data[i][4],
+        adminPass: data[i][5],
         diviApiUsername: data[i][6],
         diviApiKey: data[i][7],
         partnerTag: data[i][8]  // Per-site Amazon Partner Tag

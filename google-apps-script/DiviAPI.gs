@@ -93,7 +93,7 @@ function importDiviLayoutToSite(site, layoutData) {
     const response = makeHttpRequest(importUrl, {
       method: 'POST',
       headers: {
-        'Authorization': 'Basic ' + Utilities.base64Encode(site.username + ':' + site.password),
+        'Authorization': 'Basic ' + Utilities.base64Encode(site.adminUser + ':' + site.adminPass),
         'Content-Type': 'application/json'
       },
       payload: JSON.stringify(layoutData)
@@ -173,7 +173,7 @@ function applyDiviThemeOptions(site, options) {
     const response = makeHttpRequest(updateUrl, {
       method: 'POST',
       headers: {
-        'Authorization': 'Basic ' + Utilities.base64Encode(site.username + ':' + site.password),
+        'Authorization': 'Basic ' + Utilities.base64Encode(site.adminUser + ':' + site.adminPass),
         'Content-Type': 'application/json'
       },
       payload: JSON.stringify(options)

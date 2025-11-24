@@ -75,7 +75,7 @@ function setupWordPressAuth(site) {
       return {
         success: true,
         authType: 'basic_auth_plugin',
-        password: site.password, // Use regular password
+        password: site.adminPass, // Use regular password
         message: 'Basic Auth plugin installed automatically'
       };
     }
@@ -89,7 +89,7 @@ function setupWordPressAuth(site) {
     return {
       success: true,
       authType: 'basic_auth_legacy',
-      password: site.password,
+      password: site.adminPass,
       message: 'Using legacy Basic Auth'
     };
 
@@ -112,11 +112,11 @@ function setupWordPressAuth(site) {
 function getAuthHeader(site) {
   // Check if site has Application Password
   if (site.appPassword) {
-    return 'Basic ' + Utilities.base64Encode(site.username + ':' + site.appPassword);
+    return 'Basic ' + Utilities.base64Encode(site.adminUser + ':' + site.appPassword);
   }
 
   // Use regular password
-  return 'Basic ' + Utilities.base64Encode(site.username + ':' + site.password);
+  return 'Basic ' + Utilities.base64Encode(site.adminUser + ':' + site.adminPass);
 }
 
 // =============================================================================
@@ -218,8 +218,8 @@ function wordpressLogin(site) {
     const loginUrl = `${site.wpUrl}/wp-login.php`;
 
     const payload = {
-      'log': site.username,
-      'pwd': site.password,
+      'log': site.adminUser,
+      'pwd': site.adminPass,
       'wp-submit': 'Log In',
       'redirect_to': site.wpUrl + '/wp-admin/',
       'testcookie': '1'

@@ -299,7 +299,7 @@ function installWooCommerceOnSite(siteId) {
     logInfo('WOOCOMMERCE', `Installing WooCommerce on ${site.name}`, siteId);
 
     // WordPress REST API endpoint for plugin installation
-    const endpoint = `${site.wordpressUrl}/wp-json/wp/v2/plugins`;
+    const endpoint = `${site.wpUrl}/wp-json/wp/v2/plugins`;
 
     // WooCommerce plugin slug
     const pluginData = {
@@ -310,7 +310,7 @@ function installWooCommerceOnSite(siteId) {
     const options = {
       method: 'post',
       headers: {
-        'Authorization': 'Basic ' + Utilities.base64Encode(site.adminUsername + ':' + site.adminPassword),
+        'Authorization': 'Basic ' + Utilities.base64Encode(site.adminUser + ':' + site.adminPass),
         'Content-Type': 'application/json'
       },
       payload: JSON.stringify(pluginData),
@@ -626,9 +626,9 @@ function publishContentToWordPress(siteId, contentId, options = {}) {
 
     // Publish to WordPress
     const wpResult = createWordPressPost(
-      site.wordpressUrl,
-      site.adminUsername,
-      site.adminPassword,
+      site.wpUrl,
+      site.adminUser,
+      site.adminPass,
       postData
     );
 

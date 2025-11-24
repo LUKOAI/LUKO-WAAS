@@ -66,7 +66,7 @@ const authResult = setupWordPressAuth(site);
 
 ```javascript
 // Poprzednio (manualne):
-const authHeader = 'Basic ' + Utilities.base64Encode(site.username + ':' + site.password);
+const authHeader = 'Basic ' + Utilities.base64Encode(site.adminUser + ':' + site.adminPass);
 
 // Teraz (automatyczne):
 const authHeader = getAuthHeader(site);  // ✅ Automatycznie używa App Password!
