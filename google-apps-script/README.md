@@ -109,11 +109,15 @@ Copy **ALL 11 files** from this directory to your Google Apps Script project:
 | `PA_API_SECRET_KEY` | Your Amazon PA API Secret Key |
 | `PA_API_PARTNER_TAG` | Your Amazon Associate Tag |
 | `DIVI_DOWNLOAD_URL` | URL to your hosted Divi ZIP file (see below*) |
+| `ELEGANT_THEMES_USERNAME` | Your Elegant Themes account username/email |
+| `ELEGANT_THEMES_PASSWORD` | Your Elegant Themes account password |
 
 **Optional:**
 | Property Name | Value |
 |--------------|-------|
 | `HOSTINGER_API_KEY` | Optional - for future use |
+
+⚠️ **NOTE:** `ELEGANT_THEMES_USERNAME` and `ELEGANT_THEMES_PASSWORD` are required for **automatic Divi license activation**. After Divi theme is installed, the script will automatically log into Elegant Themes to activate the license.
 
 5. Click **Save script properties**
 

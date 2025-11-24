@@ -92,6 +92,26 @@ function getDiviCredentialsForSite(site) {
 }
 
 /**
+ * Get Elegant Themes account credentials for license activation
+ * These are stored in Script Properties and are the same for all sites
+ * @returns {Object} - {username, password}
+ */
+function getElegantThemesCredentials() {
+  const scriptProperties = PropertiesService.getScriptProperties();
+  const username = scriptProperties.getProperty('ELEGANT_THEMES_USERNAME');
+  const password = scriptProperties.getProperty('ELEGANT_THEMES_PASSWORD');
+
+  if (!username || !password) {
+    throw new Error('Elegant Themes credentials not configured. Please set ELEGANT_THEMES_USERNAME and ELEGANT_THEMES_PASSWORD in Script Properties.');
+  }
+
+  return {
+    username: username,
+    password: password
+  };
+}
+
+/**
  * Get global Amazon PA credentials (fallback/default)
  * @deprecated Use getAmazonCredentialsForSite() for per-site partner tags
  */

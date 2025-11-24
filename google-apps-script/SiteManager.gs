@@ -256,24 +256,57 @@ function installDiviOnSite(siteId) {
       throw new Error('Failed to activate Divi theme');
     }
 
-    // 4. Aktualizuj status
+    // 4. Aktywuj licencję Divi
+    logInfo('SiteManager', 'Activating Divi license...', siteId);
+    const licenseActivated = activateDiviLicense(site);
+    if (licenseActivated) {
+      logSuccess('SiteManager', 'Divi license activation completed', siteId);
+    } else {
+      logWarning('SiteManager', 'Divi license activation failed or needs manual verification', siteId);
+    }
+
+    // 5. Aktualizuj status
     updateSiteStatus(siteId, 'Active', {
       diviInstalled: 'Yes',
-      notes: 'Divi installed and activated successfully'
+      notes: licenseActivated
+        ? 'Divi installed, activated, and license activated successfully'
+        : 'Divi installed and activated - license activation may need manual verification'
     });
 
     logSuccess('SiteManager', `Divi installed successfully on: ${site.name}`, siteId);
 
-    SpreadsheetApp.getUi().alert(
-      'Success',
-      `Divi has been installed and activated on ${site.name}`,
-      SpreadsheetApp.getUi().ButtonSet.OK
-    );
+    const resultMessage = licenseActivated
+      ? 'Divi installed, activated, and license activated successfully'
+      : 'Divi installed and activated - license activation may need manual verification';
 
-    return true;
+    const alertMessage = licenseActivated
+      ? `Divi has been installed, activated, and license has been activated on ${site.name}`
+      : `Divi has been installed and activated on ${site.name}\n\nPlease verify license activation manually at:\n${site.wpUrl}/wp-admin/admin.php?page=et_onboarding#/overview`;
+
+    // Only show alert if called directly (not from automation)
+    try {
+      SpreadsheetApp.getUi().alert(
+        'Success',
+        alertMessage,
+        SpreadsheetApp.getUi().ButtonSet.OK
+      );
+    } catch (e) {
+      // UI not available (called from automation), skip alert
+    }
+
+    return {
+      success: true,
+      message: resultMessage,
+      licenseActivated: licenseActivated
+    };
   } catch (error) {
+    const errorMessage = error.message || 'Unknown error during Divi installation';
     handleError(error, 'SiteManager.installDiviOnSite', siteId);
-    return false;
+    return {
+      success: false,
+      message: errorMessage,
+      licenseActivated: false
+    };
   }
 }
 

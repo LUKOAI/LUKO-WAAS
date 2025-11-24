@@ -28,6 +28,8 @@
  *    Extensions → Apps Script → Project Settings → Script Properties
  *    - DIVI_API_USERNAME (global fallback)
  *    - DIVI_API_KEY (global fallback)
+ *    - ELEGANT_THEMES_USERNAME (email/login do elegantthemes.com)
+ *    - ELEGANT_THEMES_PASSWORD (hasło do elegantthemes.com)
  *    - PA_API_ACCESS_KEY
  *    - PA_API_SECRET_KEY
  *    - PA_API_PARTNER_TAG (global fallback)
@@ -35,6 +37,9 @@
  *
  *    ⚠️ WAŻNE: Per-site credentials (kolumny 7-9 w Sites)
  *    powinny być wypełnione dla każdej strony osobno!
+ *
+ *    ⚠️ WAŻNE: ELEGANT_THEMES_USERNAME i ELEGANT_THEMES_PASSWORD
+ *    są potrzebne do automatycznej aktywacji licencji Divi!
  *
  * 9. Przeładuj arkusz (F5)
  * 10. Użyj menu "⚡ WAAS" aby zacząć!
@@ -83,9 +88,11 @@ function installWAAS() {
         'Spreadsheet URL:\n' + spreadsheet.getUrl() + '\n\n' +
         'NEXT STEPS:\n' +
         '1. Open Project Settings (⚙️)\n' +
-        '2. Add Script Properties (global fallback):\n' +
-        '   - DIVI_API_USERNAME\n' +
-        '   - DIVI_API_KEY\n' +
+        '2. Add Script Properties (global settings):\n' +
+        '   - DIVI_API_USERNAME (fallback)\n' +
+        '   - DIVI_API_KEY (fallback)\n' +
+        '   - ELEGANT_THEMES_USERNAME (for license activation)\n' +
+        '   - ELEGANT_THEMES_PASSWORD (for license activation)\n' +
         '   - PA_API_ACCESS_KEY\n' +
         '   - PA_API_SECRET_KEY\n' +
         '   - PA_API_PARTNER_TAG (global fallback)\n' +
