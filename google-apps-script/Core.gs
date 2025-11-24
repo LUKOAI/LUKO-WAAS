@@ -367,10 +367,40 @@ function makeHttpRequest(url, options = {}) {
       };
     }
   } catch (error) {
-    logError('HTTP', `Request failed: ${error.message}`, '', '', { url, error: error.toString() });
+    // Enhanced error handling for DNS and network errors
+    const errorMsg = error.message || error.toString();
+    let errorType = 'UNKNOWN';
+    let userMessage = errorMsg;
+
+    // Detect DNS errors
+    if (errorMsg.toLowerCase().includes('dns')) {
+      errorType = 'DNS_ERROR';
+      userMessage = 'DNS resolution failed - the domain may not exist or DNS has not propagated yet';
+    }
+    // Detect timeout errors
+    else if (errorMsg.toLowerCase().includes('timeout') || errorMsg.toLowerCase().includes('timed out')) {
+      errorType = 'TIMEOUT';
+      userMessage = 'Request timed out - the server may be slow or unreachable';
+    }
+    // Detect connection errors
+    else if (errorMsg.toLowerCase().includes('connection') || errorMsg.toLowerCase().includes('connect')) {
+      errorType = 'CONNECTION_ERROR';
+      userMessage = 'Connection failed - the server may be down or blocking requests';
+    }
+    // Detect SSL/TLS errors
+    else if (errorMsg.toLowerCase().includes('ssl') || errorMsg.toLowerCase().includes('certificate')) {
+      errorType = 'SSL_ERROR';
+      userMessage = 'SSL/TLS error - invalid or expired certificate';
+    }
+
+    logError('HTTP', `Request failed: ${errorMsg}`, '', '', { url, error: error.toString(), errorType });
+
     return {
       success: false,
-      error: error.message
+      error: userMessage,
+      errorType: errorType,
+      originalError: errorMsg,
+      statusCode: null
     };
   }
 }
@@ -397,6 +427,59 @@ function retryOperation(operation, maxAttempts = 3, delayMs = 1000) {
   }
 
   throw new Error(`Operation failed after ${maxAttempts} attempts: ${lastError.message}`);
+}
+
+/**
+ * Make an HTTP request with automatic retry logic for transient errors
+ *
+ * @param {string} url - URL to request
+ * @param {Object} options - Request options (same as makeHttpRequest)
+ * @param {number} maxRetries - Maximum number of retry attempts (default: 3)
+ * @param {number} initialDelay - Initial delay in milliseconds (default: 2000)
+ * @returns {Object} Response object with success, statusCode, data, error, etc.
+ */
+function makeHttpRequestWithRetry(url, options = {}, maxRetries = 3, initialDelay = 2000) {
+  let lastResponse = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    if (attempt > 1) {
+      const delay = initialDelay * Math.pow(2, attempt - 2); // Exponential backoff: 2s, 4s, 8s
+      logInfo('HTTP', `Retrying after ${delay}ms (attempt ${attempt}/${maxRetries})...`);
+      Utilities.sleep(delay);
+    }
+
+    lastResponse = makeHttpRequest(url, options);
+
+    // Success - return immediately
+    if (lastResponse.success) {
+      if (attempt > 1) {
+        logSuccess('HTTP', `Request succeeded on attempt ${attempt}/${maxRetries}`);
+      }
+      return lastResponse;
+    }
+
+    // Check if error is retryable
+    const errorType = lastResponse.errorType;
+    const isRetryable = (
+      errorType === 'DNS_ERROR' ||
+      errorType === 'TIMEOUT' ||
+      errorType === 'CONNECTION_ERROR' ||
+      (lastResponse.statusCode >= 500 && lastResponse.statusCode < 600) // Server errors
+    );
+
+    if (!isRetryable) {
+      logWarning('HTTP', `Non-retryable error (${errorType}), not retrying`);
+      return lastResponse;
+    }
+
+    if (attempt < maxRetries) {
+      logWarning('HTTP', `Retryable error (${errorType}), will retry...`);
+    } else {
+      logError('HTTP', `Request failed after ${maxRetries} attempts`);
+    }
+  }
+
+  return lastResponse;
 }
 
 // =============================================================================

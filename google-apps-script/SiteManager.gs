@@ -127,17 +127,57 @@ function checkSiteStatus(siteId) {
 
 function checkWordPressAvailability(site) {
   try {
-    const response = makeHttpRequest(site.wpUrl + '/wp-json/');
+    logInfo('SiteManager', `Checking WordPress availability: ${site.wpUrl}`, site.id);
+
+    // Use retry logic for better resilience against transient network issues
+    const response = makeHttpRequestWithRetry(site.wpUrl + '/wp-json/', {}, 3, 2000);
 
     if (response.success) {
+      logSuccess('SiteManager', 'WordPress site is accessible', site.id);
       return { available: true };
     } else {
+      // Build detailed error message
+      let errorMsg = '';
+
+      if (response.statusCode) {
+        errorMsg = `HTTP ${response.statusCode}: ${response.error}`;
+      } else if (response.errorType) {
+        // Network/DNS error without HTTP status code
+        errorMsg = response.error;
+
+        // Add specific troubleshooting tips based on error type
+        if (response.errorType === 'DNS_ERROR') {
+          errorMsg += '\n\nTroubleshooting:\n' +
+                     '• Verify the domain exists and is properly configured\n' +
+                     '• Check if DNS has propagated (use tools like dnschecker.org)\n' +
+                     '• Ensure the domain/subdomain is correctly set in the Sites sheet\n' +
+                     '• If this is a new domain, wait 24-48 hours for DNS propagation';
+        } else if (response.errorType === 'TIMEOUT') {
+          errorMsg += '\n\nTroubleshooting:\n' +
+                     '• Server may be slow or under heavy load\n' +
+                     '• Check server resources (CPU, memory, bandwidth)\n' +
+                     '• Verify firewall/security settings aren\'t blocking requests';
+        } else if (response.errorType === 'CONNECTION_ERROR') {
+          errorMsg += '\n\nTroubleshooting:\n' +
+                     '• Server may be down or unreachable\n' +
+                     '• Check if WordPress is running\n' +
+                     '• Verify hosting provider status';
+        }
+      } else {
+        errorMsg = response.error || 'Unknown error occurred';
+      }
+
+      logError('SiteManager', `WordPress site not accessible: ${errorMsg}`, site.id);
+
       return {
         available: false,
-        error: `HTTP ${response.statusCode}: ${response.error}`
+        error: errorMsg,
+        errorType: response.errorType,
+        statusCode: response.statusCode
       };
     }
   } catch (error) {
+    logError('SiteManager', `Unexpected error checking WordPress availability: ${error.message}`, site.id);
     return {
       available: false,
       error: error.message
