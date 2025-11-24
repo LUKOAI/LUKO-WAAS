@@ -51,8 +51,11 @@ Files are uploaded automatically. No manual copying!
 ```
 PA_API_ACCESS_KEY = your_amazon_access_key
 PA_API_SECRET_KEY = your_amazon_secret_key
-DIVI_API_USERNAME = netanaliza
+DIVI_DOWNLOAD_URL = https://your-storage.com/Divi.zip
 ```
+
+**⚠️ DIVI_DOWNLOAD_URL**: You need to host the Divi ZIP file yourself (AWS S3, Dropbox, etc.)
+See detailed instructions: [docs/AUTOMATION.md#divi-theme-configuration](docs/AUTOMATION.md#divi-theme-configuration)
 
 ### Add Your Site
 

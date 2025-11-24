@@ -279,11 +279,21 @@ function installDiviOnSite(siteId) {
 
 function downloadDiviPackage(site) {
   try {
-    const creds = getDiviCredentialsForSite(site);
     logInfo('DiviAPI', `Downloading Divi package for site: ${site.name}`, site.id);
 
-    // Pobierz link do pobrania Divi
-    const downloadUrl = getDiviDownloadUrl(creds);
+    // Pobierz link do pobrania Divi (z DIVI_DOWNLOAD_URL lub fallback credentials)
+    let downloadUrl;
+    try {
+      // Try to get credentials (may fail if not configured, which is OK if DIVI_DOWNLOAD_URL is set)
+      const creds = getDiviCredentialsForSite(site);
+      downloadUrl = getDiviDownloadUrl(creds);
+    } catch (credError) {
+      // If credentials fail, try getDiviDownloadUrl without credentials
+      // It will use DIVI_DOWNLOAD_URL if configured
+      logInfo('DiviAPI', 'No Divi credentials available, checking for DIVI_DOWNLOAD_URL...', site.id);
+      downloadUrl = getDiviDownloadUrl({username: '', apiKey: ''});
+    }
+
     if (!downloadUrl) {
       return null;
     }

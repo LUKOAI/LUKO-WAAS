@@ -304,12 +304,22 @@ Po instalacji dodaj klucze API w Google Apps Script:
 1. Kliknij: **⚙️ Project Settings** (lewy panel)
 2. Przewiń do: **Script Properties**
 3. Dodaj właściwości:
-   - `DIVI_API_USERNAME` = `netanaliza`
-   - `DIVI_API_KEY` = `2abad7fcbcffa7ab2cab87d44d31f5b16b8654e4`
+   - `DIVI_DOWNLOAD_URL` = [URL do pliku Divi ZIP] (zobacz instrukcje poniżej*)
    - `PA_API_ACCESS_KEY` = [Twój klucz Amazon]
    - `PA_API_SECRET_KEY` = [Twój sekret Amazon]
    - `PA_API_PARTNER_TAG` = [Twój tag partnera]
 4. Zapisz
+
+**Konfiguracja Divi (WAŻNE):*
+
+Elegant Themes nie udostępnia publicznego API do pobierania Divi. Musisz:
+1. Pobierz Divi ZIP z elegantthemes.com
+2. Wgraj na swój storage (AWS S3, Google Cloud, Dropbox, własny serwer)
+3. Wstaw URL do pliku jako `DIVI_DOWNLOAD_URL`
+
+Przykład: `https://your-bucket.s3.amazonaws.com/Divi.zip` lub `https://www.dropbox.com/s/xxxxx/Divi.zip?dl=1`
+
+Szczegółowa instrukcja: [docs/AUTOMATION.md#divi-theme-configuration](docs/AUTOMATION.md#divi-theme-configuration)
 
 ### Krok 4: Gotowe!
 

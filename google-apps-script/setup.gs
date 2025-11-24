@@ -481,12 +481,11 @@ function initializeSettings() {
   const recommendedKeys = [
     'PA_API_ACCESS_KEY',
     'PA_API_SECRET_KEY',
-    'PA_API_PARTNER_TAG'
+    'PA_API_PARTNER_TAG',
+    'DIVI_DOWNLOAD_URL'   // Required for automated Divi installation
   ];
 
   const optionalKeys = [
-    'DIVI_API_USERNAME',  // Global fallback
-    'DIVI_API_KEY',       // Global fallback
     'HOSTINGER_API_KEY'
   ];
 

@@ -102,23 +102,36 @@ Copy **ALL 11 files** from this directory to your Google Apps Script project:
 3. Click **Add script property**
 4. Add the following properties:
 
-**Required (Amazon):**
+**Required:**
 | Property Name | Value |
 |--------------|-------|
 | `PA_API_ACCESS_KEY` | Your Amazon PA API Access Key |
 | `PA_API_SECRET_KEY` | Your Amazon PA API Secret Key |
 | `PA_API_PARTNER_TAG` | Your Amazon Associate Tag |
+| `DIVI_DOWNLOAD_URL` | URL to your hosted Divi ZIP file (see below*) |
 
-**Optional (Global Fallback):**
+**Optional:**
 | Property Name | Value |
 |--------------|-------|
-| `DIVI_API_USERNAME` | `netanaliza` (fallback for all sites) |
-| `DIVI_API_KEY` | Your global Divi API Key (fallback) |
 | `HOSTINGER_API_KEY` | Optional - for future use |
 
 5. Click **Save script properties**
 
-### Step 5: Fill Per-Site Divi Credentials
+**📋 DIVI_DOWNLOAD_URL Configuration:*
+
+Elegant Themes doesn't provide a public download API. You need to:
+1. Download Divi ZIP from elegantthemes.com
+2. Upload to your private storage (AWS S3, Google Cloud, Dropbox, etc.)
+3. Set the direct download URL as `DIVI_DOWNLOAD_URL`
+
+**Example URLs:**
+- AWS S3: `https://your-bucket.s3.amazonaws.com/Divi.zip?...`
+- Dropbox: `https://www.dropbox.com/s/xxxxx/Divi.zip?dl=1`
+- Your server: `https://yourserver.com/files/Divi.zip`
+
+See detailed guide: [../docs/AUTOMATION.md#divi-theme-configuration](../docs/AUTOMATION.md#divi-theme-configuration)
+
+### Step 5: Configure Per-Site Settings
 
 ⚠️ **IMPORTANT**: For each site in the **Sites** sheet:
 
@@ -221,57 +234,41 @@ Copy **ALL 11 files** from this directory to your Google Apps Script project:
 
 ---
 
-## 🔑 Per-Site Divi API Credentials
+## 🔑 Divi Theme Installation
 
-### Why Per-Site Credentials?
+**NEW APPROACH**: Since Elegant Themes doesn't provide a public API for downloading Divi, WAAS now uses a self-hosted approach:
 
-Each WordPress site should have its own Divi API credentials because:
+1. **One-Time Setup**: Host your Divi ZIP file on cloud storage (AWS S3, Dropbox, etc.)
+2. **Configure Once**: Set `DIVI_DOWNLOAD_URL` in Script Properties
+3. **Automated Installation**: WAAS downloads Divi from your URL for all sites
 
-1. **License Compliance** - Elegant Themes requires separate licenses per site
-2. **Security** - Isolate credentials per site
-3. **Flexibility** - Different sites can use different Divi accounts
-4. **No Conflicts** - Prevents license validation issues
+#### Benefits:
 
-### How It Works
+1. **Fully Automated** - No manual downloads needed per site
+2. **Secure** - Control access to your Divi file via storage permissions
+3. **Flexible** - Update Divi by replacing the ZIP file
+4. **License Compliant** - You control the Divi distribution
 
-#### Sites Sheet Structure (columns 7-8):
-
-| Column | Name | Purpose |
-|--------|------|---------|
-| 7 | Divi API Username | Per-site Divi username |
-| 8 | Divi API Key | Per-site Divi API key |
-
-#### Fallback System:
-
-1. **Primary**: Use per-site credentials from Sites sheet (columns 7-8)
-2. **Fallback**: If empty, use global Script Properties
+#### Configuration:
 
 ```javascript
-// In Core.gs
-function getDiviCredentialsForSite(site) {
-  // Try per-site credentials first
-  if (site.diviApiUsername && site.diviApiKey) {
-    return {
-      username: site.diviApiUsername,
-      apiKey: site.diviApiKey
-    };
+// In DiviAPI.gs
+function getDiviDownloadUrl(credentials) {
+  // Check for custom DIVI_DOWNLOAD_URL first
+  const scriptProperties = PropertiesService.getScriptProperties();
+  const customDiviUrl = scriptProperties.getProperty('DIVI_DOWNLOAD_URL');
+
+  if (customDiviUrl) {
+    return customDiviUrl; // Use your hosted Divi ZIP
   }
 
-  // Fallback to global credentials
-  return getDiviCredentials();
+  // If not configured, show helpful error message
+  throw new Error('Please configure DIVI_DOWNLOAD_URL in Script Properties');
 }
 ```
 
-### Migration from Global Credentials
+See setup guide: [../docs/AUTOMATION.md#divi-theme-configuration](../docs/AUTOMATION.md#divi-theme-configuration)
 
-If you have existing sites with global Divi credentials:
-
-1. Open your WAAS sheet
-2. Click: **⚡ WAAS → 🔧 Settings → 🔄 Migrate to Per-Site Divi Keys**
-3. Follow the prompts
-4. Verify: **⚡ WAAS → 🔧 Settings → ✅ Verify Migration**
-
----
 
 ## 🔧 API Keys Configuration
 
@@ -284,17 +281,18 @@ Set in: **Project Settings → Script Properties**
 | `PA_API_ACCESS_KEY` | ✅ Yes | Amazon PA API Access Key |
 | `PA_API_SECRET_KEY` | ✅ Yes | Amazon PA API Secret Key |
 | `PA_API_PARTNER_TAG` | ✅ Yes | Amazon Associate Tag |
-| `DIVI_API_USERNAME` | ⚠️ Fallback | Global Divi username (fallback) |
-| `DIVI_API_KEY` | ⚠️ Fallback | Global Divi API key (fallback) |
+| `DIVI_DOWNLOAD_URL` | ✅ Yes | URL to your hosted Divi ZIP file |
 | `HOSTINGER_API_KEY` | ❌ Optional | Hostinger API (future use) |
+
+**⚠️ Important**: `DIVI_DOWNLOAD_URL` requires you to host the Divi ZIP file yourself (AWS S3, Dropbox, etc.)
+See setup guide: [../docs/AUTOMATION.md#divi-theme-configuration](../docs/AUTOMATION.md#divi-theme-configuration)
 
 ### Per-Site Credentials (Recommended)
 
-Set in: **Sites sheet → Columns 7-8**
+Set in: **Sites sheet → Column 9**
 
 For EACH site, fill:
-- **Column 7**: Divi API Username (e.g., `netanaliza`)
-- **Column 8**: Divi API Key (get from Elegant Themes dashboard)
+- **Column 9**: Amazon Partner Tag (e.g., `yoursite-21`) - overrides global PA_API_PARTNER_TAG
 
 ---
 
@@ -402,8 +400,8 @@ For EACH site, fill:
 - [ ] Run `installWAAS()` function
 - [ ] Authorize application
 - [ ] Add Amazon API keys to Script Properties
-- [ ] (Optional) Add global Divi keys to Script Properties as fallback
-- [ ] **Fill per-site Divi credentials in Sites sheet (columns 7-8)**
+- [ ] **Host Divi ZIP and set DIVI_DOWNLOAD_URL in Script Properties**
+- [ ] Configure per-site Amazon Partner Tags (Sites sheet, column 9)
 - [ ] Reload spreadsheet
 - [ ] Test with one site first
 - [ ] Check logs for any errors

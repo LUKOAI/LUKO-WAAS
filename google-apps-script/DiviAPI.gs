@@ -9,6 +9,17 @@
 
 function getDiviDownloadUrl(credentials) {
   try {
+    // Check if custom Divi download URL is configured (recommended approach)
+    const scriptProperties = PropertiesService.getScriptProperties();
+    const customDiviUrl = scriptProperties.getProperty('DIVI_DOWNLOAD_URL');
+
+    if (customDiviUrl) {
+      logSuccess('DiviAPI', `Using custom Divi download URL from Script Properties`);
+      return customDiviUrl;
+    }
+
+    logInfo('DiviAPI', 'No custom DIVI_DOWNLOAD_URL configured, trying Elegant Themes API endpoints...');
+
     // Elegant Themes API - trying multiple possible endpoints
     // Note: ET may not have a public download API, might require manual download
     const apiEndpoints = [
@@ -76,10 +87,18 @@ function getDiviDownloadUrl(credentials) {
 
     // All endpoints failed
     logError('DiviAPI', 'Failed to get Divi download URL from all API endpoints');
-    logError('DiviAPI', `Credentials used - Username: ${credentials.username}, API Key: ${credentials.apiKey.substring(0, 10)}...`);
-    logWarning('DiviAPI', 'Elegant Themes may not have a public download API');
-    logInfo('DiviAPI', 'Alternative: Manual upload - Download Divi from elegantthemes.com and upload via WordPress admin');
-    throw new Error('Divi download API not available - please upload Divi manually');
+    if (credentials && credentials.username && credentials.apiKey) {
+      logError('DiviAPI', `Credentials used - Username: ${credentials.username}, API Key: ${credentials.apiKey.substring(0, 10)}...`);
+    }
+    logWarning('DiviAPI', 'Elegant Themes does not provide a public download API');
+    logInfo('DiviAPI', '');
+    logInfo('DiviAPI', '📋 RECOMMENDED SOLUTION:');
+    logInfo('DiviAPI', '1. Download Divi theme ZIP from elegantthemes.com');
+    logInfo('DiviAPI', '2. Upload it to your private storage (AWS S3, Google Cloud Storage, Dropbox, etc.)');
+    logInfo('DiviAPI', '3. Set DIVI_DOWNLOAD_URL in Script Properties to your storage URL');
+    logInfo('DiviAPI', '4. Automation will then download Divi automatically from your URL');
+    logInfo('DiviAPI', '');
+    throw new Error('Divi download not available. Please configure DIVI_DOWNLOAD_URL in Script Properties with your own hosted Divi ZIP URL.');
   } catch (error) {
     logError('DiviAPI', `Error getting download URL: ${error.message}`);
     throw error;

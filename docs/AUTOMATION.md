@@ -89,10 +89,60 @@ After successful installation, the Sites sheet automatically updates:
 
 Before using Auto Install, ensure your site has:
 - ✅ Valid WordPress admin credentials (columns 5-6)
-- ✅ Per-site Divi credentials (columns 7-8) OR global fallback
+- ✅ **DIVI_DOWNLOAD_URL** configured in Script Properties (see [Divi Configuration](#divi-theme-configuration))
 - ✅ Per-site Amazon Partner Tag (column 9) OR global fallback
 - ✅ WordPress REST API enabled
 - ✅ Admin user with installation permissions
+
+### Divi Theme Configuration
+
+**IMPORTANT**: Elegant Themes does not provide a public API for downloading Divi. To enable automated Divi installation, you need to host the Divi ZIP file yourself.
+
+#### Setup Steps:
+
+1. **Download Divi**
+   - Log into your Elegant Themes account at elegantthemes.com
+   - Download the latest Divi theme ZIP file
+
+2. **Upload to Your Storage**
+   Choose one of these options:
+   - **AWS S3**: Upload to a private bucket and create a presigned URL
+   - **Google Cloud Storage**: Upload and make the file accessible via a signed URL
+   - **Dropbox**: Upload and generate a direct download link
+   - **Your own server**: Host on any web server with HTTPS
+
+3. **Configure Script Property**
+   - Open your Google Apps Script project
+   - Go to **Project Settings** → **Script Properties**
+   - Add a new property:
+     - **Property**: `DIVI_DOWNLOAD_URL`
+     - **Value**: Your Divi ZIP download URL (must be direct download link)
+   - Click **Save**
+
+4. **Verify Configuration**
+   - Run **⚡ WAAS** → **🔧 Settings** → **🧪 Test Connections**
+   - Check that Divi download URL is accessible
+
+**Example URLs:**
+```
+AWS S3:
+https://your-bucket.s3.amazonaws.com/divi.zip?AWSAccessKeyId=...
+
+Google Cloud:
+https://storage.googleapis.com/your-bucket/divi.zip?GoogleAccessId=...
+
+Dropbox:
+https://www.dropbox.com/s/xxxxx/Divi.zip?dl=1
+
+Your Server:
+https://yourserver.com/files/divi.zip
+```
+
+**Security Tips:**
+- Use presigned/time-limited URLs when possible
+- Ensure the URL is only accessible to your automation
+- Rotate URLs periodically
+- Consider using Cloud Storage with access controls
 
 ---
 
