@@ -200,10 +200,10 @@ function createApplicationPassword(site) {
 
 /**
  * Log in to WordPress admin panel
- * Gets cookie session for authenticated requests
+ * Gets cookie session and nonce for authenticated requests
  *
  * @param {Object} site - Site object
- * @returns {Object} Result with cookies or error
+ * @returns {Object} Result with cookies, nonce, or error
  */
 function wordpressLogin(site) {
   try {
@@ -241,9 +241,14 @@ function wordpressLogin(site) {
 
     if (cookies && cookies.includes('wordpress_logged_in')) {
       logSuccess('AUTH', 'WordPress login successful', site.id);
+
+      // Get nonce for REST API
+      const nonce = getWordPressNonce(site, cookies);
+
       return {
         success: true,
-        cookies: cookies
+        cookies: cookies,
+        nonce: nonce
       };
     } else {
       return {
@@ -257,6 +262,55 @@ function wordpressLogin(site) {
       success: false,
       error: error.message
     };
+  }
+}
+
+/**
+ * Get WordPress REST API nonce
+ * Extracts nonce from wp-admin page for authenticated REST API requests
+ *
+ * @param {Object} site - Site object
+ * @param {string} cookies - Authentication cookies
+ * @returns {string|null} REST API nonce
+ */
+function getWordPressNonce(site, cookies) {
+  try {
+    // Access wp-admin page to get nonce
+    const adminUrl = `${site.wpUrl}/wp-admin/`;
+
+    const options = {
+      method: 'get',
+      headers: {
+        'Cookie': cookies
+      },
+      muteHttpExceptions: true,
+      followRedirects: true
+    };
+
+    const response = UrlFetchApp.fetch(adminUrl, options);
+    const html = response.getContentText();
+
+    // Extract nonce from wpApiSettings.nonce in the HTML
+    // WordPress includes this in wp-admin pages
+    const nonceMatch = html.match(/wpApiSettings\s*=\s*{[^}]*"nonce"\s*:\s*"([^"]+)"/);
+    if (nonceMatch && nonceMatch[1]) {
+      logInfo('AUTH', 'REST API nonce extracted successfully', site.id);
+      return nonceMatch[1];
+    }
+
+    // Alternative: try to find nonce in meta tag
+    const metaMatch = html.match(/<meta\s+name=["']api-nonce["']\s+content=["']([^"']+)["']/);
+    if (metaMatch && metaMatch[1]) {
+      logInfo('AUTH', 'REST API nonce found in meta tag', site.id);
+      return metaMatch[1];
+    }
+
+    logWarning('AUTH', 'Could not extract REST API nonce from wp-admin', site.id);
+    return null;
+
+  } catch (error) {
+    logError('AUTH', `Failed to get nonce: ${error.message}`, site.id);
+    return null;
   }
 }
 
@@ -562,10 +616,17 @@ function makeAuthenticatedRequest(site, endpoint, options = {}) {
       requestOptions.headers['Authorization'] = `Basic ${auth}`;
 
     } else if (authType === 'cookie_auth' || authType === 'none' || !authType) {
-      // Use cookie-based authentication
+      // Use cookie-based authentication with nonce
       const loginResult = wordpressLogin(site);
       if (loginResult.success) {
         requestOptions.headers['Cookie'] = loginResult.cookies;
+        // Add nonce header for REST API authentication
+        if (loginResult.nonce) {
+          requestOptions.headers['X-WP-Nonce'] = loginResult.nonce;
+          logInfo('AUTH', 'Using cookie auth with nonce', site.id);
+        } else {
+          logWarning('AUTH', 'No nonce available, request may fail', site.id);
+        }
       } else {
         throw new Error(`Cannot authenticate: ${loginResult.error}`);
       }
@@ -576,10 +637,13 @@ function makeAuthenticatedRequest(site, endpoint, options = {}) {
       requestOptions.headers['Authorization'] = `Basic ${auth}`;
 
     } else {
-      // Unknown auth type, fallback to cookies
+      // Unknown auth type, fallback to cookies with nonce
       const loginResult = wordpressLogin(site);
       if (loginResult.success) {
         requestOptions.headers['Cookie'] = loginResult.cookies;
+        if (loginResult.nonce) {
+          requestOptions.headers['X-WP-Nonce'] = loginResult.nonce;
+        }
       } else {
         throw new Error(`Cannot authenticate: ${loginResult.error}`);
       }
