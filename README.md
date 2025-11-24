@@ -239,31 +239,45 @@ LUKO-WAAS/
 3. W WordPress Admin → **Wtyczki** → Znajdź "LUKO-WAAS Product Manager"
 4. Kliknij **Aktywuj**
 
-### Krok 2: Skonfiguruj Google Apps Script (Automatyczna Instalacja) ⚡
+### Krok 2: Skonfiguruj Google Apps Script ⚡
 
-#### **NOWA METODA - Instalacja w 5 minut!**
+#### **✨ AUTOMATYCZNA INSTALACJA - BEZ KOPIOWANIA! (3 minuty)**
 
-1. Wejdź na: https://script.google.com
-2. Kliknij: **Nowy projekt**
-3. Skopiuj zawartość pliku `google-apps-script/setup.gs`
-4. Wklej do edytora i zapisz (Ctrl+S)
-5. Wybierz funkcję: `installWAAS`
-6. Kliknij: **Uruchom** ▶️
-7. Autoryzuj dostęp (zgody Google)
-8. Poczekaj 30-60 sekund - gotowe! 🎉
+**NOWA METODA 2025:** Jeden skrypt wgrywa wszystkie pliki automatycznie!
 
-**Skrypt automatycznie:**
-- Utworzy arkusz Google Sheets ze wszystkimi kartami
-- Skonfiguruje kolumny i strukturę
-- Zainstaluje wszystkie moduły systemu
-- Utworzy menu WAAS
+1. **Utwórz nowy Google Sheet:**
+   - Otwórz: https://sheets.google.com
+   - Utwórz nowy arkusz
+   - **Extensions** → **Apps Script**
+   - **Project Settings** (⚙️) → Skopiuj **Script ID**
 
-**Szczegółowa instrukcja:** Zobacz `google-apps-script/README.md`
+2. **Uruchom auto-installer:**
+   ```bash
+   cd LUKO-WAAS
+   npm install
+   ./scripts/install.sh <YOUR_SCRIPT_ID>
+   ```
 
-**Szybki start:** Zobacz `google-apps-script/INSTALLATION_QUICKSTART.md`
+3. **Pierwsze uruchomienie:**
+   - Przeglądarka otworzy się automatycznie
+   - Zaloguj się kontem Google
+   - Kliknij **Allow** (nadaj uprawnienia)
+   - Gotowe! Wszystkie pliki wgrane automatycznie
 
-#### **STARA METODA** (dla zaawansowanych)
-Jeśli chcesz ręcznie skonfigurować system, zobacz dokumentację w `google-apps-script/README_GoogleAppsScript.md`
+4. **Uruchom setup:**
+   - W Apps Script wybierz funkcję: `installWAAS`
+   - Kliknij: **Run** ▶️
+   - Autoryzuj (przy pierwszym uruchomieniu)
+   - Poczekaj 30-60 sekund
+
+**Gotowe! 🎉** Arkusz utworzony, wszystkie moduły zainstalowane, menu ⚡ WAAS dostępne!
+
+**Szczegółowa instrukcja:** `AUTOMATIC_INSTALLATION.md`
+**Szybki start:** `QUICK_START.md`
+
+#### **📋 ALTERNATYWA: Ręczna instalacja**
+Jeśli automatyczna instalacja nie działa, możesz skopiować pliki ręcznie:
+- Zobacz: `DEPLOYMENT_GUIDE.md` dla instrukcji krok po kroku
 
 ### Krok 3: Skonfiguruj API Keys
 

@@ -1,0 +1,19 @@
+{
+  "name": "luko-waas",
+  "version": "2.0.0",
+  "description": "WordPress Affiliate Automation System - Automated installation to Google Apps Script",
+  "scripts": {
+    "install-to-google": "node scripts/install-to-google.js",
+    "push": "clasp push",
+    "deploy": "clasp deploy"
+  },
+  "devDependencies": {
+    "@google/clasp": "^2.4.2"
+  },
+  "keywords": [
+    "google-apps-script",
+    "wordpress",
+    "affiliate",
+    "automation"
+  ]
+}
