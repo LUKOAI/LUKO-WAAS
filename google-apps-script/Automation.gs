@@ -44,7 +44,7 @@ function installFullStack(siteId, options = {}) {
 
   try {
     // Get site details
-    const site = getSiteById(siteId);
+    let site = getSiteById(siteId);
     if (!site) {
       throw new Error(`Site with ID ${siteId} not found`);
     }
