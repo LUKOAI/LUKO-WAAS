@@ -13,7 +13,7 @@
 
 /**
  * Main migration function
- * Adds "Divi API Username" and "Divi API Key" columns to Sites sheet
+ * Adds "Divi API Username", "Divi API Key", and "Amazon Partner Tag" columns to Sites sheet
  * FORCES the migration even if columns already exist
  */
 function migrateToPerSiteDiviKeys() {
@@ -28,15 +28,16 @@ function migrateToPerSiteDiviKeys() {
     // Check if migration is needed
     const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     const hasDiviColumns = headers.includes('Divi API Username') && headers.includes('Divi API Key');
+    const hasAmazonColumn = headers.includes('Amazon Partner Tag');
 
-    if (hasDiviColumns) {
-      Logger.log('⚠️ Divi API columns already exist. Forcing re-migration...');
+    if (hasDiviColumns && hasAmazonColumn) {
+      Logger.log('⚠️ All per-site columns already exist. Forcing re-migration...');
 
       // Ask user if they want to continue
       const ui = SpreadsheetApp.getUi();
       const response = ui.alert(
         'Migration Warning',
-        'Divi API columns already exist.\n\n' +
+        'Per-site credential columns already exist.\n\n' +
         'Do you want to re-run the migration?\n' +
         'This will NOT delete existing data.',
         ui.ButtonSet.YES_NO
@@ -53,19 +54,20 @@ function migrateToPerSiteDiviKeys() {
 
     if (result.success) {
       Logger.log('✅ Migration completed successfully!');
-      Logger.log(`   - Added columns at positions 7-8`);
+      Logger.log(`   - Added columns at positions 7-9`);
       Logger.log(`   - Migrated ${result.rowsAffected} rows`);
 
       try {
         SpreadsheetApp.getUi().alert(
           'Migration Complete!',
-          `Per-site Divi API columns have been added successfully.\n\n` +
+          `Per-site credential columns have been added successfully.\n\n` +
           `Columns added:\n` +
           `  - Column 7: Divi API Username\n` +
-          `  - Column 8: Divi API Key\n\n` +
+          `  - Column 8: Divi API Key\n` +
+          `  - Column 9: Amazon Partner Tag\n\n` +
           `Rows migrated: ${result.rowsAffected}\n\n` +
           `Next steps:\n` +
-          `1. Fill in Divi API Username and Key for each site\n` +
+          `1. Fill in credentials for each site (columns 7-9)\n` +
           `2. Reload the spreadsheet\n` +
           `3. Test Divi installation on a site`,
           SpreadsheetApp.getUi().ButtonSet.OK
@@ -85,8 +87,9 @@ function migrateToPerSiteDiviKeys() {
 }
 
 /**
- * Adds Divi API columns to Sites sheet
+ * Adds per-site credential columns to Sites sheet
  * Inserts columns after "Admin Password" (position 6)
+ * Adds: Divi API Username, Divi API Key, Amazon Partner Tag
  * @param {Sheet} sheet - The Sites sheet
  * @returns {Object} - {success: boolean, rowsAffected: number, error: string}
  */
@@ -109,51 +112,75 @@ function addDiviApiColumnsToSites(sheet) {
       ADMIN_PASSWORD: 6,
       DIVI_API_USERNAME: 7,  // NEW
       DIVI_API_KEY: 8,       // NEW
-      STATUS: 9,
-      DIVI_INSTALLED: 10,
-      PLUGIN_INSTALLED: 11,
-      LAST_CHECK: 12,
-      CREATED_DATE: 13,
-      NOTES: 14
+      AMAZON_PARTNER_TAG: 9, // NEW
+      STATUS: 10,
+      DIVI_INSTALLED: 11,
+      PLUGIN_INSTALLED: 12,
+      LAST_CHECK: 13,
+      CREATED_DATE: 14,
+      NOTES: 15
     };
 
     // Check if we need to insert columns
-    const needsInsertion = !headers.includes('Divi API Username') || !headers.includes('Divi API Key');
+    const needsDiviInsertion = !headers.includes('Divi API Username') || !headers.includes('Divi API Key');
+    const needsAmazonInsertion = !headers.includes('Amazon Partner Tag');
 
-    if (needsInsertion) {
+    if (needsDiviInsertion) {
       Logger.log('📝 Inserting new columns after position 6...');
 
-      // Insert 2 columns after position 6 (Admin Password)
-      sheet.insertColumnsAfter(6, 2);
+      // Insert 3 columns after position 6 (Admin Password)
+      sheet.insertColumnsAfter(6, 3);
 
       // Set new column headers
       sheet.getRange(1, 7).setValue('Divi API Username');
       sheet.getRange(1, 8).setValue('Divi API Key');
+      sheet.getRange(1, 9).setValue('Amazon Partner Tag');
 
       // Format new columns
       sheet.setColumnWidth(7, 200);  // Divi API Username
       sheet.setColumnWidth(8, 300);  // Divi API Key
+      sheet.setColumnWidth(9, 150);  // Amazon Partner Tag
 
       // Apply header formatting to new columns
-      const newHeaderRange = sheet.getRange(1, 7, 1, 2);
+      const newHeaderRange = sheet.getRange(1, 7, 1, 3);
       newHeaderRange.setFontWeight('bold');
       newHeaderRange.setBackground('#4285f4');
       newHeaderRange.setFontColor('#ffffff');
 
       Logger.log('✅ Columns inserted and formatted');
+    } else if (needsAmazonInsertion) {
+      Logger.log('📝 Inserting Amazon Partner Tag column after position 8...');
+
+      // Insert 1 column after position 8 (Divi API Key)
+      sheet.insertColumnsAfter(8, 1);
+
+      // Set new column header
+      sheet.getRange(1, 9).setValue('Amazon Partner Tag');
+
+      // Format new column
+      sheet.setColumnWidth(9, 150);  // Amazon Partner Tag
+
+      // Apply header formatting
+      const newHeaderRange = sheet.getRange(1, 9, 1, 1);
+      newHeaderRange.setFontWeight('bold');
+      newHeaderRange.setBackground('#4285f4');
+      newHeaderRange.setFontColor('#ffffff');
+
+      Logger.log('✅ Amazon Partner Tag column inserted and formatted');
     } else {
-      Logger.log('ℹ️ Columns already exist, skipping insertion');
+      Logger.log('ℹ️ All columns already exist, skipping insertion');
     }
 
     // Fill empty cells in new columns with empty strings (for data consistency)
     if (lastRow > 1) {
-      const newColumnRange = sheet.getRange(2, 7, lastRow - 1, 2);
+      const newColumnRange = sheet.getRange(2, 7, lastRow - 1, 3);
       const currentValues = newColumnRange.getValues();
 
       // Fill only truly empty cells
       const updatedValues = currentValues.map(row => [
         row[0] === '' || row[0] === undefined || row[0] === null ? '' : row[0],
-        row[1] === '' || row[1] === undefined || row[1] === null ? '' : row[1]
+        row[1] === '' || row[1] === undefined || row[1] === null ? '' : row[1],
+        row[2] === '' || row[2] === undefined || row[2] === null ? '' : row[2]
       ]);
 
       newColumnRange.setValues(updatedValues);
@@ -194,6 +221,7 @@ function verifyMigration() {
       'Admin Password',
       'Divi API Username',
       'Divi API Key',
+      'Amazon Partner Tag',
       'Status',
       'Divi Installed',
       'Plugin Installed',

@@ -30,10 +30,10 @@
  *    - DIVI_API_KEY (global fallback)
  *    - PA_API_ACCESS_KEY
  *    - PA_API_SECRET_KEY
- *    - PA_API_PARTNER_TAG
+ *    - PA_API_PARTNER_TAG (global fallback)
  *    - HOSTINGER_API_KEY (opcjonalnie)
  *
- *    ⚠️ WAŻNE: Per-site Divi credentials (kolumny 7-8 w Sites)
+ *    ⚠️ WAŻNE: Per-site credentials (kolumny 7-9 w Sites)
  *    powinny być wypełnione dla każdej strony osobno!
  *
  * 9. Przeładuj arkusz (F5)
@@ -74,7 +74,7 @@ function installWAAS() {
     Logger.log('✅ Installation completed successfully!');
     Logger.log('📋 Spreadsheet URL: ' + spreadsheet.getUrl());
     Logger.log('⚠️ IMPORTANT: Now set your API keys in Script Properties!');
-    Logger.log('⚠️ IMPORTANT: Fill per-site Divi credentials in Sites sheet (columns 7-8)!');
+    Logger.log('⚠️ IMPORTANT: Fill per-site credentials in Sites sheet (columns 7-9)!');
 
     // Pokazuje URL arkusza - tylko jeśli UI jest dostępne
     try {
@@ -88,10 +88,11 @@ function installWAAS() {
         '   - DIVI_API_KEY\n' +
         '   - PA_API_ACCESS_KEY\n' +
         '   - PA_API_SECRET_KEY\n' +
-        '   - PA_API_PARTNER_TAG\n' +
-        '3. Fill per-site Divi credentials in Sites sheet:\n' +
+        '   - PA_API_PARTNER_TAG (global fallback)\n' +
+        '3. Fill per-site credentials in Sites sheet:\n' +
         '   - Column 7: Divi API Username\n' +
         '   - Column 8: Divi API Key\n' +
+        '   - Column 9: Amazon Partner Tag (e.g., luko-de-21)\n' +
         '4. Reload the spreadsheet (F5)\n' +
         '5. Use WAAS menu to start!',
         SpreadsheetApp.getUi().ButtonSet.OK
@@ -175,7 +176,7 @@ function createSheetsStructure(spreadsheet) {
 function createSitesSheet(spreadsheet) {
   const sheet = spreadsheet.insertSheet('Sites');
 
-  // Nagłówki kolumn - KRYTYCZNE: kolumny 7-8 to Divi API Username/Key
+  // Nagłówki kolumn - KRYTYCZNE: kolumny 7-9 to per-site credentials
   const headers = [
     'ID',
     'Site Name',
@@ -185,6 +186,7 @@ function createSitesSheet(spreadsheet) {
     'Admin Password',
     'Divi API Username',  // COLUMN 7: Per-site Divi username
     'Divi API Key',       // COLUMN 8: Per-site Divi API key
+    'Amazon Partner Tag', // COLUMN 9: Per-site Amazon affiliate tag
     'Status',
     'Divi Installed',
     'Plugin Installed',
@@ -209,12 +211,13 @@ function createSitesSheet(spreadsheet) {
   sheet.setColumnWidth(6, 150);  // Admin Password
   sheet.setColumnWidth(7, 200);  // Divi API Username
   sheet.setColumnWidth(8, 300);  // Divi API Key
-  sheet.setColumnWidth(9, 100);  // Status
-  sheet.setColumnWidth(10, 120); // Divi Installed
-  sheet.setColumnWidth(11, 120); // Plugin Installed
-  sheet.setColumnWidth(12, 150); // Last Check
-  sheet.setColumnWidth(13, 120); // Created Date
-  sheet.setColumnWidth(14, 300); // Notes
+  sheet.setColumnWidth(9, 150);  // Amazon Partner Tag
+  sheet.setColumnWidth(10, 100); // Status
+  sheet.setColumnWidth(11, 120); // Divi Installed
+  sheet.setColumnWidth(12, 120); // Plugin Installed
+  sheet.setColumnWidth(13, 150); // Last Check
+  sheet.setColumnWidth(14, 120); // Created Date
+  sheet.setColumnWidth(15, 300); // Notes
 
   // Zamrożenie pierwszego wiersza
   sheet.setFrozenRows(1);
@@ -229,15 +232,16 @@ function createSitesSheet(spreadsheet) {
     '',                // Admin Password - fill in
     '',                // Divi API Username - fill in per site
     '',                // Divi API Key - fill in per site
+    '',                // Amazon Partner Tag - fill in per site (e.g., 'luko-de-21')
     'Pending',
     'No',
     'No',
     new Date(),
     new Date(),
-    'Example site - replace with real data. Fill Divi API Username/Key (columns 7-8) for each site!'
+    'Example site - replace with real data. Fill credentials (columns 7-9) for each site!'
   ]]);
 
-  Logger.log('✅ Sites sheet created with per-site Divi credentials (columns 7-8)');
+  Logger.log('✅ Sites sheet created with per-site credentials (columns 7-9: Divi + Amazon)');
   return sheet;
 }
 
@@ -500,7 +504,7 @@ function initializeSettings() {
     Logger.log('✅ All API keys are configured');
   }
 
-  Logger.log('💡 Remember: Per-site Divi credentials should be set in Sites sheet (columns 7-8)');
+  Logger.log('💡 Remember: Per-site credentials should be set in Sites sheet (columns 7-9)');
 }
 
 // =============================================================================

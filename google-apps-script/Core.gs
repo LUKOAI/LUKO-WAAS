@@ -91,12 +91,41 @@ function getDiviCredentialsForSite(site) {
   }
 }
 
+/**
+ * Get global Amazon PA credentials (fallback/default)
+ * @deprecated Use getAmazonCredentialsForSite() for per-site partner tags
+ */
 function getAmazonPACredentials() {
   return {
     accessKey: getAPIKey('PA_API_ACCESS_KEY'),
     secretKey: getAPIKey('PA_API_SECRET_KEY'),
     partnerTag: getAPIKey('PA_API_PARTNER_TAG')
   };
+}
+
+/**
+ * Get Amazon PA credentials for a specific site
+ * Falls back to global partner tag if site-specific tag is not set
+ * @param {Object} site - Site object from getSiteById()
+ * @returns {Object} - {accessKey, secretKey, partnerTag}
+ */
+function getAmazonCredentialsForSite(site) {
+  // Get global credentials (access keys are always global)
+  const globalCreds = getAmazonPACredentials();
+
+  // Try to use per-site partner tag first
+  if (site.partnerTag && site.partnerTag.trim() !== '') {
+    logInfo('AmazonPA', `Using per-site Amazon Partner Tag for: ${site.name}`, site.id);
+    return {
+      accessKey: globalCreds.accessKey,
+      secretKey: globalCreds.secretKey,
+      partnerTag: site.partnerTag
+    };
+  }
+
+  // Fallback to global partner tag
+  logWarning('AmazonPA', `No per-site Amazon Partner Tag for ${site.name}, using global tag`, site.id);
+  return globalCreds;
 }
 
 function getHostingerAPIKey() {

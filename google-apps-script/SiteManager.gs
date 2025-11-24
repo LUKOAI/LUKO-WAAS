@@ -20,14 +20,15 @@ function getSiteById(siteId) {
         wpUrl: data[i][3],
         username: data[i][4],
         password: data[i][5],
-        diviApiUsername: data[i][6],   // NEW: Per-site Divi username
-        diviApiKey: data[i][7],         // NEW: Per-site Divi API key
-        status: data[i][8],
-        diviInstalled: data[i][9],
-        pluginInstalled: data[i][10],
-        lastCheck: data[i][11],
-        createdDate: data[i][12],
-        notes: data[i][13],
+        diviApiUsername: data[i][6],   // COLUMN 7: Per-site Divi username
+        diviApiKey: data[i][7],         // COLUMN 8: Per-site Divi API key
+        partnerTag: data[i][8],         // COLUMN 9: Per-site Amazon Partner Tag
+        status: data[i][9],
+        diviInstalled: data[i][10],
+        pluginInstalled: data[i][11],
+        lastCheck: data[i][12],
+        createdDate: data[i][13],
+        notes: data[i][14],
         rowIndex: i + 1
       };
     }
@@ -45,11 +46,11 @@ function updateSiteStatus(siteId, status, updates = {}) {
   const sheet = getSitesSheet();
   const row = site.rowIndex;
 
-  // Aktualizuj status
-  sheet.getRange(row, 9).setValue(status);
+  // Aktualizuj status (kolumna 10)
+  sheet.getRange(row, 10).setValue(status);
 
-  // Aktualizuj last check
-  sheet.getRange(row, 12).setValue(new Date());
+  // Aktualizuj last check (kolumna 13)
+  sheet.getRange(row, 13).setValue(new Date());
 
   // Aktualizuj dodatkowe pola
   if (updates.diviApiUsername !== undefined) {
@@ -58,14 +59,17 @@ function updateSiteStatus(siteId, status, updates = {}) {
   if (updates.diviApiKey !== undefined) {
     sheet.getRange(row, 8).setValue(updates.diviApiKey);
   }
+  if (updates.partnerTag !== undefined) {
+    sheet.getRange(row, 9).setValue(updates.partnerTag);
+  }
   if (updates.diviInstalled !== undefined) {
-    sheet.getRange(row, 10).setValue(updates.diviInstalled);
+    sheet.getRange(row, 11).setValue(updates.diviInstalled);
   }
   if (updates.pluginInstalled !== undefined) {
-    sheet.getRange(row, 11).setValue(updates.pluginInstalled);
+    sheet.getRange(row, 12).setValue(updates.pluginInstalled);
   }
   if (updates.notes !== undefined) {
-    sheet.getRange(row, 14).setValue(updates.notes);
+    sheet.getRange(row, 15).setValue(updates.notes);
   }
 
   logInfo('SiteManager', `Site ${siteId} updated: ${status}`, siteId);
@@ -544,7 +548,7 @@ function getAllActiveSites() {
 
   const sites = [];
   for (let i = 1; i < data.length; i++) {
-    if (data[i][8] === 'Active') {  // Updated index for Status
+    if (data[i][9] === 'Active') {  // Updated index for Status (column 10)
       sites.push({
         id: data[i][0],
         name: data[i][1],
@@ -553,7 +557,8 @@ function getAllActiveSites() {
         username: data[i][4],
         password: data[i][5],
         diviApiUsername: data[i][6],
-        diviApiKey: data[i][7]
+        diviApiKey: data[i][7],
+        partnerTag: data[i][8]  // Per-site Amazon Partner Tag
       });
     }
   }
