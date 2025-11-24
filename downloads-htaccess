@@ -1,0 +1,27 @@
+# .htaccess for Hostinger - place in /public_html/downloads/
+# This file enables direct access to Divi ZIP files
+
+# Enable headers module (if available)
+<IfModule mod_headers.c>
+    # Allow CORS
+    Header set Access-Control-Allow-Origin "*"
+</IfModule>
+
+# Configuration for all ZIP files in this directory
+<FilesMatch "\.(zip)$">
+    # Allow access to the file
+    Require all granted
+
+    # Set correct MIME type
+    ForceType application/zip
+</FilesMatch>
+
+# Specific configuration for Divi files
+<Files "Divi*.zip">
+    Require all granted
+    ForceType application/zip
+</Files>
+
+# Directory options
+Options -Indexes
+DirectoryIndex disabled

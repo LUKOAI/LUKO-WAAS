@@ -83,9 +83,67 @@ If you see this error in your automation logs:
    - Add property: `DIVI_DOWNLOAD_URL`
    - Value: Your GCS URL
 
-### ⚠️ Option 5: Fix Your Current Web Server (Advanced)
+### ✅ Option 5: Use Hostinger (Your Current Setup)
 
-If you must use your current hosting (`srv1813-files.hstgr.io`), you need to configure the web server.
+**Working Configuration for Hostinger:**
+
+1. **Upload Divi to your Hostinger account:**
+   - Via File Manager or FTP, upload `Divi_5.zip` to `/public_html/downloads/`
+   - Set file permissions to `755` or `777`
+
+2. **Create `.htaccess` file in the downloads directory:**
+   - Location: `/public_html/downloads/.htaccess`
+   - Use the configuration from `hostinger-htaccess-example.txt`:
+
+   ```apache
+   # .htaccess dla Hostinger - umieść w folderze /public_html/downloads/
+
+   # Włącz moduł headers (jeśli dostępny)
+   <IfModule mod_headers.c>
+       Header set Access-Control-Allow-Origin "*"
+   </IfModule>
+
+   # Konfiguracja dla wszystkich plików ZIP
+   <FilesMatch "\.(zip)$">
+       Require all granted
+       ForceType application/zip
+   </FilesMatch>
+
+   # Specyficzna konfiguracja dla plików Divi
+   <Files "Divi*.zip">
+       Require all granted
+       ForceType application/zip
+   </Files>
+
+   # Opcje dla katalogu
+   Options -Indexes
+   DirectoryIndex disabled
+   ```
+
+3. **Set .htaccess permissions:**
+   ```bash
+   chmod 644 /public_html/downloads/.htaccess
+   ```
+
+4. **Your Divi URL will be:**
+   ```
+   https://lk24.shop/downloads/Divi_5.zip
+   ```
+
+5. **In Google Apps Script:**
+   - Go to **Project Settings** → **Script Properties**
+   - Add property: `DIVI_DOWNLOAD_URL`
+   - Value: `https://lk24.shop/downloads/Divi_5.zip`
+
+**Important Notes:**
+- File permissions: `755` for directories, `644` for .htaccess, `755` or `777` for Divi_5.zip
+- The `.htaccess` file must be in the same directory as your ZIP file
+- If still getting 403, check Hostinger's "Hotlink Protection" is disabled for this directory
+- Test the URL in incognito browser before setting `DIVI_DOWNLOAD_URL`
+
+### ⚠️ Option 6: Fix Other Web Servers (Advanced)
+
+If you're using a different web server, you need to configure it properly.
 
 #### For Nginx/OpenResty:
 
@@ -99,23 +157,6 @@ location /path/to/divi/ {
         application/zip zip;
     }
 }
-```
-
-#### For Apache (.htaccess):
-
-Create/edit `.htaccess` in the Divi directory:
-
-```apache
-<Files "Divi.zip">
-    Order allow,deny
-    Allow from all
-    Require all granted
-</Files>
-
-# Enable direct file downloads
-<IfModule mod_headers.c>
-    Header set Access-Control-Allow-Origin "*"
-</IfModule>
 ```
 
 #### For cPanel/DirectAdmin:
