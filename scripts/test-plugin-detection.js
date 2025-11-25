@@ -151,7 +151,7 @@ async function testWaasEndpoint(wpUrl, username, password) {
   const authHeader = 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
 
   try {
-    const response = await makeRequest(`${wpUrl}/wp-json/waas/v1/status`, {
+    const response = await makeRequest(`${wpUrl}/wp-json/waas/v1/patronage/status`, {
       headers: {
         'Authorization': authHeader,
         'Accept': 'application/json'
@@ -163,7 +163,7 @@ async function testWaasEndpoint(wpUrl, username, password) {
       console.log('  Response:', JSON.stringify(response.data, null, 2));
       return true;
     } else if (response.status === 404) {
-      log('⚠ WAAS REST API endpoint not found (plugin may not expose /status)', 'yellow');
+      log('⚠ WAAS REST API endpoint not found (/waas/v1/patronage/status)', 'yellow');
       return false;
     } else {
       log(`⚠ WAAS API returned HTTP ${response.status}`, 'yellow');
