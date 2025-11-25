@@ -24,6 +24,13 @@ const fs = require('fs');
 const path = require('path');
 const { URL } = require('url');
 
+// Configuration for stealth mode
+const STEALTH_OPTIONS = {
+  userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  locale: 'de-DE',
+  timezoneId: 'Europe/Berlin'
+};
+
 // Colors for console output
 const colors = {
   reset: '\x1b[0m',
@@ -78,13 +85,30 @@ async function downloadFile(url, outputPath) {
 }
 
 async function installPlugin(wpUrl, username, password, pluginZipUrl) {
+  log('Launching Chromium browser with stealth mode...', 'blue');
+
   const browser = await chromium.launch({
-    headless: true
+    headless: true,
+    args: [
+      '--disable-blink-features=AutomationControlled',
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-web-security',
+      '--ignore-certificate-errors'
+    ]
   });
 
   try {
     const context = await browser.newContext({
-      viewport: { width: 1280, height: 800 }
+      viewport: { width: 1280, height: 800 },
+      ignoreHTTPSErrors: true,
+      userAgent: STEALTH_OPTIONS.userAgent,
+      locale: STEALTH_OPTIONS.locale,
+      timezoneId: STEALTH_OPTIONS.timezoneId,
+      extraHTTPHeaders: {
+        'Accept-Language': 'de-DE,de;q=0.9,en;q=0.8',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+      }
     });
     const page = await context.newPage();
 
