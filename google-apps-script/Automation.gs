@@ -514,13 +514,14 @@ function installPatronageManagerOnSite(siteId) {
     }
 
     // Install plugin via WordPress admin panel
-    const installed = installPluginOnWordPress(site, pluginBlob);
+    const pluginSlug = 'waas-patronage-manager';
+    const installed = installPluginOnWordPress(site, pluginBlob, pluginSlug);
     if (!installed) {
       throw new Error('Plugin installation failed');
     }
 
-    // Activate plugin
-    const activated = activatePluginOnWordPress(site, 'waas-patronage-manager/waas-patronage-manager.php');
+    // Activate plugin (fallback jeśli instalacja nie aktywowała)
+    const activated = activatePluginOnWordPress(site, pluginSlug + '/' + pluginSlug + '.php');
     if (!activated) {
       logWarning('PATRONAGE', 'Plugin activation may have failed, but installation succeeded', siteId);
     }

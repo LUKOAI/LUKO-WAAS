@@ -377,7 +377,7 @@ function getActiveTheme(site) {
 // PLUGIN MANAGEMENT
 // =============================================================================
 
-function installPluginOnWordPress(site, pluginBlob) {
+function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
   try {
     logInfo('WordPressAPI', `Installing plugin on: ${site.name}`, site.id);
 
@@ -407,6 +407,15 @@ function installPluginOnWordPress(site, pluginBlob) {
       'Content-Type: application/zip\r\n\r\n'
     ).getBytes());
     body.push(pluginBlob.getBytes());
+
+    // Add slug parameter (REQUIRED by WordPress REST API)
+    if (pluginSlug) {
+      body.push(Utilities.newBlob(
+        delimiter +
+        'Content-Disposition: form-data; name="slug"\r\n\r\n' +
+        pluginSlug
+      ).getBytes());
+    }
 
     // Add status field to activate immediately
     body.push(Utilities.newBlob(

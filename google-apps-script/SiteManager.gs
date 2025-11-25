@@ -471,13 +471,14 @@ function installPluginOnSite(siteId) {
     }
 
     // 2. Zainstaluj plugin przez WordPress API
-    const installed = installPluginOnWordPress(site, pluginPackage);
+    const pluginSlug = 'waas-product-manager';
+    const installed = installPluginOnWordPress(site, pluginPackage, pluginSlug);
     if (!installed) {
       throw new Error('Failed to install plugin');
     }
 
-    // 3. Aktywuj plugin
-    const activated = activatePluginOnWordPress(site, 'luko-amazon-affiliate-manager');
+    // 3. Aktywuj plugin (fallback jeśli instalacja nie aktywowała)
+    const activated = activatePluginOnWordPress(site, pluginSlug + '/' + pluginSlug + '.php');
     if (!activated) {
       throw new Error('Failed to activate plugin');
     }
@@ -490,16 +491,16 @@ function installPluginOnSite(siteId) {
 
     logSuccess('SiteManager', `Plugin installed successfully on: ${site.name}`, siteId);
 
-    SpreadsheetApp.getUi().alert(
-      'Success',
-      `WAAS Product Manager has been installed and activated on ${site.name}`,
-      SpreadsheetApp.getUi().ButtonSet.OK
-    );
-
-    return true;
+    return {
+      success: true,
+      message: 'WAAS Product Manager installed and activated successfully'
+    };
   } catch (error) {
     handleError(error, 'SiteManager.installPluginOnSite', siteId);
-    return false;
+    return {
+      success: false,
+      message: error.message || 'Failed to install WAAS Product Manager'
+    };
   }
 }
 
@@ -644,16 +645,16 @@ function installWooCommerceOnSite(siteId) {
 
     logSuccess('SiteManager', `WooCommerce installed successfully on: ${site.name}`, siteId);
 
-    SpreadsheetApp.getUi().alert(
-      'Success',
-      `WooCommerce has been installed and activated on ${site.name}`,
-      SpreadsheetApp.getUi().ButtonSet.OK
-    );
-
-    return true;
+    return {
+      success: true,
+      message: 'WooCommerce installed and activated successfully'
+    };
   } catch (error) {
     handleError(error, 'SiteManager.installWooCommerceOnSite', siteId);
-    return false;
+    return {
+      success: false,
+      message: error.message || 'Failed to install WooCommerce'
+    };
   }
 }
 
