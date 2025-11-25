@@ -73,6 +73,26 @@
 - [ ] Dodaj property: `DIVI_API_USERNAME` = `netanaliza` (global username)
 - [ ] Kliknij: **Save script properties**
 
+### Skonfiguruj URL-e downloadowe (WYMAGANE dla automatycznej instalacji):
+⚠️ **WAŻNE:** Musisz hostować pliki ZIP na własnym serwerze (AWS S3, Dropbox, Google Drive, etc.)
+
+- [ ] Dodaj property: `DIVI_DOWNLOAD_URL` = `https://twoj-serwer.com/Divi.zip`
+- [ ] Dodaj property: `PRODUCT_MANAGER_DOWNLOAD_URL` = `https://twoj-serwer.com/waas-product-manager.zip`
+- [ ] Dodaj property: `PATRONAGE_MANAGER_DOWNLOAD_URL` = `https://twoj-serwer.com/waas-patronage-manager.zip`
+- [ ] Dodaj property: `DIVI_CHILD_DOWNLOAD_URL` = `https://twoj-serwer.com/divi-child-waas.zip`
+
+**Gdzie hostować pliki ZIP:**
+- AWS S3 + CloudFront (zalecane dla produkcji)
+- Google Cloud Storage
+- Dropbox (użyj URL z `?dl=1` na końcu)
+- Własny serwer HTTPS
+
+**Pliki do upload:**
+- Divi.zip - pobierz z elegantthemes.com
+- waas-product-manager.zip - z folderu `dist/`
+- waas-patronage-manager.zip - z folderu `dist/`
+- divi-child-waas.zip - z folderu `dist/`
+
 ⚠️ **NIE dodawaj:**
 - ❌ `DIVI_API_KEY` - jest per-site w zakładce Sites!
 - ❌ `PA_API_PARTNER_TAG` - jest per-site jako Amazon Associate Tag!

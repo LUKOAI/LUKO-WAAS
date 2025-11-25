@@ -304,20 +304,37 @@ Po instalacji dodaj klucze API w Google Apps Script:
 1. Kliknij: **⚙️ Project Settings** (lewy panel)
 2. Przewiń do: **Script Properties**
 3. Dodaj właściwości:
-   - `DIVI_DOWNLOAD_URL` = [URL do pliku Divi ZIP] (zobacz instrukcje poniżej*)
+
+**Credentials (API Keys):**
    - `PA_API_ACCESS_KEY` = [Twój klucz Amazon]
    - `PA_API_SECRET_KEY` = [Twój sekret Amazon]
    - `PA_API_PARTNER_TAG` = [Twój tag partnera]
+
+**Download URLs (dla automatycznej instalacji):**
+   - `DIVI_DOWNLOAD_URL` = [URL do pliku Divi.zip]
+   - `PRODUCT_MANAGER_DOWNLOAD_URL` = [URL do waas-product-manager.zip]
+   - `PATRONAGE_MANAGER_DOWNLOAD_URL` = [URL do waas-patronage-manager.zip]
+   - `DIVI_CHILD_DOWNLOAD_URL` = [URL do divi-child-waas.zip]
+
 4. Zapisz
 
-**Konfiguracja Divi (WAŻNE):*
+**Konfiguracja Download URLs (WAŻNE):*
 
-Elegant Themes nie udostępnia publicznego API do pobierania Divi. Musisz:
-1. Pobierz Divi ZIP z elegantthemes.com
-2. Wgraj na swój storage (AWS S3, Google Cloud, Dropbox, własny serwer)
-3. Wstaw URL do pliku jako `DIVI_DOWNLOAD_URL`
+Musisz hostować wszystkie pliki ZIP na własnym serwerze:
 
-Przykład: `https://your-bucket.s3.amazonaws.com/Divi.zip` lub `https://www.dropbox.com/s/xxxxx/Divi.zip?dl=1`
+**Pliki do hostowania:**
+1. `Divi.zip` - pobierz z elegantthemes.com
+2. `waas-product-manager.zip` - z folderu `dist/`
+3. `waas-patronage-manager.zip` - z folderu `dist/`
+4. `divi-child-waas.zip` - z folderu `dist/`
+
+**Gdzie hostować:**
+- AWS S3 + CloudFront (zalecane)
+- Google Cloud Storage
+- Dropbox (użyj URL z `?dl=1`)
+- Własny serwer HTTPS
+
+Przykład: `https://your-bucket.s3.amazonaws.com/waas-product-manager.zip` lub `https://www.dropbox.com/s/xxxxx/divi-child-waas.zip?dl=1`
 
 **📖 Szczegółowy przewodnik hosting:** [docs/DIVI_HOSTING_GUIDE.md](docs/DIVI_HOSTING_GUIDE.md) - rozwiązywanie problemów 403 Forbidden, konfiguracja różnych storage, testowanie URL
 

@@ -219,11 +219,32 @@ After files are uploaded, you still need to configure:
 
 In Apps Script: **Project Settings** → **Script Properties** → **Add script property**
 
+**Required API Credentials:**
 ```
 PA_API_ACCESS_KEY     = your_amazon_access_key
 PA_API_SECRET_KEY     = your_amazon_secret_key
 DIVI_API_USERNAME     = netanaliza
 ```
+
+**Required Download URLs (for automatic installation):**
+```
+DIVI_DOWNLOAD_URL                  = https://your-server.com/Divi.zip
+PRODUCT_MANAGER_DOWNLOAD_URL       = https://your-server.com/waas-product-manager.zip
+PATRONAGE_MANAGER_DOWNLOAD_URL     = https://your-server.com/waas-patronage-manager.zip
+DIVI_CHILD_DOWNLOAD_URL            = https://your-server.com/divi-child-waas.zip
+```
+
+**Where to host ZIP files:**
+- AWS S3 + CloudFront (recommended for production)
+- Google Cloud Storage
+- Dropbox (use URL with `?dl=1` at the end)
+- Your own HTTPS server
+
+**Files to upload:**
+- `Divi.zip` - download from elegantthemes.com
+- `waas-product-manager.zip` - from `dist/` folder
+- `waas-patronage-manager.zip` - from `dist/` folder
+- `divi-child-waas.zip` - from `dist/` folder
 
 ### 2. Sites Tab (Per-Site Settings)
 

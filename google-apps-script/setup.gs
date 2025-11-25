@@ -489,7 +489,10 @@ function initializeSettings() {
     'PA_API_ACCESS_KEY',
     'PA_API_SECRET_KEY',
     'PA_API_PARTNER_TAG',
-    'DIVI_DOWNLOAD_URL'   // Required for automated Divi installation
+    'DIVI_DOWNLOAD_URL',                  // Required for automated Divi installation
+    'PRODUCT_MANAGER_DOWNLOAD_URL',       // Required for WAAS Product Manager plugin installation
+    'PATRONAGE_MANAGER_DOWNLOAD_URL',     // Required for WAAS Patronage Manager plugin installation
+    'DIVI_CHILD_DOWNLOAD_URL'             // Required for Divi Child Theme installation
   ];
 
   const optionalKeys = [
