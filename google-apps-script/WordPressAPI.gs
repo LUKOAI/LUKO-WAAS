@@ -580,25 +580,34 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
                uploadText.includes('folder already exists')) {
       logInfo('WordPressAPI', 'Plugin already installed', site.id);
       return true;
-    } else if (uploadCode === 200) {
-      // Got 200 but unclear success message - assume success
-      logInfo('WordPressAPI', 'Got 200 response, assuming installation successful', site.id);
-      return true;
-    } else {
-      logWarning('WordPressAPI', `Plugin installation unclear. Status: ${uploadCode}`, site.id);
-
-      // Check again if plugin appeared in plugins list
-      const recheckResponse = UrlFetchApp.fetch(pluginsPageUrl, checkOptions);
-      const recheckHtml = recheckResponse.getContentText();
-      if (recheckHtml.includes(`data-slug="${pluginSlug}"`) ||
-          recheckHtml.includes(`/${pluginSlug}/`) ||
-          recheckHtml.includes(pluginSlug + '.php')) {
-        logInfo('WordPressAPI', `Plugin ${pluginSlug} detected in plugins list after upload`, site.id);
-        return true;
-      }
-
-      return false;
     }
+
+    // For all other cases (including 200 without clear success message), verify plugin actually exists
+    logInfo('WordPressAPI', `Upload response code ${uploadCode} - verifying plugin installation...`, site.id);
+
+    // Check if plugin appeared in plugins list
+    const recheckResponse = UrlFetchApp.fetch(pluginsPageUrl, checkOptions);
+    const recheckHtml = recheckResponse.getContentText();
+    if (recheckHtml.includes(`data-slug="${pluginSlug}"`) ||
+        recheckHtml.includes(`/${pluginSlug}/`) ||
+        recheckHtml.includes(pluginSlug + '.php')) {
+      logSuccess('WordPressAPI', `Plugin ${pluginSlug} verified in plugins list after upload`, site.id);
+      return true;
+    }
+
+    // Plugin not found - try to extract error message from response
+    const errorMatch = uploadText.match(/<div[^>]*class="[^"]*error[^"]*"[^>]*>(.*?)<\/div>/i);
+    if (errorMatch) {
+      const errorText = errorMatch[1].replace(/<[^>]+>/g, '').trim();
+      logError('WordPressAPI', `Plugin installation failed: ${errorText}`, site.id);
+    } else {
+      logError('WordPressAPI', `Plugin installation failed - plugin not found in plugins list after upload (status ${uploadCode})`, site.id);
+      // Log first 500 chars of response for debugging
+      const preview = uploadText.substring(0, 500).replace(/\s+/g, ' ');
+      logInfo('WordPressAPI', `Upload response preview: ${preview}`, site.id);
+    }
+
+    return false;
 
   } catch (error) {
     logError('WordPressAPI', `Error installing plugin: ${error.message}`, site.id);
@@ -702,8 +711,9 @@ function activatePluginViaCookies(site, pluginSlug) {
     logInfo('WordPressAPI', `Plugin ${pluginSlug} not found in active plugins. Active plugins: ${allDeactivateLinks.length}`, site.id);
 
     // Plugin is not active, look for activation link with nonce
-    // Format: plugins.php?action=activate&plugin=plugin-slug/plugin.php&_wpnonce=abc123
-    const activateLinkRegex = new RegExp(`plugins\\.php\\?action=activate&(?:amp;)?plugin=([^&"']+)&(?:amp;)?_wpnonce=([\\w]+)`, 'g');
+    // Format: plugins.php?action=activate&plugin=plugin-slug/plugin.php&plugin_status=all&paged=1&s&_wpnonce=abc123
+    // Note: There can be additional parameters between plugin= and _wpnonce=
+    const activateLinkRegex = new RegExp(`plugins\\.php\\?[^"']*action=activate[^"']*plugin=([^&"']+)[^"']*_wpnonce=([\\w]+)`, 'g');
 
     let activationNonce = null;
     let pluginPath = null;
@@ -713,9 +723,13 @@ function activatePluginViaCookies(site, pluginSlug) {
     // Find the matching plugin by checking if the slug is in the plugin path
     while ((match = activateLinkRegex.exec(pageHtml)) !== null) {
       const foundPluginPath = match[1];
-      allInactivePlugins.push(foundPluginPath);
-      if (foundPluginPath.includes(pluginSlug)) {
-        pluginPath = foundPluginPath;
+      // Decode URL-encoded plugin path (e.g., %2F -> /)
+      const decodedPluginPath = decodeURIComponent(foundPluginPath);
+      allInactivePlugins.push(decodedPluginPath);
+
+      // Compare decoded paths
+      if (decodedPluginPath.includes(pluginSlug) || foundPluginPath.includes(pluginSlug)) {
+        pluginPath = decodedPluginPath;
         activationNonce = match[2];
         logInfo('WordPressAPI', `Found activation link for plugin: ${pluginPath}`, site.id);
         break;
