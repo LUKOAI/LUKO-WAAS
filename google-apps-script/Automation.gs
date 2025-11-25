@@ -459,19 +459,59 @@ function installPatronageManagerOnSite(siteId) {
 
     logInfo('PATRONAGE', `Downloading Patronage Manager from: ${pluginUrl}`, siteId);
 
-    // Download plugin package
-    const response = UrlFetchApp.fetch(pluginUrl, {
-      muteHttpExceptions: true,
-      followRedirects: true
-    });
+    // Download plugin package with retry logic for DNS errors
+    let pluginBlob = null;
+    const maxRetries = 3;
+    let lastError = null;
 
-    const statusCode = response.getResponseCode();
-    if (statusCode !== 200) {
-      throw new Error(`Failed to download plugin: HTTP ${statusCode}`);
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 1) {
+          const delay = 2000 * Math.pow(2, attempt - 2); // Exponential backoff: 2s, 4s, 8s
+          logInfo('PATRONAGE', `Retrying download after ${delay}ms (attempt ${attempt}/${maxRetries})...`, siteId);
+          Utilities.sleep(delay);
+        }
+
+        const response = UrlFetchApp.fetch(pluginUrl, {
+          muteHttpExceptions: true,
+          followRedirects: true
+        });
+
+        const statusCode = response.getResponseCode();
+        if (statusCode === 200) {
+          pluginBlob = response.getBlob();
+          logSuccess('PATRONAGE', `Patronage Manager package downloaded successfully (${(pluginBlob.getBytes().length / 1024).toFixed(2)} KB)`, siteId);
+          break; // Success - exit retry loop
+        } else if (statusCode === 404 || statusCode === 403) {
+          // Don't retry on 404/403
+          throw new Error(`Failed to download plugin: HTTP ${statusCode}`);
+        } else {
+          lastError = new Error(`HTTP ${statusCode}`);
+          if (attempt < maxRetries) {
+            logWarning('PATRONAGE', `Download failed with HTTP ${statusCode}, retrying...`, siteId);
+          }
+        }
+      } catch (error) {
+        lastError = error;
+        const isDnsError = error.message.toLowerCase().includes('dns');
+        const isRetryable = isDnsError || error.message.toLowerCase().includes('timeout') || error.message.toLowerCase().includes('connection');
+
+        if (!isRetryable || error.message.includes('404') || error.message.includes('403')) {
+          // Don't retry on non-retryable errors
+          throw error;
+        }
+
+        if (attempt < maxRetries) {
+          logWarning('PATRONAGE', `Download failed (${error.message}), retrying...`, siteId);
+        } else {
+          throw new Error(`Failed to download plugin after ${maxRetries} attempts: ${error.message}`);
+        }
+      }
     }
 
-    const pluginBlob = response.getBlob();
-    logSuccess('PATRONAGE', `Patronage Manager package downloaded successfully (${(pluginBlob.getBytes().length / 1024).toFixed(2)} KB)`, siteId);
+    if (!pluginBlob) {
+      throw lastError || new Error('Failed to download plugin');
+    }
 
     // Install plugin via WordPress admin panel
     const installed = installPluginOnWordPress(site, pluginBlob);
@@ -529,19 +569,59 @@ function installDiviChildThemeOnSite(siteId) {
 
     logInfo('CHILD_THEME', `Downloading Divi Child Theme from: ${themeUrl}`, siteId);
 
-    // Download theme package
-    const response = UrlFetchApp.fetch(themeUrl, {
-      muteHttpExceptions: true,
-      followRedirects: true
-    });
+    // Download theme package with retry logic for DNS errors
+    let themeBlob = null;
+    const maxRetries = 3;
+    let lastError = null;
 
-    const statusCode = response.getResponseCode();
-    if (statusCode !== 200) {
-      throw new Error(`Failed to download theme: HTTP ${statusCode}`);
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 1) {
+          const delay = 2000 * Math.pow(2, attempt - 2); // Exponential backoff: 2s, 4s, 8s
+          logInfo('CHILD_THEME', `Retrying download after ${delay}ms (attempt ${attempt}/${maxRetries})...`, siteId);
+          Utilities.sleep(delay);
+        }
+
+        const response = UrlFetchApp.fetch(themeUrl, {
+          muteHttpExceptions: true,
+          followRedirects: true
+        });
+
+        const statusCode = response.getResponseCode();
+        if (statusCode === 200) {
+          themeBlob = response.getBlob();
+          logSuccess('CHILD_THEME', `Divi Child Theme package downloaded successfully (${(themeBlob.getBytes().length / 1024).toFixed(2)} KB)`, siteId);
+          break; // Success - exit retry loop
+        } else if (statusCode === 404 || statusCode === 403) {
+          // Don't retry on 404/403
+          throw new Error(`Failed to download theme: HTTP ${statusCode}`);
+        } else {
+          lastError = new Error(`HTTP ${statusCode}`);
+          if (attempt < maxRetries) {
+            logWarning('CHILD_THEME', `Download failed with HTTP ${statusCode}, retrying...`, siteId);
+          }
+        }
+      } catch (error) {
+        lastError = error;
+        const isDnsError = error.message.toLowerCase().includes('dns');
+        const isRetryable = isDnsError || error.message.toLowerCase().includes('timeout') || error.message.toLowerCase().includes('connection');
+
+        if (!isRetryable || error.message.includes('404') || error.message.includes('403')) {
+          // Don't retry on non-retryable errors
+          throw error;
+        }
+
+        if (attempt < maxRetries) {
+          logWarning('CHILD_THEME', `Download failed (${error.message}), retrying...`, siteId);
+        } else {
+          throw new Error(`Failed to download theme after ${maxRetries} attempts: ${error.message}`);
+        }
+      }
     }
 
-    const themeBlob = response.getBlob();
-    logSuccess('CHILD_THEME', `Divi Child Theme package downloaded successfully (${(themeBlob.getBytes().length / 1024).toFixed(2)} KB)`, siteId);
+    if (!themeBlob) {
+      throw lastError || new Error('Failed to download theme');
+    }
 
     // Install theme via WordPress admin panel
     const installed = installThemeOnWordPress(site, themeBlob);

@@ -512,26 +512,51 @@ function downloadPluginFromGitHub() {
     if (customPluginUrl) {
       logInfo('PluginManager', `Trying custom download URL: ${customPluginUrl}`);
 
-      try {
-        const response = UrlFetchApp.fetch(customPluginUrl, {
-          muteHttpExceptions: true,
-          followRedirects: true,
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      // Try with retry logic for DNS errors
+      const maxRetries = 3;
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          if (attempt > 1) {
+            const delay = 2000 * Math.pow(2, attempt - 2); // Exponential backoff: 2s, 4s, 8s
+            logInfo('PluginManager', `Retrying after ${delay}ms (attempt ${attempt}/${maxRetries})...`);
+            Utilities.sleep(delay);
           }
-        });
 
-        const statusCode = response.getResponseCode();
+          const response = UrlFetchApp.fetch(customPluginUrl, {
+            muteHttpExceptions: true,
+            followRedirects: true,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+          });
 
-        if (statusCode === 200) {
-          const blob = response.getBlob();
-          logSuccess('PluginManager', `Plugin package downloaded successfully from custom URL (${(blob.getBytes().length / 1024).toFixed(2)} KB)`);
-          return blob;
-        } else {
-          logWarning('PluginManager', `Custom URL returned ${statusCode}, trying GitHub fallback...`);
+          const statusCode = response.getResponseCode();
+
+          if (statusCode === 200) {
+            const blob = response.getBlob();
+            logSuccess('PluginManager', `Plugin package downloaded successfully from custom URL (${(blob.getBytes().length / 1024).toFixed(2)} KB)`);
+            return blob;
+          } else if (statusCode === 404 || statusCode === 403) {
+            // Don't retry on 404/403
+            logWarning('PluginManager', `Custom URL returned ${statusCode}, trying GitHub fallback...`);
+            break;
+          } else {
+            logWarning('PluginManager', `Custom URL returned ${statusCode}, retrying...`);
+            if (attempt === maxRetries) {
+              logWarning('PluginManager', `Failed after ${maxRetries} attempts, trying GitHub fallback...`);
+            }
+          }
+        } catch (e) {
+          const isDnsError = e.message.toLowerCase().includes('dns');
+          const isRetryable = isDnsError || e.message.toLowerCase().includes('timeout') || e.message.toLowerCase().includes('connection');
+
+          if (isRetryable && attempt < maxRetries) {
+            logWarning('PluginManager', `Custom URL failed (${e.message}), retrying...`);
+          } else {
+            logWarning('PluginManager', `Custom URL failed: ${e.message}, trying GitHub fallback...`);
+            break;
+          }
         }
-      } catch (e) {
-        logWarning('PluginManager', `Custom URL failed: ${e.message}, trying GitHub fallback...`);
       }
     }
 

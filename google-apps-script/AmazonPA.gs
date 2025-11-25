@@ -117,9 +117,11 @@ function makeAmazonPARequest(path, payload, credentials) {
     const payloadString = JSON.stringify(payload);
 
     // Przygotuj nagłówki
+    // NOTE: DO NOT include 'Host' header here - Google Apps Script adds it automatically
+    // Including it manually causes "Attribute provided with invalid value: Header:Host" error
+    // The Host header is still included in the HMAC signature calculation (required by AWS4)
     const headers = {
       'Content-Type': 'application/json; charset=utf-8',
-      'Host': AMAZON_PA_CONFIG.endpoint,
       'X-Amz-Date': timestamp,
       'X-Amz-Target': 'com.amazon.paapi5.v1.ProductAdvertisingAPIv1.SearchItems'
     };
