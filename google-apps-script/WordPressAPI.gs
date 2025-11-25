@@ -493,7 +493,9 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
     const pluginsPageHtml = checkResponse.getContentText();
 
     // Check if plugin slug appears in the plugins list
+    // Note: data-plugin attribute contains the actual file path (e.g., "waas-product-manager/waas-product-manager.php")
     if (pluginsPageHtml.includes(`data-slug="${pluginSlug}"`) ||
+        pluginsPageHtml.includes(`data-plugin="${pluginSlug}/`) ||
         pluginsPageHtml.includes(`/${pluginSlug}/`) ||
         pluginsPageHtml.includes(pluginSlug + '.php')) {
       logInfo('WordPressAPI', `Plugin ${pluginSlug} is already installed`, site.id);
@@ -651,22 +653,23 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
 
     logInfo('WordPressAPI', `Upload response code: ${uploadCode}`, site.id);
 
-    // Check for Brotli encoding issue - empty response with 200 status
+    // Check for empty response with 200 status (can happen with Brotli encoding or other reasons)
     const headers = uploadResponse.getHeaders();
     const contentEncoding = headers['Content-Encoding'] || headers['content-encoding'] || '';
-    if (uploadCode === 200 && uploadText.length === 0 && contentEncoding.includes('br')) {
-      logWarning('WordPressAPI', 'Empty response due to Brotli encoding - verifying plugin installation directly...', site.id);
+    if (uploadCode === 200 && uploadText.length === 0) {
+      logWarning('WordPressAPI', `Empty response received (encoding: ${contentEncoding || 'none'}) - verifying plugin installation directly...`, site.id);
       // Skip HTML parsing and go directly to verification
       Utilities.sleep(2000); // Wait for WordPress to finish installing
       const recheckResponse = UrlFetchApp.fetch(pluginsPageUrl, checkOptions);
       const recheckHtml = recheckResponse.getContentText();
       if (recheckHtml.includes(`data-slug="${pluginSlug}"`) ||
+          recheckHtml.includes(`data-plugin="${pluginSlug}/`) ||
           recheckHtml.includes(`/${pluginSlug}/`) ||
           recheckHtml.includes(pluginSlug + '.php')) {
-        logSuccess('WordPressAPI', `Plugin ${pluginSlug} verified in plugins list after upload (Brotli workaround)`, site.id);
+        logSuccess('WordPressAPI', `Plugin ${pluginSlug} verified in plugins list after upload (empty response workaround)`, site.id);
         return true;
       }
-      logWarning('WordPressAPI', 'Plugin not found after Brotli workaround check', site.id);
+      logWarning('WordPressAPI', 'Plugin not found after empty response verification check', site.id);
     }
 
     // Check for errors first
@@ -769,6 +772,7 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
     const recheckResponse = UrlFetchApp.fetch(pluginsPageUrl, checkOptions);
     const recheckHtml = recheckResponse.getContentText();
     if (recheckHtml.includes(`data-slug="${pluginSlug}"`) ||
+        recheckHtml.includes(`data-plugin="${pluginSlug}/`) ||
         recheckHtml.includes(`/${pluginSlug}/`) ||
         recheckHtml.includes(pluginSlug + '.php')) {
       logSuccess('WordPressAPI', `Plugin ${pluginSlug} verified in plugins list after upload`, site.id);
@@ -885,9 +889,11 @@ function activatePluginViaCookies(site, pluginSlug) {
 
     while ((deactivateMatch = deactivateLinkRegex.exec(pageHtml)) !== null) {
       const foundPluginPath = deactivateMatch[1];
-      allDeactivateLinks.push(foundPluginPath);
-      if (foundPluginPath.includes(pluginSlug)) {
-        logInfo('WordPressAPI', `Plugin ${pluginSlug} is already active (found deactivate link for: ${foundPluginPath})`, site.id);
+      // Decode URL-encoded plugin path (e.g., %2F -> /)
+      const decodedPluginPath = decodeURIComponent(foundPluginPath);
+      allDeactivateLinks.push(decodedPluginPath);
+      if (decodedPluginPath.includes(pluginSlug) || foundPluginPath.includes(pluginSlug)) {
+        logInfo('WordPressAPI', `Plugin ${pluginSlug} is already active (found deactivate link for: ${decodedPluginPath})`, site.id);
         return true;
       }
     }
