@@ -656,20 +656,40 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
     // Check for empty response with 200 status (can happen with Brotli encoding or other reasons)
     const headers = uploadResponse.getHeaders();
     const contentEncoding = headers['Content-Encoding'] || headers['content-encoding'] || '';
+
+    // Log all headers for debugging when upload returns 200
+    if (uploadCode === 200) {
+      logInfo('WordPressAPI', `Response headers: ${JSON.stringify(headers)}`, site.id);
+      logInfo('WordPressAPI', `Response length: ${uploadText.length} bytes`, site.id);
+    }
+
     if (uploadCode === 200 && uploadText.length === 0) {
-      logWarning('WordPressAPI', `Empty response received (encoding: ${contentEncoding || 'none'}) - verifying plugin installation directly...`, site.id);
-      // Skip HTML parsing and go directly to verification
-      Utilities.sleep(2000); // Wait for WordPress to finish installing
-      const recheckResponse = UrlFetchApp.fetch(pluginsPageUrl, checkOptions);
-      const recheckHtml = recheckResponse.getContentText();
-      if (recheckHtml.includes(`data-slug="${pluginSlug}"`) ||
-          recheckHtml.includes(`data-plugin="${pluginSlug}/`) ||
-          recheckHtml.includes(`/${pluginSlug}/`) ||
-          recheckHtml.includes(pluginSlug + '.php')) {
-        logSuccess('WordPressAPI', `Plugin ${pluginSlug} verified in plugins list after upload (empty response workaround)`, site.id);
+      logWarning('WordPressAPI', `Empty response received (encoding: ${contentEncoding || 'none'}) - this may indicate WAF/cache blocking`, site.id);
+
+      // Wait longer and try verification multiple times
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        logInfo('WordPressAPI', `Verification attempt ${attempt}/3...`, site.id);
+        Utilities.sleep(3000); // Wait 3 seconds
+
+        const recheckResponse = UrlFetchApp.fetch(pluginsPageUrl, checkOptions);
+        const recheckHtml = recheckResponse.getContentText();
+        if (recheckHtml.includes(`data-slug="${pluginSlug}"`) ||
+            recheckHtml.includes(`data-plugin="${pluginSlug}/`) ||
+            recheckHtml.includes(`/${pluginSlug}/`) ||
+            recheckHtml.includes(pluginSlug + '.php')) {
+          logSuccess('WordPressAPI', `Plugin ${pluginSlug} verified in plugins list after upload (empty response workaround)`, site.id);
+          return true;
+        }
+      }
+
+      // Still not found - try alternative upload method using async-upload
+      logWarning('WordPressAPI', 'Plugin not found after verification checks, trying alternative upload method...', site.id);
+      const altUploadResult = tryAlternativePluginUpload(site, pluginBlob, pluginSlug, cookies, loginResult.nonce);
+      if (altUploadResult) {
         return true;
       }
-      logWarning('WordPressAPI', 'Plugin not found after empty response verification check', site.id);
+
+      logWarning('WordPressAPI', 'Plugin not found after all upload attempts', site.id);
     }
 
     // Check for errors first
@@ -996,6 +1016,142 @@ function activatePluginViaCookies(site, pluginSlug) {
 
   } catch (error) {
     logError('WordPressAPI', `Error in cookie-based activation: ${error.message}`, site.id);
+    return false;
+  }
+}
+
+/**
+ * Alternative plugin upload method using admin-ajax endpoint
+ * This is a fallback when the standard upload.php method fails
+ */
+function tryAlternativePluginUpload(site, pluginBlob, pluginSlug, cookies, nonce) {
+  try {
+    logInfo('WordPressAPI', 'Trying alternative upload method via admin-ajax...', site.id);
+
+    // Method 1: Try using the admin-ajax.php with plupload action
+    const ajaxUrl = `${site.wpUrl}/wp-admin/admin-ajax.php`;
+
+    // First, we'll try using plupload which is what WordPress uses for async uploads
+    const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
+
+    // Build the multipart body with different field structure
+    const bodyParts = [];
+
+    // Add action field first
+    bodyParts.push('--' + boundary);
+    bodyParts.push('Content-Disposition: form-data; name="action"');
+    bodyParts.push('');
+    bodyParts.push('upload-plugin');
+
+    // Add nonce with _wpnonce field
+    bodyParts.push('--' + boundary);
+    bodyParts.push('Content-Disposition: form-data; name="_wpnonce"');
+    bodyParts.push('');
+    bodyParts.push(nonce);
+
+    // Convert to string for the text parts
+    const textPartString = bodyParts.join('\r\n') + '\r\n';
+
+    // Add file part header
+    const filePartHeader = [
+      '--' + boundary,
+      'Content-Disposition: form-data; name="pluginzip"; filename="' + pluginSlug + '.zip"',
+      'Content-Type: application/zip',
+      ''
+    ].join('\r\n') + '\r\n';
+
+    // Add closing
+    const closingPart = '\r\n--' + boundary + '--\r\n';
+
+    // Combine all parts as bytes
+    const textBytes = Utilities.newBlob(textPartString + filePartHeader).getBytes();
+    const fileBytes = pluginBlob.getBytes();
+    const closingBytes = Utilities.newBlob(closingPart).getBytes();
+
+    const allBytes = [];
+    textBytes.forEach(b => allBytes.push(b));
+    fileBytes.forEach(b => allBytes.push(b));
+    closingBytes.forEach(b => allBytes.push(b));
+
+    // Method 2: Try direct POST to update.php with different headers
+    const uploadUrl = `${site.wpUrl}/wp-admin/update.php?action=upload-plugin`;
+
+    const uploadOptions = {
+      method: 'post',
+      headers: {
+        'Cookie': cookies,
+        'Content-Type': 'multipart/form-data; boundary=' + boundary,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate',  // Try with gzip instead of identity
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/119.0'
+      },
+      payload: allBytes,
+      muteHttpExceptions: true,
+      followRedirects: true  // Follow redirects this time
+    };
+
+    logInfo('WordPressAPI', 'Attempting upload with Firefox UA and gzip accept...', site.id);
+    const response = UrlFetchApp.fetch(uploadUrl, uploadOptions);
+    const responseCode = response.getResponseCode();
+    const responseText = response.getContentText();
+
+    logInfo('WordPressAPI', `Alternative upload response code: ${responseCode}`, site.id);
+    logInfo('WordPressAPI', `Alternative upload response length: ${responseText.length} bytes`, site.id);
+
+    if (responseText.length > 0) {
+      const snippet = responseText.substring(0, 500).replace(/\s+/g, ' ');
+      logInfo('WordPressAPI', `Response snippet: ${snippet}`, site.id);
+    }
+
+    // Check if upload was successful
+    if (responseCode === 200) {
+      // Check for success indicators
+      if (responseText.includes('Plugin installed successfully') ||
+          responseText.includes('Activate Plugin') ||
+          responseText.includes('successfully installed')) {
+        logSuccess('WordPressAPI', 'Alternative upload successful!', site.id);
+        return true;
+      }
+
+      // Check for "already installed" which is also success
+      if (responseText.includes('already installed') ||
+          responseText.includes('folder already exists')) {
+        logInfo('WordPressAPI', 'Plugin already installed (alternative method)', site.id);
+        return true;
+      }
+
+      // Still empty? Try one more verification
+      if (responseText.length === 0) {
+        Utilities.sleep(3000);
+        const pluginsPageUrl = `${site.wpUrl}/wp-admin/plugins.php`;
+        const checkOptions = {
+          method: 'get',
+          headers: {
+            'Cookie': cookies,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/119.0'
+          },
+          muteHttpExceptions: true,
+          followRedirects: true
+        };
+
+        const verifyResponse = UrlFetchApp.fetch(pluginsPageUrl, checkOptions);
+        const verifyHtml = verifyResponse.getContentText();
+
+        if (verifyHtml.includes(pluginSlug)) {
+          logSuccess('WordPressAPI', 'Plugin found after alternative upload!', site.id);
+          return true;
+        }
+      }
+    }
+
+    logWarning('WordPressAPI', 'Alternative upload method did not succeed', site.id);
+    return false;
+
+  } catch (error) {
+    logError('WordPressAPI', `Alternative upload error: ${error.message}`, site.id);
     return false;
   }
 }
