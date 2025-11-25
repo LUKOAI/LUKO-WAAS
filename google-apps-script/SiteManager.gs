@@ -497,6 +497,62 @@ function installPluginOnSite(siteId) {
   }
 }
 
+/**
+ * Downloads a file from Google Drive by file ID
+ * Supports formats:
+ * - gdrive:FILE_ID
+ * - https://drive.google.com/file/d/FILE_ID/view
+ * - https://drive.google.com/open?id=FILE_ID
+ * - FILE_ID (raw 33-character ID)
+ */
+function downloadFromGoogleDrive(urlOrId) {
+  try {
+    let fileId = urlOrId;
+
+    // Extract file ID from various Google Drive URL formats
+    if (urlOrId.startsWith('gdrive:')) {
+      fileId = urlOrId.substring(7);
+    } else if (urlOrId.includes('drive.google.com')) {
+      // Format: https://drive.google.com/file/d/FILE_ID/view
+      const match1 = urlOrId.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+      if (match1) {
+        fileId = match1[1];
+      } else {
+        // Format: https://drive.google.com/open?id=FILE_ID
+        const match2 = urlOrId.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+        if (match2) {
+          fileId = match2[1];
+        }
+      }
+    }
+
+    logInfo('PluginManager', `Downloading from Google Drive, file ID: ${fileId}`);
+
+    const file = DriveApp.getFileById(fileId);
+    const blob = file.getBlob();
+    const fileName = file.getName();
+    const fileSize = blob.getBytes().length;
+
+    logSuccess('PluginManager', `Downloaded ${fileName} from Google Drive (${(fileSize / 1024).toFixed(2)} KB)`);
+    return blob;
+
+  } catch (e) {
+    logError('PluginManager', `Google Drive download failed: ${e.message}`);
+    return null;
+  }
+}
+
+/**
+ * Check if a URL/ID is a Google Drive reference
+ */
+function isGoogleDriveUrl(url) {
+  if (!url) return false;
+  return url.startsWith('gdrive:') ||
+         url.includes('drive.google.com') ||
+         // Match raw file ID (33 chars, alphanumeric with dashes/underscores)
+         /^[a-zA-Z0-9_-]{25,50}$/.test(url);
+}
+
 function downloadPluginFromGitHub() {
   try {
     // First, try to get custom plugin URL from Script Properties (preferred method)
@@ -506,49 +562,58 @@ function downloadPluginFromGitHub() {
     if (customPluginUrl) {
       logInfo('PluginManager', `Trying custom download URL: ${customPluginUrl}`);
 
-      // Try with retry logic for DNS errors
-      const maxRetries = 3;
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-          if (attempt > 1) {
-            const delay = 2000 * Math.pow(2, attempt - 2); // Exponential backoff: 2s, 4s, 8s
-            logInfo('PluginManager', `Retrying after ${delay}ms (attempt ${attempt}/${maxRetries})...`);
-            Utilities.sleep(delay);
-          }
-
-          const response = UrlFetchApp.fetch(customPluginUrl, {
-            muteHttpExceptions: true,
-            followRedirects: true,
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      // Check if it's a Google Drive URL/ID
+      if (isGoogleDriveUrl(customPluginUrl)) {
+        const blob = downloadFromGoogleDrive(customPluginUrl);
+        if (blob) {
+          return blob;
+        }
+        logWarning('PluginManager', 'Google Drive download failed, trying GitHub fallback...');
+      } else {
+        // Try with retry logic for DNS errors
+        const maxRetries = 3;
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+          try {
+            if (attempt > 1) {
+              const delay = 2000 * Math.pow(2, attempt - 2); // Exponential backoff: 2s, 4s, 8s
+              logInfo('PluginManager', `Retrying after ${delay}ms (attempt ${attempt}/${maxRetries})...`);
+              Utilities.sleep(delay);
             }
-          });
 
-          const statusCode = response.getResponseCode();
+            const response = UrlFetchApp.fetch(customPluginUrl, {
+              muteHttpExceptions: true,
+              followRedirects: true,
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+              }
+            });
 
-          if (statusCode === 200) {
-            const blob = response.getBlob();
-            logSuccess('PluginManager', `Plugin package downloaded successfully from custom URL (${(blob.getBytes().length / 1024).toFixed(2)} KB)`);
-            return blob;
-          } else if (statusCode === 404 || statusCode === 403) {
-            // Don't retry on 404/403
-            logWarning('PluginManager', `Custom URL returned ${statusCode}, trying GitHub fallback...`);
-            break;
-          } else {
-            logWarning('PluginManager', `Custom URL returned ${statusCode}, retrying...`);
-            if (attempt === maxRetries) {
-              logWarning('PluginManager', `Failed after ${maxRetries} attempts, trying GitHub fallback...`);
+            const statusCode = response.getResponseCode();
+
+            if (statusCode === 200) {
+              const blob = response.getBlob();
+              logSuccess('PluginManager', `Plugin package downloaded successfully from custom URL (${(blob.getBytes().length / 1024).toFixed(2)} KB)`);
+              return blob;
+            } else if (statusCode === 404 || statusCode === 403) {
+              // Don't retry on 404/403
+              logWarning('PluginManager', `Custom URL returned ${statusCode}, trying GitHub fallback...`);
+              break;
+            } else {
+              logWarning('PluginManager', `Custom URL returned ${statusCode}, retrying...`);
+              if (attempt === maxRetries) {
+                logWarning('PluginManager', `Failed after ${maxRetries} attempts, trying GitHub fallback...`);
+              }
             }
-          }
-        } catch (e) {
-          const isDnsError = e.message.toLowerCase().includes('dns');
-          const isRetryable = isDnsError || e.message.toLowerCase().includes('timeout') || e.message.toLowerCase().includes('connection');
+          } catch (e) {
+            const isDnsError = e.message.toLowerCase().includes('dns');
+            const isRetryable = isDnsError || e.message.toLowerCase().includes('timeout') || e.message.toLowerCase().includes('connection');
 
-          if (isRetryable && attempt < maxRetries) {
-            logWarning('PluginManager', `Custom URL failed (${e.message}), retrying...`);
-          } else {
-            logWarning('PluginManager', `Custom URL failed: ${e.message}, trying GitHub fallback...`);
-            break;
+            if (isRetryable && attempt < maxRetries) {
+              logWarning('PluginManager', `Custom URL failed (${e.message}), retrying...`);
+            } else {
+              logWarning('PluginManager', `Custom URL failed: ${e.message}, trying GitHub fallback...`);
+              break;
+            }
           }
         }
       }

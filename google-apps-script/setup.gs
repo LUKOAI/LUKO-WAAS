@@ -490,9 +490,9 @@ function initializeSettings() {
     'PA_API_SECRET_KEY',
     'PA_API_PARTNER_TAG',
     'DIVI_DOWNLOAD_URL',                  // Required for automated Divi installation
-    'PRODUCT_MANAGER_DOWNLOAD_URL',       // Required for WAAS Product Manager plugin installation
-    'PATRONAGE_MANAGER_DOWNLOAD_URL',     // Required for WAAS Patronage Manager plugin installation
-    'DIVI_CHILD_DOWNLOAD_URL'             // Required for Divi Child Theme installation
+    'PRODUCT_MANAGER_DOWNLOAD_URL',       // WAAS Product Manager - supports: URL, Google Drive link, gdrive:FILE_ID
+    'PATRONAGE_MANAGER_DOWNLOAD_URL',     // WAAS Patronage Manager - supports: URL, Google Drive link, gdrive:FILE_ID
+    'DIVI_CHILD_DOWNLOAD_URL'             // Divi Child Theme - supports: URL, Google Drive link, gdrive:FILE_ID
   ];
 
   const optionalKeys = [

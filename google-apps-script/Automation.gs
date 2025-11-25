@@ -459,64 +459,80 @@ function installPatronageManagerOnSite(siteId) {
 
     logInfo('PATRONAGE', `Downloading Patronage Manager from: ${pluginUrl}`, siteId);
 
-    // Download plugin package with retry logic for DNS errors
+    // Download plugin package - check for Google Drive URL first
     let pluginBlob = null;
-    const maxRetries = 3;
-    let lastError = null;
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        if (attempt > 1) {
-          const delay = 2000 * Math.pow(2, attempt - 2); // Exponential backoff: 2s, 4s, 8s
-          logInfo('PATRONAGE', `Retrying download after ${delay}ms (attempt ${attempt}/${maxRetries})...`, siteId);
-          Utilities.sleep(delay);
-        }
+    // Check if it's a Google Drive URL/ID (use helper from SiteManager.gs)
+    if (isGoogleDriveUrl(pluginUrl)) {
+      pluginBlob = downloadFromGoogleDrive(pluginUrl);
+      if (pluginBlob) {
+        logSuccess('PATRONAGE', `Patronage Manager downloaded from Google Drive (${(pluginBlob.getBytes().length / 1024).toFixed(2)} KB)`, siteId);
+      }
+    }
 
-        const response = UrlFetchApp.fetch(pluginUrl, {
-          muteHttpExceptions: true,
-          followRedirects: true,
-          headers: {
-            'Accept-Encoding': 'identity',
-            'Cache-Control': 'no-transform, no-cache',
-            'Pragma': 'no-cache',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
+    // If not Google Drive or download failed, try regular URL with retry logic
+    if (!pluginBlob) {
+      const maxRetries = 3;
+      let lastError = null;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          if (attempt > 1) {
+            const delay = 2000 * Math.pow(2, attempt - 2); // Exponential backoff: 2s, 4s, 8s
+            logInfo('PATRONAGE', `Retrying download after ${delay}ms (attempt ${attempt}/${maxRetries})...`, siteId);
+            Utilities.sleep(delay);
           }
-        });
 
-        const statusCode = response.getResponseCode();
-        if (statusCode === 200) {
-          pluginBlob = response.getBlob();
-          logSuccess('PATRONAGE', `Patronage Manager package downloaded successfully (${(pluginBlob.getBytes().length / 1024).toFixed(2)} KB)`, siteId);
-          break; // Success - exit retry loop
-        } else if (statusCode === 404 || statusCode === 403) {
-          // Don't retry on 404/403
-          throw new Error(`Failed to download plugin: HTTP ${statusCode}`);
-        } else {
-          lastError = new Error(`HTTP ${statusCode}`);
+          const response = UrlFetchApp.fetch(pluginUrl, {
+            muteHttpExceptions: true,
+            followRedirects: true,
+            headers: {
+              'Accept-Encoding': 'identity',
+              'Cache-Control': 'no-transform, no-cache',
+              'Pragma': 'no-cache',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
+            }
+          });
+
+          const statusCode = response.getResponseCode();
+          if (statusCode === 200) {
+            pluginBlob = response.getBlob();
+            logSuccess('PATRONAGE', `Patronage Manager package downloaded successfully (${(pluginBlob.getBytes().length / 1024).toFixed(2)} KB)`, siteId);
+            break; // Success - exit retry loop
+          } else if (statusCode === 404 || statusCode === 403) {
+            // Don't retry on 404/403
+            throw new Error(`Failed to download plugin: HTTP ${statusCode}`);
+          } else {
+            lastError = new Error(`HTTP ${statusCode}`);
+            if (attempt < maxRetries) {
+              logWarning('PATRONAGE', `Download failed with HTTP ${statusCode}, retrying...`, siteId);
+            }
+          }
+        } catch (error) {
+          lastError = error;
+          const isDnsError = error.message.toLowerCase().includes('dns');
+          const isRetryable = isDnsError || error.message.toLowerCase().includes('timeout') || error.message.toLowerCase().includes('connection');
+
+          if (!isRetryable || error.message.includes('404') || error.message.includes('403')) {
+            // Don't retry on non-retryable errors
+            throw error;
+          }
+
           if (attempt < maxRetries) {
-            logWarning('PATRONAGE', `Download failed with HTTP ${statusCode}, retrying...`, siteId);
+            logWarning('PATRONAGE', `Download failed (${error.message}), retrying...`, siteId);
+          } else {
+            throw new Error(`Failed to download plugin after ${maxRetries} attempts: ${error.message}`);
           }
         }
-      } catch (error) {
-        lastError = error;
-        const isDnsError = error.message.toLowerCase().includes('dns');
-        const isRetryable = isDnsError || error.message.toLowerCase().includes('timeout') || error.message.toLowerCase().includes('connection');
+      }
 
-        if (!isRetryable || error.message.includes('404') || error.message.includes('403')) {
-          // Don't retry on non-retryable errors
-          throw error;
-        }
-
-        if (attempt < maxRetries) {
-          logWarning('PATRONAGE', `Download failed (${error.message}), retrying...`, siteId);
-        } else {
-          throw new Error(`Failed to download plugin after ${maxRetries} attempts: ${error.message}`);
-        }
+      if (!pluginBlob && lastError) {
+        throw lastError;
       }
     }
 
     if (!pluginBlob) {
-      throw lastError || new Error('Failed to download plugin');
+      throw new Error('Failed to download plugin from any source');
     }
 
     // Install plugin via WordPress admin panel
@@ -576,64 +592,80 @@ function installDiviChildThemeOnSite(siteId) {
 
     logInfo('CHILD_THEME', `Downloading Divi Child Theme from: ${themeUrl}`, siteId);
 
-    // Download theme package with retry logic for DNS errors
+    // Download theme package - check for Google Drive URL first
     let themeBlob = null;
-    const maxRetries = 3;
-    let lastError = null;
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        if (attempt > 1) {
-          const delay = 2000 * Math.pow(2, attempt - 2); // Exponential backoff: 2s, 4s, 8s
-          logInfo('CHILD_THEME', `Retrying download after ${delay}ms (attempt ${attempt}/${maxRetries})...`, siteId);
-          Utilities.sleep(delay);
-        }
+    // Check if it's a Google Drive URL/ID (use helper from SiteManager.gs)
+    if (isGoogleDriveUrl(themeUrl)) {
+      themeBlob = downloadFromGoogleDrive(themeUrl);
+      if (themeBlob) {
+        logSuccess('CHILD_THEME', `Divi Child Theme downloaded from Google Drive (${(themeBlob.getBytes().length / 1024).toFixed(2)} KB)`, siteId);
+      }
+    }
 
-        const response = UrlFetchApp.fetch(themeUrl, {
-          muteHttpExceptions: true,
-          followRedirects: true,
-          headers: {
-            'Accept-Encoding': 'identity',
-            'Cache-Control': 'no-transform, no-cache',
-            'Pragma': 'no-cache',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
+    // If not Google Drive or download failed, try regular URL with retry logic
+    if (!themeBlob) {
+      const maxRetries = 3;
+      let lastError = null;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          if (attempt > 1) {
+            const delay = 2000 * Math.pow(2, attempt - 2); // Exponential backoff: 2s, 4s, 8s
+            logInfo('CHILD_THEME', `Retrying download after ${delay}ms (attempt ${attempt}/${maxRetries})...`, siteId);
+            Utilities.sleep(delay);
           }
-        });
 
-        const statusCode = response.getResponseCode();
-        if (statusCode === 200) {
-          themeBlob = response.getBlob();
-          logSuccess('CHILD_THEME', `Divi Child Theme package downloaded successfully (${(themeBlob.getBytes().length / 1024).toFixed(2)} KB)`, siteId);
-          break; // Success - exit retry loop
-        } else if (statusCode === 404 || statusCode === 403) {
-          // Don't retry on 404/403
-          throw new Error(`Failed to download theme: HTTP ${statusCode}`);
-        } else {
-          lastError = new Error(`HTTP ${statusCode}`);
+          const response = UrlFetchApp.fetch(themeUrl, {
+            muteHttpExceptions: true,
+            followRedirects: true,
+            headers: {
+              'Accept-Encoding': 'identity',
+              'Cache-Control': 'no-transform, no-cache',
+              'Pragma': 'no-cache',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
+            }
+          });
+
+          const statusCode = response.getResponseCode();
+          if (statusCode === 200) {
+            themeBlob = response.getBlob();
+            logSuccess('CHILD_THEME', `Divi Child Theme package downloaded successfully (${(themeBlob.getBytes().length / 1024).toFixed(2)} KB)`, siteId);
+            break; // Success - exit retry loop
+          } else if (statusCode === 404 || statusCode === 403) {
+            // Don't retry on 404/403
+            throw new Error(`Failed to download theme: HTTP ${statusCode}`);
+          } else {
+            lastError = new Error(`HTTP ${statusCode}`);
+            if (attempt < maxRetries) {
+              logWarning('CHILD_THEME', `Download failed with HTTP ${statusCode}, retrying...`, siteId);
+            }
+          }
+        } catch (error) {
+          lastError = error;
+          const isDnsError = error.message.toLowerCase().includes('dns');
+          const isRetryable = isDnsError || error.message.toLowerCase().includes('timeout') || error.message.toLowerCase().includes('connection');
+
+          if (!isRetryable || error.message.includes('404') || error.message.includes('403')) {
+            // Don't retry on non-retryable errors
+            throw error;
+          }
+
           if (attempt < maxRetries) {
-            logWarning('CHILD_THEME', `Download failed with HTTP ${statusCode}, retrying...`, siteId);
+            logWarning('CHILD_THEME', `Download failed (${error.message}), retrying...`, siteId);
+          } else {
+            throw new Error(`Failed to download theme after ${maxRetries} attempts: ${error.message}`);
           }
         }
-      } catch (error) {
-        lastError = error;
-        const isDnsError = error.message.toLowerCase().includes('dns');
-        const isRetryable = isDnsError || error.message.toLowerCase().includes('timeout') || error.message.toLowerCase().includes('connection');
+      }
 
-        if (!isRetryable || error.message.includes('404') || error.message.includes('403')) {
-          // Don't retry on non-retryable errors
-          throw error;
-        }
-
-        if (attempt < maxRetries) {
-          logWarning('CHILD_THEME', `Download failed (${error.message}), retrying...`, siteId);
-        } else {
-          throw new Error(`Failed to download theme after ${maxRetries} attempts: ${error.message}`);
-        }
+      if (!themeBlob && lastError) {
+        throw lastError;
       }
     }
 
     if (!themeBlob) {
-      throw lastError || new Error('Failed to download theme');
+      throw new Error('Failed to download theme from any source');
     }
 
     // Install theme via WordPress admin panel
