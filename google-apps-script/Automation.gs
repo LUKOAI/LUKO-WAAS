@@ -461,17 +461,28 @@ function installPatronageManagerOnSite(siteId) {
 
     // Download plugin package - check for Google Drive URL first
     let pluginBlob = null;
+    let isGDriveUrl = isGoogleDriveUrl(pluginUrl);
 
     // Check if it's a Google Drive URL/ID (use helper from SiteManager.gs)
-    if (isGoogleDriveUrl(pluginUrl)) {
+    if (isGDriveUrl) {
       pluginBlob = downloadFromGoogleDrive(pluginUrl);
       if (pluginBlob) {
         logSuccess('PATRONAGE', `Patronage Manager downloaded from Google Drive (${(pluginBlob.getBytes().length / 1024).toFixed(2)} KB)`, siteId);
+      } else {
+        // Google Drive download failed - don't try HTTP fallback for gdrive URLs
+        logError('PATRONAGE', 'Failed to download from Google Drive. Check file permissions.', siteId);
+        logInfo('PATRONAGE', '', siteId);
+        logInfo('PATRONAGE', '📋 TROUBLESHOOTING GOOGLE DRIVE:', siteId);
+        logInfo('PATRONAGE', '1. Make sure the file ID is correct in PATRONAGE_MANAGER_DOWNLOAD_URL', siteId);
+        logInfo('PATRONAGE', '2. Ensure the Google Apps Script has access to Google Drive', siteId);
+        logInfo('PATRONAGE', '3. Check if the file is shared with "Anyone with the link" or the script user', siteId);
+        logInfo('PATRONAGE', '', siteId);
+        throw new Error('Google Drive download failed - check file permissions');
       }
     }
 
-    // If not Google Drive or download failed, try regular URL with retry logic
-    if (!pluginBlob) {
+    // If not Google Drive, try regular HTTP URL with retry logic
+    if (!pluginBlob && !isGDriveUrl) {
       const maxRetries = 3;
       let lastError = null;
 
@@ -594,17 +605,28 @@ function installDiviChildThemeOnSite(siteId) {
 
     // Download theme package - check for Google Drive URL first
     let themeBlob = null;
+    let isGDriveUrl = isGoogleDriveUrl(themeUrl);
 
     // Check if it's a Google Drive URL/ID (use helper from SiteManager.gs)
-    if (isGoogleDriveUrl(themeUrl)) {
+    if (isGDriveUrl) {
       themeBlob = downloadFromGoogleDrive(themeUrl);
       if (themeBlob) {
         logSuccess('CHILD_THEME', `Divi Child Theme downloaded from Google Drive (${(themeBlob.getBytes().length / 1024).toFixed(2)} KB)`, siteId);
+      } else {
+        // Google Drive download failed - don't try HTTP fallback for gdrive URLs
+        logError('CHILD_THEME', 'Failed to download from Google Drive. Check file permissions.', siteId);
+        logInfo('CHILD_THEME', '', siteId);
+        logInfo('CHILD_THEME', '📋 TROUBLESHOOTING GOOGLE DRIVE:', siteId);
+        logInfo('CHILD_THEME', '1. Make sure the file ID is correct in DIVI_CHILD_DOWNLOAD_URL', siteId);
+        logInfo('CHILD_THEME', '2. Ensure the Google Apps Script has access to Google Drive', siteId);
+        logInfo('CHILD_THEME', '3. Check if the file is shared with "Anyone with the link" or the script user', siteId);
+        logInfo('CHILD_THEME', '', siteId);
+        throw new Error('Google Drive download failed - check file permissions');
       }
     }
 
-    // If not Google Drive or download failed, try regular URL with retry logic
-    if (!themeBlob) {
+    // If not Google Drive, try regular HTTP URL with retry logic
+    if (!themeBlob && !isGDriveUrl) {
       const maxRetries = 3;
       let lastError = null;
 

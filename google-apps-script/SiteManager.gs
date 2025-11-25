@@ -366,7 +366,27 @@ function downloadDiviPackage(site) {
 
     logInfo('DiviAPI', `Download URL: ${downloadUrl}`, site.id);
 
-    // Retry logic: try up to 3 times
+    // Check if it's a Google Drive URL/ID - handle separately
+    if (isGoogleDriveUrl(downloadUrl)) {
+      logInfo('DiviAPI', 'Detected Google Drive URL, downloading from Drive...', site.id);
+      const blob = downloadFromGoogleDrive(downloadUrl);
+      if (blob) {
+        const fileSize = blob.getBytes().length;
+        logSuccess('DiviAPI', `Divi package downloaded from Google Drive (${(fileSize / 1024 / 1024).toFixed(2)} MB)`, site.id);
+        return blob;
+      } else {
+        logError('DiviAPI', 'Failed to download Divi from Google Drive. Check file permissions.', site.id);
+        logInfo('DiviAPI', '', site.id);
+        logInfo('DiviAPI', '📋 TROUBLESHOOTING GOOGLE DRIVE:', site.id);
+        logInfo('DiviAPI', '1. Make sure the file ID is correct', site.id);
+        logInfo('DiviAPI', '2. Ensure the Google Apps Script has access to Google Drive', site.id);
+        logInfo('DiviAPI', '3. Check if the file is shared with "Anyone with the link" or the script user', site.id);
+        logInfo('DiviAPI', '', site.id);
+        return null;
+      }
+    }
+
+    // Regular HTTP URL - Retry logic: try up to 3 times
     const maxRetries = 3;
     let lastError = null;
 
@@ -544,11 +564,13 @@ function downloadFromGoogleDrive(urlOrId) {
 
 /**
  * Check if a URL/ID is a Google Drive reference
+ * Supports: gdrive:FILE_ID, Gdrive:FILE_ID, GDRIVE:FILE_ID, drive.google.com URLs, raw file IDs
  */
 function isGoogleDriveUrl(url) {
   if (!url) return false;
-  return url.startsWith('gdrive:') ||
-         url.includes('drive.google.com') ||
+  const lowerUrl = url.toLowerCase();
+  return lowerUrl.startsWith('gdrive:') ||
+         lowerUrl.includes('drive.google.com') ||
          // Match raw file ID (33 chars, alphanumeric with dashes/underscores)
          /^[a-zA-Z0-9_-]{25,50}$/.test(url);
 }
@@ -564,11 +586,21 @@ function downloadPluginFromGitHub() {
 
       // Check if it's a Google Drive URL/ID
       if (isGoogleDriveUrl(customPluginUrl)) {
+        logInfo('PluginManager', 'Detected Google Drive URL, downloading from Drive...');
         const blob = downloadFromGoogleDrive(customPluginUrl);
         if (blob) {
+          logSuccess('PluginManager', `Plugin downloaded from Google Drive (${(blob.getBytes().length / 1024).toFixed(2)} KB)`);
           return blob;
         }
-        logWarning('PluginManager', 'Google Drive download failed, trying GitHub fallback...');
+        // Google Drive download failed - provide helpful troubleshooting
+        logError('PluginManager', 'Failed to download from Google Drive. Check file permissions.');
+        logInfo('PluginManager', '');
+        logInfo('PluginManager', '📋 TROUBLESHOOTING GOOGLE DRIVE:');
+        logInfo('PluginManager', '1. Make sure the file ID is correct in PRODUCT_MANAGER_DOWNLOAD_URL');
+        logInfo('PluginManager', '2. Ensure the Google Apps Script has access to Google Drive');
+        logInfo('PluginManager', '3. Check if the file is shared with "Anyone with the link" or the script user');
+        logInfo('PluginManager', '');
+        logWarning('PluginManager', 'Trying GitHub fallback...');
       } else {
         // Try with retry logic for DNS errors
         const maxRetries = 3;
