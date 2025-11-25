@@ -7,9 +7,16 @@
  * Solves the problem of empty responses when using multipart/form-data uploads
  *
  * Usage:
- *   node scripts/install-plugin-puppeteer.js <WP_URL> <USERNAME> <PASSWORD> <PLUGIN_ZIP_URL>
+ *   node scripts/install-plugin-puppeteer.js <WP_URL> <USERNAME> <PASSWORD> <PLUGIN_ZIP_PATH_OR_URL>
  *
- * Example:
+ * Example with local file:
+ *   node scripts/install-plugin-puppeteer.js \
+ *     https://passgenaue-lkw-fussmatten.lk24.shop \
+ *     admin \
+ *     "YourPassword123" \
+ *     /home/user/LUKO-WAAS/wordpress-plugin/waas-product-manager.zip
+ *
+ * Example with URL:
  *   node scripts/install-plugin-puppeteer.js \
  *     https://passgenaue-lkw-fussmatten.lk24.shop \
  *     admin \
@@ -84,7 +91,7 @@ async function downloadFile(url, outputPath) {
   });
 }
 
-async function installPlugin(wpUrl, username, password, pluginZipUrl) {
+async function installPlugin(wpUrl, username, password, pluginZipPathOrUrl) {
   log('Launching Chromium browser with stealth mode...', 'blue');
 
   const browser = await chromium.launch({
@@ -97,6 +104,9 @@ async function installPlugin(wpUrl, username, password, pluginZipUrl) {
       '--ignore-certificate-errors'
     ]
   });
+
+  // Track if we created a temp file that needs cleanup
+  let tempPluginPath = null;
 
   try {
     const context = await browser.newContext({
@@ -150,18 +160,33 @@ async function installPlugin(wpUrl, username, password, pluginZipUrl) {
     await page.goto(uploadUrl, { waitUntil: 'networkidle' });
     log('✓ Plugin upload page loaded', 'green');
 
-    // Step 3: Download plugin ZIP file
-    log('Step 3: Downloading plugin ZIP...', 'cyan');
-    const tempDir = path.join(__dirname, '..', 'temp');
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true });
+    // Step 3: Get plugin ZIP file (local path or download from URL)
+    log('Step 3: Preparing plugin ZIP...', 'cyan');
+
+    let pluginPath;
+    const isLocalFile = !pluginZipPathOrUrl.startsWith('http://') && !pluginZipPathOrUrl.startsWith('https://');
+
+    if (isLocalFile) {
+      // Use local file directly
+      if (!fs.existsSync(pluginZipPathOrUrl)) {
+        throw new Error(`Local file not found: ${pluginZipPathOrUrl}`);
+      }
+      pluginPath = pluginZipPathOrUrl;
+      log(`✓ Using local file: ${pluginPath}`, 'green');
+    } else {
+      // Download from URL
+      const tempDir = path.join(__dirname, '..', 'temp');
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+
+      const pluginFileName = path.basename(new URL(pluginZipPathOrUrl).pathname);
+      pluginPath = path.join(tempDir, pluginFileName);
+      tempPluginPath = pluginPath; // Mark for cleanup
+
+      await downloadFile(pluginZipPathOrUrl, pluginPath);
+      log('✓ Plugin downloaded', 'green');
     }
-
-    const pluginFileName = path.basename(new URL(pluginZipUrl).pathname);
-    const pluginPath = path.join(tempDir, pluginFileName);
-
-    await downloadFile(pluginZipUrl, pluginPath);
-    log('✓ Plugin downloaded', 'green');
 
     // Step 4: Upload plugin file
     log('Step 4: Uploading plugin file...', 'cyan');
@@ -229,8 +254,10 @@ async function installPlugin(wpUrl, username, password, pluginZipUrl) {
         log('⚠ Activate button not found - plugin may already be active', 'yellow');
       }
 
-      // Clean up temp file
-      fs.unlinkSync(pluginPath);
+      // Clean up temp file only (not local files)
+      if (tempPluginPath && fs.existsSync(tempPluginPath)) {
+        fs.unlinkSync(tempPluginPath);
+      }
 
       return {
         success: true,
@@ -241,8 +268,10 @@ async function installPlugin(wpUrl, username, password, pluginZipUrl) {
                pageContent.includes('Destination folder already exists')) {
       log('✓ Plugin already installed', 'yellow');
 
-      // Clean up temp file
-      fs.unlinkSync(pluginPath);
+      // Clean up temp file only (not local files)
+      if (tempPluginPath && fs.existsSync(tempPluginPath)) {
+        fs.unlinkSync(tempPluginPath);
+      }
 
       return {
         success: true,
@@ -261,8 +290,10 @@ async function installPlugin(wpUrl, username, password, pluginZipUrl) {
       log('⚠ Installation result unclear. Page content:', 'yellow');
       console.log(pageContent.substring(0, 500));
 
-      // Clean up temp file
-      fs.unlinkSync(pluginPath);
+      // Clean up temp file only (not local files)
+      if (tempPluginPath && fs.existsSync(tempPluginPath)) {
+        fs.unlinkSync(tempPluginPath);
+      }
 
       return {
         success: false,
@@ -283,9 +314,16 @@ if (require.main === module) {
   const args = process.argv.slice(2);
 
   if (args.length < 4) {
-    console.log('Usage: node install-plugin-puppeteer.js <WP_URL> <USERNAME> <PASSWORD> <PLUGIN_ZIP_URL>');
+    console.log('Usage: node install-plugin-puppeteer.js <WP_URL> <USERNAME> <PASSWORD> <PLUGIN_ZIP_PATH_OR_URL>');
     console.log('');
-    console.log('Example:');
+    console.log('Example with local file:');
+    console.log('  node scripts/install-plugin-puppeteer.js \\');
+    console.log('    https://passgenaue-lkw-fussmatten.lk24.shop \\');
+    console.log('    admin \\');
+    console.log('    "YourPassword123" \\');
+    console.log('    /tmp/waas-product-manager-local.zip');
+    console.log('');
+    console.log('Example with URL:');
     console.log('  node scripts/install-plugin-puppeteer.js \\');
     console.log('    https://passgenaue-lkw-fussmatten.lk24.shop \\');
     console.log('    admin \\');
@@ -294,7 +332,7 @@ if (require.main === module) {
     process.exit(1);
   }
 
-  const [wpUrl, username, password, pluginZipUrl] = args;
+  const [wpUrl, username, password, pluginZipPathOrUrl] = args;
 
   log('='.repeat(60), 'bright');
   log('LUKO WAAS - Plugin Installation via Puppeteer', 'bright');
@@ -302,10 +340,10 @@ if (require.main === module) {
   log('', 'reset');
   log(`WordPress URL: ${wpUrl}`, 'cyan');
   log(`Username: ${username}`, 'cyan');
-  log(`Plugin ZIP: ${pluginZipUrl}`, 'cyan');
+  log(`Plugin ZIP: ${pluginZipPathOrUrl}`, 'cyan');
   log('', 'reset');
 
-  installPlugin(wpUrl, username, password, pluginZipUrl)
+  installPlugin(wpUrl, username, password, pluginZipPathOrUrl)
     .then(result => {
       log('', 'reset');
       log('='.repeat(60), 'bright');
