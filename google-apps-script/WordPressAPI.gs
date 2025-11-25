@@ -149,7 +149,8 @@ function installThemeOnWordPress(site, themeBlob, themeSlug) {
     const checkOptions = {
       method: 'get',
       headers: {
-        'Cookie': cookies
+        'Cookie': cookies,
+        'Accept-Encoding': 'gzip, deflate' // Disable Brotli which GAS doesn't support
       },
       muteHttpExceptions: true,
       followRedirects: true
@@ -172,7 +173,8 @@ function installThemeOnWordPress(site, themeBlob, themeSlug) {
     const pageOptions = {
       method: 'get',
       headers: {
-        'Cookie': cookies
+        'Cookie': cookies,
+        'Accept-Encoding': 'gzip, deflate' // Disable Brotli which GAS doesn't support
       },
       muteHttpExceptions: true,
       followRedirects: true
@@ -257,7 +259,8 @@ function installThemeOnWordPress(site, themeBlob, themeSlug) {
       method: 'post',
       headers: {
         'Cookie': cookies,
-        'Content-Type': 'multipart/form-data; boundary=' + boundary
+        'Content-Type': 'multipart/form-data; boundary=' + boundary,
+        'Accept-Encoding': 'gzip, deflate' // Disable Brotli which GAS doesn't support
       },
       payload: payloadBlob.getBytes(),
       muteHttpExceptions: true,
@@ -331,7 +334,8 @@ function activateThemeOnWordPress(site, themeSlug) {
     const pageOptions = {
       method: 'get',
       headers: {
-        'Cookie': cookies
+        'Cookie': cookies,
+        'Accept-Encoding': 'gzip, deflate' // Disable Brotli which GAS doesn't support
       },
       muteHttpExceptions: true,
       followRedirects: true
@@ -367,7 +371,8 @@ function activateThemeOnWordPress(site, themeSlug) {
     const activateOptions = {
       method: 'get',
       headers: {
-        'Cookie': cookies
+        'Cookie': cookies,
+        'Accept-Encoding': 'gzip, deflate' // Disable Brotli which GAS doesn't support
       },
       muteHttpExceptions: true,
       followRedirects: true
@@ -459,7 +464,8 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
     const checkOptions = {
       method: 'get',
       headers: {
-        'Cookie': cookies
+        'Cookie': cookies,
+        'Accept-Encoding': 'gzip, deflate' // Disable Brotli which GAS doesn't support
       },
       muteHttpExceptions: true,
       followRedirects: true
@@ -482,7 +488,8 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
     const pageOptions = {
       method: 'get',
       headers: {
-        'Cookie': cookies
+        'Cookie': cookies,
+        'Accept-Encoding': 'gzip, deflate' // Disable Brotli which GAS doesn't support
       },
       muteHttpExceptions: true,
       followRedirects: true
@@ -568,7 +575,8 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
       method: 'post',
       headers: {
         'Cookie': cookies,
-        'Content-Type': 'multipart/form-data; boundary=' + boundary
+        'Content-Type': 'multipart/form-data; boundary=' + boundary,
+        'Accept-Encoding': 'gzip, deflate' // Disable Brotli which GAS doesn't support
       },
       payload: payloadBlob.getBytes(),
       muteHttpExceptions: true,
@@ -598,7 +606,8 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
         const redirectOptions = {
           method: 'get',
           headers: {
-            'Cookie': cookies
+            'Cookie': cookies,
+            'Accept-Encoding': 'gzip, deflate' // Disable Brotli which GAS doesn't support
           },
           muteHttpExceptions: true,
           followRedirects: true
@@ -656,7 +665,8 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
       const installOptions = {
         method: 'get',
         headers: {
-          'Cookie': cookies
+          'Cookie': cookies,
+          'Accept-Encoding': 'gzip, deflate' // Disable Brotli which GAS doesn't support
         },
         muteHttpExceptions: true,
         followRedirects: true
@@ -806,7 +816,8 @@ function activatePluginViaCookies(site, pluginSlug) {
     const pageOptions = {
       method: 'get',
       headers: {
-        'Cookie': cookies
+        'Cookie': cookies,
+        'Accept-Encoding': 'gzip, deflate' // Disable Brotli which GAS doesn't support
       },
       muteHttpExceptions: true,
       followRedirects: true
@@ -872,7 +883,8 @@ function activatePluginViaCookies(site, pluginSlug) {
     const activateOptions = {
       method: 'get',
       headers: {
-        'Cookie': cookies
+        'Cookie': cookies,
+        'Accept-Encoding': 'gzip, deflate' // Disable Brotli which GAS doesn't support
       },
       muteHttpExceptions: true,
       followRedirects: true

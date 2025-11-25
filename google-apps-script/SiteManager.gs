@@ -269,7 +269,9 @@ function refreshAllSites() {
 // INSTALACJA DIVI
 // =============================================================================
 
-function installDiviOnSite(siteId) {
+function installDiviOnSite(siteId, options = {}) {
+  const skipDialog = options.skipDialog || false;
+
   try {
     const site = getSiteById(siteId);
     if (!site) {
@@ -324,14 +326,16 @@ function installDiviOnSite(siteId) {
       : `Divi has been installed and activated on ${site.name}\n\nPlease verify license activation manually at:\n${site.wpUrl}/wp-admin/admin.php?page=et_onboarding#/overview`;
 
     // Only show alert if called directly (not from automation)
-    try {
-      SpreadsheetApp.getUi().alert(
-        'Success',
-        alertMessage,
-        SpreadsheetApp.getUi().ButtonSet.OK
-      );
-    } catch (e) {
-      // UI not available (called from automation), skip alert
+    if (!skipDialog) {
+      try {
+        SpreadsheetApp.getUi().alert(
+          'Success',
+          alertMessage,
+          SpreadsheetApp.getUi().ButtonSet.OK
+        );
+      } catch (e) {
+        // UI not available (called from automation), skip alert
+      }
     }
 
     return {

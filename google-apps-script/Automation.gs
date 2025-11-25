@@ -108,7 +108,7 @@ function installFullStack(siteId, options = {}) {
     // STEP 2: Install Divi theme
     logInfo('AUTOMATION', 'Step 2/8: Installing Divi theme...', siteId);
     try {
-      const diviResult = installDiviOnSite(siteId);
+      const diviResult = installDiviOnSite(siteId, { skipDialog: true });
       result.steps.push({
         step: 2,
         name: 'Divi Theme Installation',
