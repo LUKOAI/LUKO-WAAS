@@ -27,11 +27,14 @@ google-apps-script/
 ├── ContentGenerator.gs    # Content generation
 ├── DiviAPI.gs             # Divi API integration
 ├── WordPressAPI.gs        # WordPress REST API
+├── WordPressAuth.gs       # WordPress authentication system
 ├── AmazonPA.gs            # Amazon Product Advertising API
+├── Automation.gs          # Complete automation workflows
 ├── Migration.gs           # Migration tools (per-site credentials)
+├── AuthMigration.gs       # Authentication migration tools
 └── appsscript.json        # Manifest file
 
-TOTAL: 11 files
+TOTAL: 14 files
 ```
 
 ### ✨ Key Features
@@ -55,7 +58,7 @@ TOTAL: 11 files
 
 ### Step 2: Copy All Module Files
 
-Copy **ALL 11 files** from this directory to your Google Apps Script project:
+Copy **ALL 14 files** from this directory to your Google Apps Script project:
 
 1. Click `+` next to `Files`
 2. For each `.gs` file:
@@ -78,8 +81,11 @@ Copy **ALL 11 files** from this directory to your Google Apps Script project:
 - ContentGenerator.gs
 - DiviAPI.gs
 - WordPressAPI.gs
+- WordPressAuth.gs
 - AmazonPA.gs
+- Automation.gs
 - Migration.gs
+- AuthMigration.gs
 - appsscript.json
 
 ### Step 3: Run Installation
@@ -392,15 +398,15 @@ For EACH site, fill:
 ## 📄 Version Information
 
 **Version**: 2.0.0
-**Last Updated**: 2024-11-24
-**Architecture**: Modular (11 separate files)
-**Key Feature**: Per-Site Divi API Credentials
+**Last Updated**: 2024-11-25
+**Architecture**: Modular (14 separate files)
+**Key Feature**: Per-Site Divi API Credentials + Complete Automation
 
 ---
 
 ## ✅ Quick Start Checklist
 
-- [ ] Copy all 11 files to Google Apps Script
+- [ ] Copy all 14 files to Google Apps Script (or use automatic install: `./scripts/install.sh`)
 - [ ] Run `installWAAS()` function
 - [ ] Authorize application
 - [ ] Add Amazon API keys to Script Properties

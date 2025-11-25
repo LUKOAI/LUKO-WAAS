@@ -58,16 +58,32 @@
 - ✅ Responsywne szablony CSS
 - ✅ Meta boxes z pełną konfiguracją produktów
 
-### Google Apps Script - WERSJA 2.0! 🚀
-- ✅ **Automatyczna instalacja jednym skryptem** - setup.gs
+### Google Apps Script - Modularna Architektura v2.0! 🚀
+**14 osobnych plików współpracujących ze sobą:**
+
+1. `setup.gs` - instalacja i konfiguracja
+2. `Core.gs` - funkcje podstawowe
+3. `Menu.gs` - interfejs użytkownika
+4. `SiteManager.gs` - zarządzanie stronami
+5. `ProductManager.gs` - produkty Amazon
+6. `TaskManager.gs` - kolejka zadań
+7. `ContentGenerator.gs` - generowanie treści
+8. `DiviAPI.gs` - integracja Divi
+9. `WordPressAPI.gs` - WordPress REST API
+10. `WordPressAuth.gs` - autoryzacja WordPress
+11. `AmazonPA.gs` - Amazon PA API 5.0
+12. `Automation.gs` - pełna automatyzacja
+13. `Migration.gs` - migracja danych
+14. `AuthMigration.gs` - migracja autoryzacji
+
+**Główne funkcje:**
 - ✅ **Zarządzanie wieloma stronami WordPress**
-- ✅ **Automatyczna instalacja Divi theme**
-- ✅ **Instalacja WAAS Product Manager plugin**
+- ✅ **Automatyczna instalacja Divi + WooCommerce + pluginy**
 - ✅ **Import i synchronizacja produktów Amazon**
 - ✅ **Automatyczne generowanie treści afiliacyjnych**
 - ✅ **System kolejki zadań (Task Queue)**
 - ✅ **Pełne logowanie operacji**
-- ✅ **Intuicyjne menu i dialogi**
+- ✅ **Per-site credentials (Divi API, Amazon Tag)**
 
 ### 🤖 NOWOŚĆ: Complete Automation System (v2.0)
 - ✅ **Auto Install Checkbox** - zaznacz i zapomnij o instalacji
