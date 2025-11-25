@@ -523,10 +523,10 @@ function installPatronageManagerOnSite(siteId) {
     // Activate plugin (fallback jeśli instalacja nie aktywowała)
     const activated = activatePluginOnWordPress(site, pluginSlug + '/' + pluginSlug + '.php');
     if (!activated) {
-      logWarning('PATRONAGE', 'Plugin activation may have failed, but installation succeeded', siteId);
+      throw new Error('Failed to activate plugin');
     }
 
-    logSuccess('PATRONAGE', 'WAAS Patronage Manager installed successfully', siteId);
+    logSuccess('PATRONAGE', 'WAAS Patronage Manager installed and activated successfully', siteId);
     return {
       success: true,
       message: 'WAAS Patronage Manager installed and activated'
@@ -633,7 +633,7 @@ function installDiviChildThemeOnSite(siteId) {
     // Activate child theme (Divi must be parent theme)
     const activated = activateThemeOnWordPress(site, 'divi-child-waas');
     if (!activated) {
-      logWarning('CHILD_THEME', 'Theme activation may have failed, but installation succeeded', siteId);
+      throw new Error('Failed to activate theme');
     }
 
     logSuccess('CHILD_THEME', 'Divi Child Theme installed and activated successfully', siteId);

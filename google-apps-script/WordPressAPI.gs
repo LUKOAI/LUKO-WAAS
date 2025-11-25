@@ -610,6 +610,12 @@ function activatePluginOnWordPress(site, pluginSlug) {
   try {
     logInfo('WordPressAPI', `Activating plugin: ${pluginSlug}`, site.id);
 
+    // Check if plugin is already active
+    if (isPluginActive(site, pluginSlug)) {
+      logInfo('WordPressAPI', `Plugin ${pluginSlug} is already active`, site.id);
+      return true;
+    }
+
     // Check WordPress version from site info to determine activation method
     const siteInfo = getWordPressSiteInfo(site);
     const wpVersion = siteInfo ? parseFloat(siteInfo.version) : 0;
@@ -618,7 +624,9 @@ function activatePluginOnWordPress(site, pluginSlug) {
     // For older versions, use cookie-based activation
     if (wpVersion >= 5.5) {
       // Use REST API for WordPress 5.5+
-      const result = makeAuthenticatedRequest(site, `wp/v2/plugins/${pluginSlug}`, {
+      // IMPORTANT: pluginSlug for REST API must be URL-encoded (e.g., "waas-product-manager%2Fwaas-product-manager")
+      const encodedSlug = encodeURIComponent(pluginSlug);
+      const result = makeAuthenticatedRequest(site, `wp/v2/plugins/${encodedSlug}`, {
         method: 'post',
         payload: {
           status: 'active'
@@ -626,8 +634,12 @@ function activatePluginOnWordPress(site, pluginSlug) {
       });
 
       if (result.success) {
-        logSuccess('WordPressAPI', `Plugin activated: ${pluginSlug}`, site.id);
+        logSuccess('WordPressAPI', `Plugin activated via REST API: ${pluginSlug}`, site.id);
         return true;
+      } else if (result.statusCode === 404) {
+        // Plugin not found, might not be installed yet
+        logError('WordPressAPI', `Plugin not found (404): ${pluginSlug} - plugin may not be installed`, site.id);
+        return false;
       } else {
         logError('WordPressAPI', `REST API activation failed: ${result.statusCode} - ${JSON.stringify(result.data)}`, site.id);
         // Fall back to cookie-based activation
@@ -790,6 +802,39 @@ function getInstalledPlugins(site) {
   } catch (error) {
     logError('WordPressAPI', `Error getting plugins: ${error.message}`, site.id);
     return [];
+  }
+}
+
+/**
+ * Check if a plugin is active
+ * @param {Object} site - Site object
+ * @param {string} pluginSlug - Plugin slug (e.g., "waas-product-manager/waas-product-manager.php")
+ * @returns {boolean} True if plugin is active
+ */
+function isPluginActive(site, pluginSlug) {
+  try {
+    logInfo('WordPressAPI', `Checking if plugin is active: ${pluginSlug}`, site.id);
+
+    const plugins = getInstalledPlugins(site);
+
+    // Search for plugin in the list
+    const plugin = plugins.find(p =>
+      p.plugin === pluginSlug ||
+      p.plugin.includes(pluginSlug) ||
+      (p.name && p.name.includes('WAAS'))
+    );
+
+    if (plugin) {
+      const isActive = plugin.status === 'active';
+      logInfo('WordPressAPI', `Plugin ${pluginSlug} found. Status: ${plugin.status}`, site.id);
+      return isActive;
+    } else {
+      logInfo('WordPressAPI', `Plugin ${pluginSlug} not found in installed plugins`, site.id);
+      return false;
+    }
+  } catch (error) {
+    logError('WordPressAPI', `Error checking plugin status: ${error.message}`, site.id);
+    return false;
   }
 }
 
