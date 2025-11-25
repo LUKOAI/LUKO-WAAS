@@ -556,13 +556,45 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
       },
       payload: bodyBytes,
       muteHttpExceptions: true,
-      followRedirects: true
+      followRedirects: false // Don't follow redirects automatically
     };
 
     logInfo('WordPressAPI', 'Uploading plugin ZIP via wp-admin...', site.id);
-    const uploadResponse = UrlFetchApp.fetch(uploadUrl, uploadOptions);
-    const uploadCode = uploadResponse.getResponseCode();
-    const uploadText = uploadResponse.getContentText();
+    let uploadResponse = UrlFetchApp.fetch(uploadUrl, uploadOptions);
+    let uploadCode = uploadResponse.getResponseCode();
+    let uploadText = uploadResponse.getContentText();
+
+    // Handle redirects manually
+    if (uploadCode === 302 || uploadCode === 301 || uploadCode === 303) {
+      const redirectUrl = uploadResponse.getHeaders()['Location'] || uploadResponse.getHeaders()['location'];
+      if (redirectUrl) {
+        logInfo('WordPressAPI', `Following redirect to: ${redirectUrl}`, site.id);
+
+        // Make absolute URL if relative
+        let fullRedirectUrl = redirectUrl;
+        if (redirectUrl.startsWith('/')) {
+          fullRedirectUrl = site.wpUrl + redirectUrl;
+        } else if (!redirectUrl.startsWith('http')) {
+          fullRedirectUrl = site.wpUrl + '/wp-admin/' + redirectUrl;
+        }
+
+        // Follow redirect
+        const redirectOptions = {
+          method: 'get',
+          headers: {
+            'Cookie': cookies
+          },
+          muteHttpExceptions: true,
+          followRedirects: true
+        };
+
+        uploadResponse = UrlFetchApp.fetch(fullRedirectUrl, redirectOptions);
+        uploadCode = uploadResponse.getResponseCode();
+        uploadText = uploadResponse.getContentText();
+
+        logInfo('WordPressAPI', `Redirect response code: ${uploadCode}`, site.id);
+      }
+    }
 
     logInfo('WordPressAPI', `Upload response code: ${uploadCode}`, site.id);
 
@@ -581,7 +613,10 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
     // Log response snippet for debugging
     if (!installLinkMatch) {
       const responseSnippet = uploadText.substring(0, 1000).replace(/\s+/g, ' ');
+      const headers = uploadResponse.getHeaders();
       logInfo('WordPressAPI', `No install link found. Response snippet: ${responseSnippet}`, site.id);
+      logInfo('WordPressAPI', `Response headers: ${JSON.stringify(headers)}`, site.id);
+      logInfo('WordPressAPI', `Response length: ${uploadText.length} bytes`, site.id);
     }
 
     if (installLinkMatch && uploadCode === 200) {
