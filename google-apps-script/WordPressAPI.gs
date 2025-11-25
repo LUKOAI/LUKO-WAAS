@@ -896,8 +896,9 @@ function activatePluginViaCookies(site, pluginSlug) {
 
     // Plugin is not active, look for activation link with nonce
     // Format: plugins.php?action=activate&plugin=plugin-slug/plugin.php&plugin_status=all&paged=1&s&_wpnonce=abc123
+    // Note: WordPress HTML-encodes & as &amp; in href attributes
     // Note: There can be additional parameters between plugin= and _wpnonce=
-    const activateLinkRegex = new RegExp(`plugins\\.php\\?[^"']*action=activate[^"']*plugin=([^&"']+)[^"']*_wpnonce=([\\w]+)`, 'g');
+    const activateLinkRegex = /plugins\.php\?action=activate(?:&amp;|&)plugin=([^&"']+)(?:[^"']*?)(?:&amp;|&)_wpnonce=(\w+)/g;
 
     let activationNonce = null;
     let pluginPath = null;
@@ -924,6 +925,16 @@ function activatePluginViaCookies(site, pluginSlug) {
       logWarning('WordPressAPI', `Could not find activation link for ${pluginSlug}. Inactive plugins found: ${allInactivePlugins.length}`, site.id);
       if (allInactivePlugins.length > 0 && allInactivePlugins.length <= 10) {
         logInfo('WordPressAPI', `Inactive plugins: ${allInactivePlugins.join(', ')}`, site.id);
+      }
+      // Debug: Check if plugin appears in HTML at all
+      const pluginSlugLower = pluginSlug.toLowerCase();
+      if (pageHtml.toLowerCase().includes(pluginSlugLower)) {
+        // Plugin is mentioned in HTML but regex didn't match - log a sample
+        const idx = pageHtml.toLowerCase().indexOf(pluginSlugLower);
+        const sample = pageHtml.substring(Math.max(0, idx - 100), Math.min(pageHtml.length, idx + 200));
+        logInfo('WordPressAPI', `DEBUG: Plugin found in HTML near: ...${sample.substring(0, 250)}...`, site.id);
+      } else {
+        logInfo('WordPressAPI', `DEBUG: Plugin slug "${pluginSlug}" not found anywhere in plugins page HTML`, site.id);
       }
       return false;
     }
