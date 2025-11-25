@@ -625,7 +625,7 @@ function installDiviChildThemeOnSite(siteId) {
     }
 
     // Install theme via WordPress admin panel
-    const installed = installThemeOnWordPress(site, themeBlob);
+    const installed = installThemeOnWordPress(site, themeBlob, 'divi-child-waas');
     if (!installed) {
       throw new Error('Theme installation failed');
     }

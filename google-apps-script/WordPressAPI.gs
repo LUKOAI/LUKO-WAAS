@@ -130,21 +130,70 @@ function getWordPressPosts(site, params = {}) {
 // THEME MANAGEMENT
 // =============================================================================
 
-function installThemeOnWordPress(site, themeBlob) {
+function installThemeOnWordPress(site, themeBlob, themeSlug) {
   try {
     logInfo('WordPressAPI', `Installing theme on: ${site.name}`, site.id);
 
-    // Get authentication credentials
-    const auth = getAuthCredentials(site);
-    if (!auth) {
-      logError('WordPressAPI', 'No authentication credentials available', site.id);
+    // Step 1: Login and check if theme is already installed
+    logInfo('WordPressAPI', 'Checking if theme is already installed...', site.id);
+    const loginResult = wordpressLogin(site);
+    if (!loginResult.success) {
+      logError('WordPressAPI', `Cannot login: ${loginResult.error}`, site.id);
       return false;
     }
 
-    // WordPress doesn't support theme upload via REST API yet
-    // We need to use wp-admin/update.php endpoint with proper authentication
-    // The nonce from REST API authentication can be used for wp-admin actions
+    const cookies = loginResult.cookies;
 
+    // Check themes page to see if theme already exists
+    const themesPageUrl = `${site.wpUrl}/wp-admin/themes.php`;
+    const checkOptions = {
+      method: 'get',
+      headers: {
+        'Cookie': cookies
+      },
+      muteHttpExceptions: true,
+      followRedirects: true
+    };
+
+    const checkResponse = UrlFetchApp.fetch(themesPageUrl, checkOptions);
+    const themesPageHtml = checkResponse.getContentText();
+
+    // Check if theme slug appears in the themes list
+    if (themeSlug && (themesPageHtml.includes(`data-slug="${themeSlug}"`) ||
+        themesPageHtml.includes(`themes.php?action=activate&amp;stylesheet=${themeSlug}`) ||
+        themesPageHtml.includes(`themes.php?action=activate&stylesheet=${themeSlug}`))) {
+      logInfo('WordPressAPI', `Theme ${themeSlug} is already installed`, site.id);
+      return true; // Return true, will be activated separately
+    }
+
+    // Step 2: Get upload nonce from theme-install page
+    logInfo('WordPressAPI', 'Getting upload nonce from theme-install page...', site.id);
+    const installPageUrl = `${site.wpUrl}/wp-admin/theme-install.php?tab=upload`;
+    const pageOptions = {
+      method: 'get',
+      headers: {
+        'Cookie': cookies
+      },
+      muteHttpExceptions: true,
+      followRedirects: true
+    };
+
+    const pageResponse = UrlFetchApp.fetch(installPageUrl, pageOptions);
+    const pageHtml = pageResponse.getContentText();
+
+    // Extract nonce from the upload form
+    const nonceMatch = pageHtml.match(/<input[^>]*name="_wpnonce"[^>]*value="([^"]+)"/i) ||
+                       pageHtml.match(/name="_wpnonce"[^>]*value="([^"]+)"/i) ||
+                       pageHtml.match(/_wpnonce["\s]*[:=]["\s]*["']([^"']+)["']/i);
+
+    if (!nonceMatch) {
+      logWarning('WordPressAPI', 'Could not extract upload nonce, trying with REST API nonce...', site.id);
+    }
+
+    const uploadNonce = nonceMatch ? nonceMatch[1] : loginResult.nonce;
+    logInfo('WordPressAPI', 'Got upload nonce', site.id);
+
+    // Step 3: Upload theme via wp-admin
     const uploadUrl = `${site.wpUrl}/wp-admin/update.php?action=upload-theme`;
 
     // Create multipart boundary
@@ -163,14 +212,19 @@ function installThemeOnWordPress(site, themeBlob) {
     ).getBytes());
     body.push(themeBlob.getBytes());
 
-    // Add nonce (use the nonce from authentication)
-    if (auth.nonce) {
-      body.push(Utilities.newBlob(
-        delimiter +
-        'Content-Disposition: form-data; name="_wpnonce"\r\n\r\n' +
-        auth.nonce
-      ).getBytes());
-    }
+    // Add nonce
+    body.push(Utilities.newBlob(
+      delimiter +
+      'Content-Disposition: form-data; name="_wpnonce"\r\n\r\n' +
+      uploadNonce
+    ).getBytes());
+
+    // Add action field
+    body.push(Utilities.newBlob(
+      delimiter +
+      'Content-Disposition: form-data; name="action"\r\n\r\n' +
+      'install-theme-upload'
+    ).getBytes());
 
     // Add submit button
     body.push(Utilities.newBlob(
@@ -190,27 +244,13 @@ function installThemeOnWordPress(site, themeBlob) {
       }
     });
 
-    // Prepare request headers
-    const headers = {
-      'Content-Type': 'multipart/form-data; boundary=' + boundary
-    };
-
-    // Add authentication
-    if (auth.type === 'cookie_auth') {
-      headers['Cookie'] = auth.cookie;
-      if (auth.nonce) {
-        headers['X-WP-Nonce'] = auth.nonce;
-      }
-    } else if (auth.type === 'application_password') {
-      headers['Authorization'] = 'Basic ' + Utilities.base64Encode(auth.username + ':' + auth.appPassword);
-    } else if (auth.type === 'basic_auth') {
-      headers['Authorization'] = 'Basic ' + Utilities.base64Encode(auth.username + ':' + auth.password);
-    }
-
     // Upload theme
     const uploadOptions = {
       method: 'post',
-      headers: headers,
+      headers: {
+        'Cookie': cookies,
+        'Content-Type': 'multipart/form-data; boundary=' + boundary
+      },
       payload: bodyBytes,
       muteHttpExceptions: true,
       followRedirects: true
@@ -227,11 +267,14 @@ function installThemeOnWordPress(site, themeBlob) {
     if (uploadCode === 200 && (
       uploadText.includes('Theme installed successfully') ||
       uploadText.includes('Theme installation was successful') ||
-      uploadText.includes('successfully installed')
+      uploadText.includes('successfully installed') ||
+      uploadText.includes('Activate')
     )) {
       logSuccess('WordPressAPI', 'Theme installed successfully!', site.id);
       return true;
-    } else if (uploadText.includes('already installed') || uploadText.includes('Destination folder already exists')) {
+    } else if (uploadText.includes('already installed') ||
+               uploadText.includes('Destination folder already exists') ||
+               uploadText.includes('folder already exists')) {
       logInfo('WordPressAPI', 'Theme already installed', site.id);
       return true;
     } else if (uploadCode === 200) {
@@ -240,6 +283,18 @@ function installThemeOnWordPress(site, themeBlob) {
       return true;
     } else {
       logWarning('WordPressAPI', `Theme installation unclear. Status: ${uploadCode}`, site.id);
+
+      // Check again if theme appeared in themes list
+      if (themeSlug) {
+        const recheckResponse = UrlFetchApp.fetch(themesPageUrl, checkOptions);
+        const recheckHtml = recheckResponse.getContentText();
+        if (recheckHtml.includes(`data-slug="${themeSlug}"`) ||
+            recheckHtml.includes(`stylesheet=${themeSlug}`)) {
+          logInfo('WordPressAPI', `Theme ${themeSlug} detected in themes list after upload`, site.id);
+          return true;
+        }
+      }
+
       return false;
     }
 
@@ -381,21 +436,73 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
   try {
     logInfo('WordPressAPI', `Installing plugin on: ${site.name}`, site.id);
 
-    // Use WordPress REST API to upload plugin ZIP file
-    // This is more reliable than wp-admin form upload
-    const endpoint = `${site.wpUrl}/wp-json/wp/v2/plugins`;
-
-    // Get authentication credentials
-    const auth = getAuthCredentials(site);
-    if (!auth) {
-      logError('WordPressAPI', 'No authentication credentials available', site.id);
+    // Step 1: Check if plugin is already installed
+    logInfo('WordPressAPI', 'Checking if plugin is already installed...', site.id);
+    const loginResult = wordpressLogin(site);
+    if (!loginResult.success) {
+      logError('WordPressAPI', `Cannot login: ${loginResult.error}`, site.id);
       return false;
     }
 
-    // Build multipart form data with the plugin ZIP file
+    const cookies = loginResult.cookies;
+
+    // Check plugins page to see if plugin already exists
+    const pluginsPageUrl = `${site.wpUrl}/wp-admin/plugins.php`;
+    const checkOptions = {
+      method: 'get',
+      headers: {
+        'Cookie': cookies
+      },
+      muteHttpExceptions: true,
+      followRedirects: true
+    };
+
+    const checkResponse = UrlFetchApp.fetch(pluginsPageUrl, checkOptions);
+    const pluginsPageHtml = checkResponse.getContentText();
+
+    // Check if plugin slug appears in the plugins list
+    if (pluginsPageHtml.includes(`data-slug="${pluginSlug}"`) ||
+        pluginsPageHtml.includes(`/${pluginSlug}/`) ||
+        pluginsPageHtml.includes(pluginSlug + '.php')) {
+      logInfo('WordPressAPI', `Plugin ${pluginSlug} is already installed`, site.id);
+      return true; // Return true, will be activated separately
+    }
+
+    // Step 2: Get upload nonce from plugin-install page
+    logInfo('WordPressAPI', 'Getting upload nonce from plugin-install page...', site.id);
+    const installPageUrl = `${site.wpUrl}/wp-admin/plugin-install.php?tab=upload`;
+    const pageOptions = {
+      method: 'get',
+      headers: {
+        'Cookie': cookies
+      },
+      muteHttpExceptions: true,
+      followRedirects: true
+    };
+
+    const pageResponse = UrlFetchApp.fetch(installPageUrl, pageOptions);
+    const pageHtml = pageResponse.getContentText();
+
+    // Extract nonce from the upload form
+    // Look for: <input type="hidden" name="_wpnonce" value="abc123" />
+    const nonceMatch = pageHtml.match(/<input[^>]*name="_wpnonce"[^>]*value="([^"]+)"/i) ||
+                       pageHtml.match(/name="_wpnonce"[^>]*value="([^"]+)"/i) ||
+                       pageHtml.match(/_wpnonce["\s]*[:=]["\s]*["']([^"']+)["']/i);
+
+    if (!nonceMatch) {
+      logWarning('WordPressAPI', 'Could not extract upload nonce, trying with REST API nonce...', site.id);
+    }
+
+    const uploadNonce = nonceMatch ? nonceMatch[1] : loginResult.nonce;
+    logInfo('WordPressAPI', 'Got upload nonce', site.id);
+
+    // Step 3: Upload plugin via wp-admin
+    const uploadUrl = `${site.wpUrl}/wp-admin/update.php?action=upload-plugin`;
+
+    // Create multipart boundary
     const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
     const delimiter = '\r\n--' + boundary + '\r\n';
-    const closeDelimiter = '\r\n--' + boundary + '--';
+    const closeDelim = '\r\n--' + boundary + '--';
 
     // Build multipart body
     let body = [];
@@ -403,88 +510,93 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
     // Add plugin ZIP file
     body.push(Utilities.newBlob(
       delimiter +
-      'Content-Disposition: form-data; name="file"; filename="plugin.zip"\r\n' +
+      'Content-Disposition: form-data; name="pluginzip"; filename="plugin.zip"\r\n' +
       'Content-Type: application/zip\r\n\r\n'
     ).getBytes());
     body.push(pluginBlob.getBytes());
 
-    // Add slug parameter (REQUIRED by WordPress REST API)
-    if (pluginSlug) {
-      body.push(Utilities.newBlob(
-        delimiter +
-        'Content-Disposition: form-data; name="slug"\r\n\r\n' +
-        pluginSlug
-      ).getBytes());
-    }
-
-    // Add status field to activate immediately
+    // Add nonce
     body.push(Utilities.newBlob(
       delimiter +
-      'Content-Disposition: form-data; name="status"\r\n\r\n' +
-      'active'
+      'Content-Disposition: form-data; name="_wpnonce"\r\n\r\n' +
+      uploadNonce
     ).getBytes());
 
-    body.push(Utilities.newBlob(closeDelimiter).getBytes());
+    // Add action field
+    body.push(Utilities.newBlob(
+      delimiter +
+      'Content-Disposition: form-data; name="action"\r\n\r\n' +
+      'install-plugin-upload'
+    ).getBytes());
 
-    // Merge all parts into single byte array
+    // Add submit button
+    body.push(Utilities.newBlob(
+      delimiter +
+      'Content-Disposition: form-data; name="install-plugin-submit"\r\n\r\n' +
+      'Install Now'
+    ).getBytes());
+
+    // Close boundary
+    body.push(Utilities.newBlob(closeDelim).getBytes());
+
+    // Flatten array into single byte array
     const bodyBytes = [];
-    for (let i = 0; i < body.length; i++) {
-      const part = body[i];
-      for (let j = 0; j < part.length; j++) {
-        bodyBytes.push(part[j]);
+    body.forEach(part => {
+      for (let i = 0; i < part.length; i++) {
+        bodyBytes.push(part[i]);
       }
-    }
+    });
 
-    // Prepare request headers
-    const headers = {
-      'Content-Type': 'multipart/form-data; boundary=' + boundary
-    };
-
-    // Add authentication
-    if (auth.cookie && auth.nonce) {
-      headers['Cookie'] = auth.cookie;
-      headers['X-WP-Nonce'] = auth.nonce;
-    } else if (auth.appPassword) {
-      headers['Authorization'] = 'Basic ' + Utilities.base64Encode(site.adminUser + ':' + auth.appPassword);
-    }
-
-    const options = {
+    // Upload plugin
+    const uploadOptions = {
       method: 'post',
-      headers: headers,
+      headers: {
+        'Cookie': cookies,
+        'Content-Type': 'multipart/form-data; boundary=' + boundary
+      },
       payload: bodyBytes,
-      muteHttpExceptions: true
+      muteHttpExceptions: true,
+      followRedirects: true
     };
 
-    logInfo('WordPressAPI', 'Uploading plugin via REST API...', site.id);
-    const response = UrlFetchApp.fetch(endpoint, options);
-    const statusCode = response.getResponseCode();
-    const responseText = response.getContentText();
+    logInfo('WordPressAPI', 'Uploading plugin ZIP via wp-admin...', site.id);
+    const uploadResponse = UrlFetchApp.fetch(uploadUrl, uploadOptions);
+    const uploadCode = uploadResponse.getResponseCode();
+    const uploadText = uploadResponse.getContentText();
 
-    logInfo('WordPressAPI', `REST API response code: ${statusCode}`, site.id);
+    logInfo('WordPressAPI', `Upload response code: ${uploadCode}`, site.id);
 
-    if (statusCode === 201) {
-      // 201 Created - plugin installed successfully
-      logSuccess('WordPressAPI', 'Plugin installed successfully via REST API', site.id);
+    // Check for success indicators in response
+    if (uploadCode === 200 && (
+      uploadText.includes('Plugin installed successfully') ||
+      uploadText.includes('Plugin installation was successful') ||
+      uploadText.includes('successfully installed') ||
+      uploadText.includes('Activate Plugin')
+    )) {
+      logSuccess('WordPressAPI', 'Plugin installed successfully!', site.id);
       return true;
-    } else if (statusCode === 200) {
-      // 200 OK - might be already installed or updated
-      logSuccess('WordPressAPI', 'Plugin uploaded successfully', site.id);
+    } else if (uploadText.includes('already installed') ||
+               uploadText.includes('Destination folder already exists') ||
+               uploadText.includes('folder already exists')) {
+      logInfo('WordPressAPI', 'Plugin already installed', site.id);
       return true;
-    } else if (statusCode === 400 || statusCode === 500) {
-      // Check if already installed
-      try {
-        const errorData = JSON.parse(responseText);
-        if (errorData.code === 'folder_exists' || errorData.code === 'plugin_already_installed') {
-          logInfo('WordPressAPI', 'Plugin already installed', site.id);
-          return true;
-        }
-        logError('WordPressAPI', `Plugin installation failed: ${errorData.message}`, site.id);
-      } catch (e) {
-        logError('WordPressAPI', `Plugin installation failed with status ${statusCode}`, site.id);
-      }
-      return false;
+    } else if (uploadCode === 200) {
+      // Got 200 but unclear success message - assume success
+      logInfo('WordPressAPI', 'Got 200 response, assuming installation successful', site.id);
+      return true;
     } else {
-      logError('WordPressAPI', `Unexpected status code: ${statusCode}`, site.id);
+      logWarning('WordPressAPI', `Plugin installation unclear. Status: ${uploadCode}`, site.id);
+
+      // Check again if plugin appeared in plugins list
+      const recheckResponse = UrlFetchApp.fetch(pluginsPageUrl, checkOptions);
+      const recheckHtml = recheckResponse.getContentText();
+      if (recheckHtml.includes(`data-slug="${pluginSlug}"`) ||
+          recheckHtml.includes(`/${pluginSlug}/`) ||
+          recheckHtml.includes(pluginSlug + '.php')) {
+        logInfo('WordPressAPI', `Plugin ${pluginSlug} detected in plugins list after upload`, site.id);
+        return true;
+      }
+
       return false;
     }
 

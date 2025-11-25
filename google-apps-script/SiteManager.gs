@@ -285,7 +285,7 @@ function installDiviOnSite(siteId) {
     }
 
     // 2. Zainstaluj Divi przez WordPress API
-    const installed = installThemeOnWordPress(site, diviPackage);
+    const installed = installThemeOnWordPress(site, diviPackage, 'Divi');
     if (!installed) {
       throw new Error('Failed to install Divi theme');
     }
