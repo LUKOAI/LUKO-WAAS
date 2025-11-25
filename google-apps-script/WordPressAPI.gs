@@ -566,7 +566,83 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
 
     logInfo('WordPressAPI', `Upload response code: ${uploadCode}`, site.id);
 
-    // Check for success indicators in response
+    // Check for errors first
+    if (uploadText.includes('already installed') ||
+        uploadText.includes('Destination folder already exists') ||
+        uploadText.includes('folder already exists')) {
+      logInfo('WordPressAPI', 'Plugin already installed', site.id);
+      return true;
+    }
+
+    // Check if WordPress is asking for confirmation to install
+    // Look for install confirmation URL: update.php?action=install-plugin&plugin=...
+    const installLinkMatch = uploadText.match(/href="([^"]*update\.php\?action=install-plugin[^"]*)"/i);
+
+    // Log response snippet for debugging
+    if (!installLinkMatch) {
+      const responseSnippet = uploadText.substring(0, 1000).replace(/\s+/g, ' ');
+      logInfo('WordPressAPI', `No install link found. Response snippet: ${responseSnippet}`, site.id);
+    }
+
+    if (installLinkMatch && uploadCode === 200) {
+      logInfo('WordPressAPI', 'Found install confirmation link, clicking to complete installation...', site.id);
+
+      // Extract and clean the URL
+      let installUrl = installLinkMatch[1];
+      // Decode HTML entities
+      installUrl = installUrl.replace(/&amp;/g, '&');
+
+      // Make it absolute if relative
+      if (installUrl.startsWith('/')) {
+        installUrl = site.wpUrl + installUrl;
+      } else if (!installUrl.startsWith('http')) {
+        installUrl = site.wpUrl + '/wp-admin/' + installUrl;
+      }
+
+      logInfo('WordPressAPI', `Completing installation via: ${installUrl}`, site.id);
+
+      // Click the install link
+      const installOptions = {
+        method: 'get',
+        headers: {
+          'Cookie': cookies
+        },
+        muteHttpExceptions: true,
+        followRedirects: true
+      };
+
+      const installResponse = UrlFetchApp.fetch(installUrl, installOptions);
+      const installCode = installResponse.getResponseCode();
+      const installText = installResponse.getContentText();
+
+      logInfo('WordPressAPI', `Install completion response code: ${installCode}`, site.id);
+
+      // Check for errors in install response
+      if (installText.includes('error') || installText.includes('Error')) {
+        const errorMatch = installText.match(/<div[^>]*class="[^"]*error[^"]*"[^>]*>(.*?)<\/div>/is);
+        if (errorMatch) {
+          const errorText = errorMatch[1].replace(/<[^>]+>/g, '').trim();
+          logWarning('WordPressAPI', `Installation warning: ${errorText}`, site.id);
+        }
+      }
+
+      // Check for success after clicking install
+      if (installCode === 200 && (
+        installText.includes('Plugin installed successfully') ||
+        installText.includes('Plugin installation was successful') ||
+        installText.includes('successfully installed') ||
+        installText.includes('Activate Plugin')
+      )) {
+        logSuccess('WordPressAPI', 'Plugin installed successfully!', site.id);
+        return true;
+      }
+
+      // Log snippet of install response if unclear
+      const installSnippet = installText.substring(0, 500).replace(/\s+/g, ' ');
+      logInfo('WordPressAPI', `Install response snippet: ${installSnippet}`, site.id);
+    }
+
+    // Check for immediate success (some WordPress versions)
     if (uploadCode === 200 && (
       uploadText.includes('Plugin installed successfully') ||
       uploadText.includes('Plugin installation was successful') ||
@@ -575,14 +651,9 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
     )) {
       logSuccess('WordPressAPI', 'Plugin installed successfully!', site.id);
       return true;
-    } else if (uploadText.includes('already installed') ||
-               uploadText.includes('Destination folder already exists') ||
-               uploadText.includes('folder already exists')) {
-      logInfo('WordPressAPI', 'Plugin already installed', site.id);
-      return true;
     }
 
-    // For all other cases (including 200 without clear success message), verify plugin actually exists
+    // For all other cases, verify plugin actually exists
     logInfo('WordPressAPI', `Upload response code ${uploadCode} - verifying plugin installation...`, site.id);
 
     // Check if plugin appeared in plugins list
