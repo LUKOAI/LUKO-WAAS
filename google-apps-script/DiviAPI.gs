@@ -254,7 +254,10 @@ function activateDiviLicense(site) {
       method: 'get',
       headers: {
         'Cookie': cookies,
-        'Accept-Encoding': 'identity' // Avoid Brotli issues with Hostinger
+        'Accept-Encoding': 'identity', // Force no compression
+        'Cache-Control': 'no-transform, no-cache',
+        'Pragma': 'no-cache',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
       },
       muteHttpExceptions: true,
       followRedirects: true
@@ -287,7 +290,10 @@ function activateDiviLicense(site) {
         'Cookie': cookies,
         'Content-Type': 'application/x-www-form-urlencoded',
         'X-Requested-With': 'XMLHttpRequest',
-        'Accept-Encoding': 'identity' // Avoid Brotli issues with Hostinger
+        'Accept-Encoding': 'identity', // Force no compression
+        'Cache-Control': 'no-transform, no-cache',
+        'Pragma': 'no-cache',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
       },
       payload: activationPayload,
       muteHttpExceptions: true,
@@ -368,7 +374,10 @@ function saveDiviCredentialsToOptions(site, credentials, cookies, nonce) {
         'Cookie': cookies,
         'Content-Type': 'application/x-www-form-urlencoded',
         'X-Requested-With': 'XMLHttpRequest',
-        'Accept-Encoding': 'identity' // Avoid Brotli issues with Hostinger
+        'Accept-Encoding': 'identity', // Force no compression
+        'Cache-Control': 'no-transform, no-cache',
+        'Pragma': 'no-cache',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
       },
       payload: payload,
       muteHttpExceptions: true
@@ -417,7 +426,10 @@ function saveElegantThemesApiKey(site, apiKey, cookies, nonce) {
         'Cookie': cookies,
         'X-WP-Nonce': nonce,
         'Content-Type': 'application/json',
-        'Accept-Encoding': 'identity' // Avoid Brotli issues with Hostinger
+        'Accept-Encoding': 'identity', // Force no compression
+        'Cache-Control': 'no-transform, no-cache',
+        'Pragma': 'no-cache',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
       },
       payload: JSON.stringify(payload),
       muteHttpExceptions: true

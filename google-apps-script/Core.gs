@@ -333,7 +333,10 @@ function makeHttpRequest(url, options = {}) {
     muteHttpExceptions: true,
     timeout: WAAS_CONFIG.limits.requestTimeout,
     headers: {
-      'Accept-Encoding': 'identity' // Avoid Brotli issues with Hostinger CDN
+      'Accept-Encoding': 'identity', // Avoid Brotli issues with Hostinger CDN
+      'Cache-Control': 'no-transform, no-cache',
+      'Pragma': 'no-cache',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
     }
   };
 

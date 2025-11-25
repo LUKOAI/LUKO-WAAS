@@ -282,7 +282,10 @@ function getWordPressNonce(site, cookies) {
       method: 'get',
       headers: {
         'Cookie': cookies,
-        'Accept-Encoding': 'identity' // Force no compression to avoid Brotli issues with Hostinger
+        'Accept-Encoding': 'identity', // Force no compression
+        'Cache-Control': 'no-transform, no-cache',
+        'Pragma': 'no-cache',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
       },
       muteHttpExceptions: true,
       followRedirects: true
@@ -330,7 +333,10 @@ function getCurrentUserId(site, cookies) {
       method: 'get',
       headers: {
         'Cookie': cookies,
-        'Accept-Encoding': 'identity' // Force no compression to avoid Brotli issues
+        'Accept-Encoding': 'identity', // Force no compression
+        'Cache-Control': 'no-transform, no-cache',
+        'Pragma': 'no-cache',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
       },
       muteHttpExceptions: true
     };
@@ -785,7 +791,12 @@ function getWordPressVersion(site) {
   try {
     const defaultFetchOptions = {
       muteHttpExceptions: true,
-      headers: { 'Accept-Encoding': 'identity' } // Avoid Brotli issues
+      headers: {
+        'Accept-Encoding': 'identity',
+        'Cache-Control': 'no-transform, no-cache',
+        'Pragma': 'no-cache',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
+      }
     };
 
     const endpoint = `${site.wpUrl}/wp-json/`;
@@ -882,7 +893,10 @@ function testWordPressAuth(site) {
       method: 'get',
       headers: {
         'Authorization': authHeader,
-        'Accept-Encoding': 'identity' // Avoid Brotli issues with Hostinger
+        'Accept-Encoding': 'identity', // Force no compression
+        'Cache-Control': 'no-transform, no-cache',
+        'Pragma': 'no-cache',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
       },
       muteHttpExceptions: true
     };

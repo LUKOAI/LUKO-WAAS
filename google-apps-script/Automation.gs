@@ -475,7 +475,12 @@ function installPatronageManagerOnSite(siteId) {
         const response = UrlFetchApp.fetch(pluginUrl, {
           muteHttpExceptions: true,
           followRedirects: true,
-          headers: { 'Accept-Encoding': 'identity' } // Avoid Brotli issues with Hostinger
+          headers: {
+            'Accept-Encoding': 'identity',
+            'Cache-Control': 'no-transform, no-cache',
+            'Pragma': 'no-cache',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
+          }
         });
 
         const statusCode = response.getResponseCode();
@@ -587,7 +592,12 @@ function installDiviChildThemeOnSite(siteId) {
         const response = UrlFetchApp.fetch(themeUrl, {
           muteHttpExceptions: true,
           followRedirects: true,
-          headers: { 'Accept-Encoding': 'identity' } // Avoid Brotli issues with Hostinger
+          headers: {
+            'Accept-Encoding': 'identity',
+            'Cache-Control': 'no-transform, no-cache',
+            'Pragma': 'no-cache',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
+          }
         });
 
         const statusCode = response.getResponseCode();

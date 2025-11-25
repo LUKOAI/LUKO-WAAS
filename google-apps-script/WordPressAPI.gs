@@ -150,7 +150,10 @@ function installThemeOnWordPress(site, themeBlob, themeSlug) {
       method: 'get',
       headers: {
         'Cookie': cookies,
-        'Accept-Encoding': 'identity' // Force no compression - Hostinger ignores gzip,deflate and sends Brotli which GAS can't decode
+        'Accept-Encoding': 'identity', // Force no compression
+        'Cache-Control': 'no-transform, no-cache',
+        'Pragma': 'no-cache',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
       },
       muteHttpExceptions: true,
       followRedirects: true
@@ -174,7 +177,10 @@ function installThemeOnWordPress(site, themeBlob, themeSlug) {
       method: 'get',
       headers: {
         'Cookie': cookies,
-        'Accept-Encoding': 'identity' // Force no compression - Hostinger ignores gzip,deflate and sends Brotli which GAS can't decode
+        'Accept-Encoding': 'identity', // Force no compression
+        'Cache-Control': 'no-transform, no-cache',
+        'Pragma': 'no-cache',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
       },
       muteHttpExceptions: true,
       followRedirects: true
@@ -260,7 +266,10 @@ function installThemeOnWordPress(site, themeBlob, themeSlug) {
       headers: {
         'Cookie': cookies,
         'Content-Type': 'multipart/form-data; boundary=' + boundary,
-        'Accept-Encoding': 'identity' // Force no compression - Hostinger ignores gzip,deflate and sends Brotli which GAS can't decode
+        'Accept-Encoding': 'identity', // Force no compression
+        'Cache-Control': 'no-transform, no-cache',
+        'Pragma': 'no-cache',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
       },
       payload: payloadBlob.getBytes(),
       muteHttpExceptions: true,
@@ -335,7 +344,10 @@ function activateThemeOnWordPress(site, themeSlug) {
       method: 'get',
       headers: {
         'Cookie': cookies,
-        'Accept-Encoding': 'identity' // Force no compression - Hostinger ignores gzip,deflate and sends Brotli which GAS can't decode
+        'Accept-Encoding': 'identity', // Force no compression
+        'Cache-Control': 'no-transform, no-cache',
+        'Pragma': 'no-cache',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
       },
       muteHttpExceptions: true,
       followRedirects: true
@@ -372,7 +384,10 @@ function activateThemeOnWordPress(site, themeSlug) {
       method: 'get',
       headers: {
         'Cookie': cookies,
-        'Accept-Encoding': 'identity' // Force no compression - Hostinger ignores gzip,deflate and sends Brotli which GAS can't decode
+        'Accept-Encoding': 'identity', // Force no compression
+        'Cache-Control': 'no-transform, no-cache',
+        'Pragma': 'no-cache',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
       },
       muteHttpExceptions: true,
       followRedirects: true
@@ -465,7 +480,10 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
       method: 'get',
       headers: {
         'Cookie': cookies,
-        'Accept-Encoding': 'identity' // Force no compression - Hostinger ignores gzip,deflate and sends Brotli which GAS can't decode
+        'Accept-Encoding': 'identity', // Force no compression
+        'Cache-Control': 'no-transform, no-cache',
+        'Pragma': 'no-cache',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
       },
       muteHttpExceptions: true,
       followRedirects: true
@@ -489,7 +507,10 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
       method: 'get',
       headers: {
         'Cookie': cookies,
-        'Accept-Encoding': 'identity' // Force no compression - Hostinger ignores gzip,deflate and sends Brotli which GAS can't decode
+        'Accept-Encoding': 'identity', // Force no compression
+        'Cache-Control': 'no-transform, no-cache',
+        'Pragma': 'no-cache',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
       },
       muteHttpExceptions: true,
       followRedirects: true
@@ -576,7 +597,11 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
       headers: {
         'Cookie': cookies,
         'Content-Type': 'multipart/form-data; boundary=' + boundary,
-        'Accept-Encoding': 'identity' // Force no compression - Hostinger ignores gzip,deflate and sends Brotli which GAS can't decode
+        'Accept-Encoding': 'identity', // Force no compression
+        'Cache-Control': 'no-transform, no-cache', // Tell CDN not to transform response
+        'Pragma': 'no-cache',
+        // Use older User-Agent that doesn't support Brotli - Hostinger CDN may check this
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
       },
       payload: payloadBlob.getBytes(),
       muteHttpExceptions: true,
@@ -607,7 +632,10 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
           method: 'get',
           headers: {
             'Cookie': cookies,
-            'Accept-Encoding': 'identity' // Force no compression - Hostinger ignores gzip,deflate and sends Brotli which GAS can't decode
+            'Accept-Encoding': 'identity', // Force no compression
+            'Cache-Control': 'no-transform, no-cache',
+            'Pragma': 'no-cache',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
           },
           muteHttpExceptions: true,
           followRedirects: true
@@ -623,6 +651,24 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
 
     logInfo('WordPressAPI', `Upload response code: ${uploadCode}`, site.id);
 
+    // Check for Brotli encoding issue - empty response with 200 status
+    const headers = uploadResponse.getHeaders();
+    const contentEncoding = headers['Content-Encoding'] || headers['content-encoding'] || '';
+    if (uploadCode === 200 && uploadText.length === 0 && contentEncoding.includes('br')) {
+      logWarning('WordPressAPI', 'Empty response due to Brotli encoding - verifying plugin installation directly...', site.id);
+      // Skip HTML parsing and go directly to verification
+      Utilities.sleep(2000); // Wait for WordPress to finish installing
+      const recheckResponse = UrlFetchApp.fetch(pluginsPageUrl, checkOptions);
+      const recheckHtml = recheckResponse.getContentText();
+      if (recheckHtml.includes(`data-slug="${pluginSlug}"`) ||
+          recheckHtml.includes(`/${pluginSlug}/`) ||
+          recheckHtml.includes(pluginSlug + '.php')) {
+        logSuccess('WordPressAPI', `Plugin ${pluginSlug} verified in plugins list after upload (Brotli workaround)`, site.id);
+        return true;
+      }
+      logWarning('WordPressAPI', 'Plugin not found after Brotli workaround check', site.id);
+    }
+
     // Check for errors first
     if (uploadText.includes('already installed') ||
         uploadText.includes('Destination folder already exists') ||
@@ -636,9 +682,8 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
     const installLinkMatch = uploadText.match(/href="([^"]*update\.php\?action=install-plugin[^"]*)"/i);
 
     // Log response snippet for debugging
-    if (!installLinkMatch) {
+    if (!installLinkMatch && uploadText.length > 0) {
       const responseSnippet = uploadText.substring(0, 1000).replace(/\s+/g, ' ');
-      const headers = uploadResponse.getHeaders();
       logInfo('WordPressAPI', `No install link found. Response snippet: ${responseSnippet}`, site.id);
       logInfo('WordPressAPI', `Response headers: ${JSON.stringify(headers)}`, site.id);
       logInfo('WordPressAPI', `Response length: ${uploadText.length} bytes`, site.id);
@@ -666,7 +711,10 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
         method: 'get',
         headers: {
           'Cookie': cookies,
-          'Accept-Encoding': 'identity' // Force no compression - Hostinger ignores gzip,deflate and sends Brotli which GAS can't decode
+          'Accept-Encoding': 'identity', // Force no compression
+          'Cache-Control': 'no-transform, no-cache',
+          'Pragma': 'no-cache',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
         },
         muteHttpExceptions: true,
         followRedirects: true
@@ -817,7 +865,10 @@ function activatePluginViaCookies(site, pluginSlug) {
       method: 'get',
       headers: {
         'Cookie': cookies,
-        'Accept-Encoding': 'identity' // Force no compression - Hostinger ignores gzip,deflate and sends Brotli which GAS can't decode
+        'Accept-Encoding': 'identity', // Force no compression
+        'Cache-Control': 'no-transform, no-cache',
+        'Pragma': 'no-cache',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
       },
       muteHttpExceptions: true,
       followRedirects: true
@@ -884,7 +935,10 @@ function activatePluginViaCookies(site, pluginSlug) {
       method: 'get',
       headers: {
         'Cookie': cookies,
-        'Accept-Encoding': 'identity' // Force no compression - Hostinger ignores gzip,deflate and sends Brotli which GAS can't decode
+        'Accept-Encoding': 'identity', // Force no compression
+        'Cache-Control': 'no-transform, no-cache',
+        'Pragma': 'no-cache',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
       },
       muteHttpExceptions: true,
       followRedirects: true

@@ -325,18 +325,7 @@ function installDiviOnSite(siteId, options = {}) {
       ? `Divi has been installed, activated, and license has been activated on ${site.name}`
       : `Divi has been installed and activated on ${site.name}\n\nPlease verify license activation manually at:\n${site.wpUrl}/wp-admin/admin.php?page=et_onboarding#/overview`;
 
-    // Only show alert if called directly (not from automation)
-    if (!skipDialog) {
-      try {
-        SpreadsheetApp.getUi().alert(
-          'Success',
-          alertMessage,
-          SpreadsheetApp.getUi().ButtonSet.OK
-        );
-      } catch (e) {
-        // UI not available (called from automation), skip alert
-      }
-    }
+    // Alert removed - user can see progress in logs
 
     return {
       success: true,
