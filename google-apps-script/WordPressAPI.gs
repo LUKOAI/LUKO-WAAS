@@ -672,17 +672,36 @@ function activatePluginViaCookies(site, pluginSlug) {
     const pageResponse = UrlFetchApp.fetch(pluginsPageUrl, pageOptions);
     const pageHtml = pageResponse.getContentText();
 
-    // Look for activation link with nonce
+    // First check if plugin is already active by looking for deactivate link
+    // This must be checked BEFORE looking for activation link
+    const deactivateLinkRegex = new RegExp(`plugins\\.php\\?action=deactivate&(?:amp;)?plugin=([^&"']+)`, 'g');
+    let deactivateMatch;
+    const allDeactivateLinks = [];
+
+    while ((deactivateMatch = deactivateLinkRegex.exec(pageHtml)) !== null) {
+      const foundPluginPath = deactivateMatch[1];
+      allDeactivateLinks.push(foundPluginPath);
+      if (foundPluginPath.includes(pluginSlug)) {
+        logInfo('WordPressAPI', `Plugin ${pluginSlug} is already active (found deactivate link for: ${foundPluginPath})`, site.id);
+        return true;
+      }
+    }
+
+    logInfo('WordPressAPI', `Plugin ${pluginSlug} not found in active plugins. Active plugins: ${allDeactivateLinks.length}`, site.id);
+
+    // Plugin is not active, look for activation link with nonce
     // Format: plugins.php?action=activate&plugin=plugin-slug/plugin.php&_wpnonce=abc123
     const activateLinkRegex = new RegExp(`plugins\\.php\\?action=activate&(?:amp;)?plugin=([^&"']+)&(?:amp;)?_wpnonce=([\\w]+)`, 'g');
 
     let activationNonce = null;
     let pluginPath = null;
     let match;
+    const allInactivePlugins = [];
 
     // Find the matching plugin by checking if the slug is in the plugin path
     while ((match = activateLinkRegex.exec(pageHtml)) !== null) {
       const foundPluginPath = match[1];
+      allInactivePlugins.push(foundPluginPath);
       if (foundPluginPath.includes(pluginSlug)) {
         pluginPath = foundPluginPath;
         activationNonce = match[2];
@@ -692,12 +711,9 @@ function activatePluginViaCookies(site, pluginSlug) {
     }
 
     if (!activationNonce || !pluginPath) {
-      logWarning('WordPressAPI', `Could not find activation link for ${pluginSlug}. Plugin may already be active.`, site.id);
-      // Try to verify if plugin is already active by checking for "Deactivate" link
-      if (pageHtml.includes(`action=deactivate&amp;plugin=${pluginSlug}`) ||
-          pageHtml.includes(`action=deactivate&plugin=${pluginSlug}`)) {
-        logInfo('WordPressAPI', 'Plugin appears to be already active', site.id);
-        return true;
+      logWarning('WordPressAPI', `Could not find activation link for ${pluginSlug}. Inactive plugins found: ${allInactivePlugins.length}`, site.id);
+      if (allInactivePlugins.length > 0 && allInactivePlugins.length <= 10) {
+        logInfo('WordPressAPI', `Inactive plugins: ${allInactivePlugins.join(', ')}`, site.id);
       }
       return false;
     }

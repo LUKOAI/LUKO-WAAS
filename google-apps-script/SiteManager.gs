@@ -480,7 +480,7 @@ function installPluginOnSite(siteId) {
     // 3. Aktywuj plugin (fallback jeśli instalacja nie aktywowała)
     const activated = activatePluginOnWordPress(site, pluginSlug + '/' + pluginSlug + '.php');
     if (!activated) {
-      throw new Error('Failed to activate plugin');
+      logWarning('SiteManager', 'Plugin activation may have failed, but installation succeeded', siteId);
     }
 
     // 4. Aktualizuj status
