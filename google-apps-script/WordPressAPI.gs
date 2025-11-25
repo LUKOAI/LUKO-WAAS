@@ -198,51 +198,59 @@ function installThemeOnWordPress(site, themeBlob, themeSlug) {
 
     // Create multipart boundary
     const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
-    const delimiter = '\r\n--' + boundary + '\r\n';
-    const closeDelim = '\r\n--' + boundary + '--';
 
-    // Build multipart body
-    let body = [];
+    // Build multipart body as a single string with proper formatting
+    // IMPORTANT: First boundary must NOT have leading \r\n
+    let bodyParts = [];
 
-    // Add theme ZIP file
-    body.push(Utilities.newBlob(
-      delimiter +
-      'Content-Disposition: form-data; name="themezip"; filename="theme.zip"\r\n' +
-      'Content-Type: application/zip\r\n\r\n'
-    ).getBytes());
-    body.push(themeBlob.getBytes());
+    // Part 1: Theme ZIP file header
+    bodyParts.push('--' + boundary);
+    bodyParts.push('Content-Disposition: form-data; name="themezip"; filename="theme.zip"');
+    bodyParts.push('Content-Type: application/zip');
+    bodyParts.push('');  // Empty line before content
 
-    // Add nonce
-    body.push(Utilities.newBlob(
-      delimiter +
-      'Content-Disposition: form-data; name="_wpnonce"\r\n\r\n' +
+    // Part 2: Nonce (will be added after file content)
+    const noncePart = [
+      '--' + boundary,
+      'Content-Disposition: form-data; name="_wpnonce"',
+      '',
       uploadNonce
-    ).getBytes());
+    ].join('\r\n');
 
-    // Add action field
-    body.push(Utilities.newBlob(
-      delimiter +
-      'Content-Disposition: form-data; name="action"\r\n\r\n' +
+    // Part 3: Action field
+    const actionPart = [
+      '--' + boundary,
+      'Content-Disposition: form-data; name="action"',
+      '',
       'install-theme-upload'
-    ).getBytes());
+    ].join('\r\n');
 
-    // Add submit button
-    body.push(Utilities.newBlob(
-      delimiter +
-      'Content-Disposition: form-data; name="install-theme-submit"\r\n\r\n' +
+    // Part 4: Submit button
+    const submitPart = [
+      '--' + boundary,
+      'Content-Disposition: form-data; name="install-theme-submit"',
+      '',
       'Install Now'
-    ).getBytes());
+    ].join('\r\n');
 
-    // Close boundary
-    body.push(Utilities.newBlob(closeDelim).getBytes());
+    // Closing boundary
+    const closingBoundary = '--' + boundary + '--';
 
-    // Flatten array into single byte array
-    const bodyBytes = [];
-    body.forEach(part => {
-      for (let i = 0; i < part.length; i++) {
-        bodyBytes.push(part[i]);
-      }
-    });
+    // Build the complete multipart body as bytes
+    const headerBytes = Utilities.newBlob(bodyParts.join('\r\n') + '\r\n').getBytes();
+    const fileBytes = themeBlob.getBytes();
+    const tailBytes = Utilities.newBlob(
+      '\r\n' + noncePart + '\r\n' + actionPart + '\r\n' + submitPart + '\r\n' + closingBoundary
+    ).getBytes();
+
+    // Combine all parts into single byte array
+    const allBytes = [];
+    headerBytes.forEach(b => allBytes.push(b));
+    fileBytes.forEach(b => allBytes.push(b));
+    tailBytes.forEach(b => allBytes.push(b));
+
+    // Create final Blob from combined bytes
+    const payloadBlob = Utilities.newBlob(allBytes, 'multipart/form-data');
 
     // Upload theme
     const uploadOptions = {
@@ -251,7 +259,7 @@ function installThemeOnWordPress(site, themeBlob, themeSlug) {
         'Cookie': cookies,
         'Content-Type': 'multipart/form-data; boundary=' + boundary
       },
-      payload: bodyBytes,
+      payload: payloadBlob.getBytes(),
       muteHttpExceptions: true,
       followRedirects: true
     };
@@ -501,51 +509,59 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
 
     // Create multipart boundary
     const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
-    const delimiter = '\r\n--' + boundary + '\r\n';
-    const closeDelim = '\r\n--' + boundary + '--';
 
-    // Build multipart body
-    let body = [];
+    // Build multipart body as a single string with proper formatting
+    // IMPORTANT: First boundary must NOT have leading \r\n
+    let bodyParts = [];
 
-    // Add plugin ZIP file
-    body.push(Utilities.newBlob(
-      delimiter +
-      'Content-Disposition: form-data; name="pluginzip"; filename="plugin.zip"\r\n' +
-      'Content-Type: application/zip\r\n\r\n'
-    ).getBytes());
-    body.push(pluginBlob.getBytes());
+    // Part 1: Plugin ZIP file
+    bodyParts.push('--' + boundary);
+    bodyParts.push('Content-Disposition: form-data; name="pluginzip"; filename="plugin.zip"');
+    bodyParts.push('Content-Type: application/zip');
+    bodyParts.push('');  // Empty line before content
 
-    // Add nonce
-    body.push(Utilities.newBlob(
-      delimiter +
-      'Content-Disposition: form-data; name="_wpnonce"\r\n\r\n' +
+    // Part 2: Nonce (will be added after file content)
+    const noncePart = [
+      '--' + boundary,
+      'Content-Disposition: form-data; name="_wpnonce"',
+      '',
       uploadNonce
-    ).getBytes());
+    ].join('\r\n');
 
-    // Add action field
-    body.push(Utilities.newBlob(
-      delimiter +
-      'Content-Disposition: form-data; name="action"\r\n\r\n' +
+    // Part 3: Action field
+    const actionPart = [
+      '--' + boundary,
+      'Content-Disposition: form-data; name="action"',
+      '',
       'install-plugin-upload'
-    ).getBytes());
+    ].join('\r\n');
 
-    // Add submit button
-    body.push(Utilities.newBlob(
-      delimiter +
-      'Content-Disposition: form-data; name="install-plugin-submit"\r\n\r\n' +
+    // Part 4: Submit button
+    const submitPart = [
+      '--' + boundary,
+      'Content-Disposition: form-data; name="install-plugin-submit"',
+      '',
       'Install Now'
-    ).getBytes());
+    ].join('\r\n');
 
-    // Close boundary
-    body.push(Utilities.newBlob(closeDelim).getBytes());
+    // Closing boundary
+    const closingBoundary = '--' + boundary + '--';
 
-    // Flatten array into single byte array
-    const bodyBytes = [];
-    body.forEach(part => {
-      for (let i = 0; i < part.length; i++) {
-        bodyBytes.push(part[i]);
-      }
-    });
+    // Build the complete multipart body as bytes
+    const headerBytes = Utilities.newBlob(bodyParts.join('\r\n') + '\r\n').getBytes();
+    const fileBytes = pluginBlob.getBytes();
+    const tailBytes = Utilities.newBlob(
+      '\r\n' + noncePart + '\r\n' + actionPart + '\r\n' + submitPart + '\r\n' + closingBoundary
+    ).getBytes();
+
+    // Combine all parts into single byte array
+    const allBytes = [];
+    headerBytes.forEach(b => allBytes.push(b));
+    fileBytes.forEach(b => allBytes.push(b));
+    tailBytes.forEach(b => allBytes.push(b));
+
+    // Create final Blob from combined bytes
+    const payloadBlob = Utilities.newBlob(allBytes, 'multipart/form-data');
 
     // Upload plugin
     const uploadOptions = {
@@ -554,7 +570,7 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
         'Cookie': cookies,
         'Content-Type': 'multipart/form-data; boundary=' + boundary
       },
-      payload: bodyBytes,
+      payload: payloadBlob.getBytes(),
       muteHttpExceptions: true,
       followRedirects: false // Don't follow redirects automatically
     };
