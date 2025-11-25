@@ -474,7 +474,8 @@ function installPatronageManagerOnSite(siteId) {
 
         const response = UrlFetchApp.fetch(pluginUrl, {
           muteHttpExceptions: true,
-          followRedirects: true
+          followRedirects: true,
+          headers: { 'Accept-Encoding': 'identity' } // Avoid Brotli issues with Hostinger
         });
 
         const statusCode = response.getResponseCode();
@@ -585,7 +586,8 @@ function installDiviChildThemeOnSite(siteId) {
 
         const response = UrlFetchApp.fetch(themeUrl, {
           muteHttpExceptions: true,
-          followRedirects: true
+          followRedirects: true,
+          headers: { 'Accept-Encoding': 'identity' } // Avoid Brotli issues with Hostinger
         });
 
         const statusCode = response.getResponseCode();

@@ -331,10 +331,18 @@ function makeHttpRequest(url, options = {}) {
     method: 'GET',
     contentType: 'application/json',
     muteHttpExceptions: true,
-    timeout: WAAS_CONFIG.limits.requestTimeout
+    timeout: WAAS_CONFIG.limits.requestTimeout,
+    headers: {
+      'Accept-Encoding': 'identity' // Avoid Brotli issues with Hostinger CDN
+    }
   };
 
-  const finalOptions = { ...defaultOptions, ...options };
+  // Merge headers separately to not lose default headers
+  const finalOptions = {
+    ...defaultOptions,
+    ...options,
+    headers: { ...defaultOptions.headers, ...(options.headers || {}) }
+  };
 
   try {
     logInfo('HTTP', `Request: ${finalOptions.method} ${url}`);

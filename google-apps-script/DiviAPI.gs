@@ -253,7 +253,8 @@ function activateDiviLicense(site) {
     const diviOptionsResponse = UrlFetchApp.fetch(diviOptionsUrl, {
       method: 'get',
       headers: {
-        'Cookie': cookies
+        'Cookie': cookies,
+        'Accept-Encoding': 'identity' // Avoid Brotli issues with Hostinger
       },
       muteHttpExceptions: true,
       followRedirects: true
@@ -285,7 +286,8 @@ function activateDiviLicense(site) {
       headers: {
         'Cookie': cookies,
         'Content-Type': 'application/x-www-form-urlencoded',
-        'X-Requested-With': 'XMLHttpRequest'
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept-Encoding': 'identity' // Avoid Brotli issues with Hostinger
       },
       payload: activationPayload,
       muteHttpExceptions: true,
@@ -365,7 +367,8 @@ function saveDiviCredentialsToOptions(site, credentials, cookies, nonce) {
       headers: {
         'Cookie': cookies,
         'Content-Type': 'application/x-www-form-urlencoded',
-        'X-Requested-With': 'XMLHttpRequest'
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept-Encoding': 'identity' // Avoid Brotli issues with Hostinger
       },
       payload: payload,
       muteHttpExceptions: true
@@ -413,7 +416,8 @@ function saveElegantThemesApiKey(site, apiKey, cookies, nonce) {
       headers: {
         'Cookie': cookies,
         'X-WP-Nonce': nonce,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Accept-Encoding': 'identity' // Avoid Brotli issues with Hostinger
       },
       payload: JSON.stringify(payload),
       muteHttpExceptions: true

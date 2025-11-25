@@ -150,7 +150,7 @@ function installThemeOnWordPress(site, themeBlob, themeSlug) {
       method: 'get',
       headers: {
         'Cookie': cookies,
-        'Accept-Encoding': 'gzip, deflate' // Disable Brotli which GAS doesn't support
+        'Accept-Encoding': 'identity' // Force no compression - Hostinger ignores gzip,deflate and sends Brotli which GAS can't decode
       },
       muteHttpExceptions: true,
       followRedirects: true
@@ -174,7 +174,7 @@ function installThemeOnWordPress(site, themeBlob, themeSlug) {
       method: 'get',
       headers: {
         'Cookie': cookies,
-        'Accept-Encoding': 'gzip, deflate' // Disable Brotli which GAS doesn't support
+        'Accept-Encoding': 'identity' // Force no compression - Hostinger ignores gzip,deflate and sends Brotli which GAS can't decode
       },
       muteHttpExceptions: true,
       followRedirects: true
@@ -260,7 +260,7 @@ function installThemeOnWordPress(site, themeBlob, themeSlug) {
       headers: {
         'Cookie': cookies,
         'Content-Type': 'multipart/form-data; boundary=' + boundary,
-        'Accept-Encoding': 'gzip, deflate' // Disable Brotli which GAS doesn't support
+        'Accept-Encoding': 'identity' // Force no compression - Hostinger ignores gzip,deflate and sends Brotli which GAS can't decode
       },
       payload: payloadBlob.getBytes(),
       muteHttpExceptions: true,
@@ -335,7 +335,7 @@ function activateThemeOnWordPress(site, themeSlug) {
       method: 'get',
       headers: {
         'Cookie': cookies,
-        'Accept-Encoding': 'gzip, deflate' // Disable Brotli which GAS doesn't support
+        'Accept-Encoding': 'identity' // Force no compression - Hostinger ignores gzip,deflate and sends Brotli which GAS can't decode
       },
       muteHttpExceptions: true,
       followRedirects: true
@@ -372,7 +372,7 @@ function activateThemeOnWordPress(site, themeSlug) {
       method: 'get',
       headers: {
         'Cookie': cookies,
-        'Accept-Encoding': 'gzip, deflate' // Disable Brotli which GAS doesn't support
+        'Accept-Encoding': 'identity' // Force no compression - Hostinger ignores gzip,deflate and sends Brotli which GAS can't decode
       },
       muteHttpExceptions: true,
       followRedirects: true
@@ -465,7 +465,7 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
       method: 'get',
       headers: {
         'Cookie': cookies,
-        'Accept-Encoding': 'gzip, deflate' // Disable Brotli which GAS doesn't support
+        'Accept-Encoding': 'identity' // Force no compression - Hostinger ignores gzip,deflate and sends Brotli which GAS can't decode
       },
       muteHttpExceptions: true,
       followRedirects: true
@@ -489,7 +489,7 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
       method: 'get',
       headers: {
         'Cookie': cookies,
-        'Accept-Encoding': 'gzip, deflate' // Disable Brotli which GAS doesn't support
+        'Accept-Encoding': 'identity' // Force no compression - Hostinger ignores gzip,deflate and sends Brotli which GAS can't decode
       },
       muteHttpExceptions: true,
       followRedirects: true
@@ -576,7 +576,7 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
       headers: {
         'Cookie': cookies,
         'Content-Type': 'multipart/form-data; boundary=' + boundary,
-        'Accept-Encoding': 'gzip, deflate' // Disable Brotli which GAS doesn't support
+        'Accept-Encoding': 'identity' // Force no compression - Hostinger ignores gzip,deflate and sends Brotli which GAS can't decode
       },
       payload: payloadBlob.getBytes(),
       muteHttpExceptions: true,
@@ -607,7 +607,7 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
           method: 'get',
           headers: {
             'Cookie': cookies,
-            'Accept-Encoding': 'gzip, deflate' // Disable Brotli which GAS doesn't support
+            'Accept-Encoding': 'identity' // Force no compression - Hostinger ignores gzip,deflate and sends Brotli which GAS can't decode
           },
           muteHttpExceptions: true,
           followRedirects: true
@@ -666,7 +666,7 @@ function installPluginOnWordPress(site, pluginBlob, pluginSlug) {
         method: 'get',
         headers: {
           'Cookie': cookies,
-          'Accept-Encoding': 'gzip, deflate' // Disable Brotli which GAS doesn't support
+          'Accept-Encoding': 'identity' // Force no compression - Hostinger ignores gzip,deflate and sends Brotli which GAS can't decode
         },
         muteHttpExceptions: true,
         followRedirects: true
@@ -817,7 +817,7 @@ function activatePluginViaCookies(site, pluginSlug) {
       method: 'get',
       headers: {
         'Cookie': cookies,
-        'Accept-Encoding': 'gzip, deflate' // Disable Brotli which GAS doesn't support
+        'Accept-Encoding': 'identity' // Force no compression - Hostinger ignores gzip,deflate and sends Brotli which GAS can't decode
       },
       muteHttpExceptions: true,
       followRedirects: true
@@ -884,7 +884,7 @@ function activatePluginViaCookies(site, pluginSlug) {
       method: 'get',
       headers: {
         'Cookie': cookies,
-        'Accept-Encoding': 'gzip, deflate' // Disable Brotli which GAS doesn't support
+        'Accept-Encoding': 'identity' // Force no compression - Hostinger ignores gzip,deflate and sends Brotli which GAS can't decode
       },
       muteHttpExceptions: true,
       followRedirects: true

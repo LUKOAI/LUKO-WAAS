@@ -281,7 +281,8 @@ function getWordPressNonce(site, cookies) {
     const options = {
       method: 'get',
       headers: {
-        'Cookie': cookies
+        'Cookie': cookies,
+        'Accept-Encoding': 'identity' // Force no compression to avoid Brotli issues with Hostinger
       },
       muteHttpExceptions: true,
       followRedirects: true
@@ -328,7 +329,8 @@ function getCurrentUserId(site, cookies) {
     const options = {
       method: 'get',
       headers: {
-        'Cookie': cookies
+        'Cookie': cookies,
+        'Accept-Encoding': 'identity' // Force no compression to avoid Brotli issues
       },
       muteHttpExceptions: true
     };
@@ -593,7 +595,10 @@ function makeAuthenticatedRequest(site, endpoint, options = {}) {
     // Build request options
     const requestOptions = {
       method: method,
-      headers: options.headers || {},
+      headers: {
+        'Accept-Encoding': 'identity', // Force no compression to avoid Brotli issues with Hostinger
+        ...(options.headers || {})
+      },
       muteHttpExceptions: true
     };
 
@@ -778,8 +783,13 @@ function getApplicationPassword(site) {
  */
 function getWordPressVersion(site) {
   try {
+    const defaultFetchOptions = {
+      muteHttpExceptions: true,
+      headers: { 'Accept-Encoding': 'identity' } // Avoid Brotli issues
+    };
+
     const endpoint = `${site.wpUrl}/wp-json/`;
-    const response = UrlFetchApp.fetch(endpoint, { muteHttpExceptions: true });
+    const response = UrlFetchApp.fetch(endpoint, defaultFetchOptions);
 
     if (response.getResponseCode() === 200) {
       const data = JSON.parse(response.getContentText());
@@ -795,7 +805,7 @@ function getWordPressVersion(site) {
         // WP 4.7+ detected, try to get version from generator
         try {
           const siteInfoEndpoint = `${site.wpUrl}/wp-json/wp/v2/`;
-          const siteInfoResponse = UrlFetchApp.fetch(siteInfoEndpoint, { muteHttpExceptions: true });
+          const siteInfoResponse = UrlFetchApp.fetch(siteInfoEndpoint, defaultFetchOptions);
           if (siteInfoResponse.getResponseCode() === 200) {
             const siteData = JSON.parse(siteInfoResponse.getContentText());
             if (siteData.version) {
@@ -809,7 +819,7 @@ function getWordPressVersion(site) {
 
       // Try to get from home page generator meta tag as last resort
       try {
-        const homeResponse = UrlFetchApp.fetch(site.wpUrl, { muteHttpExceptions: true });
+        const homeResponse = UrlFetchApp.fetch(site.wpUrl, defaultFetchOptions);
         if (homeResponse.getResponseCode() === 200) {
           const html = homeResponse.getContentText();
           const generatorMatch = html.match(/<meta name=["']generator["'] content=["']WordPress ([0-9.]+)["']/i);
@@ -871,7 +881,8 @@ function testWordPressAuth(site) {
     const options = {
       method: 'get',
       headers: {
-        'Authorization': authHeader
+        'Authorization': authHeader,
+        'Accept-Encoding': 'identity' // Avoid Brotli issues with Hostinger
       },
       muteHttpExceptions: true
     };
