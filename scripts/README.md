@@ -76,6 +76,44 @@ Sprawdza czy wszystkie komponenty projektu są na miejscu.
 
 ---
 
+### 🚀 `setup-phase-a.gs` - **AUTOMATYCZNA KONFIGURACJA PHASE A**
+
+Automatycznie tworzy arkusz **WC_Pages** i konfiguruje wszystkie domyślne strony WordPress.
+
+**Uruchomienie:**
+1. Otwórz Google Sheet (AmazonAffiliateProductsDashboard)
+2. Extensions > Apps Script
+3. Skopiuj i wklej cały kod z `scripts/setup-phase-a.gs`
+4. Uruchom funkcję: `setupPhaseA`
+5. Gotowe! 🎉
+
+**Co robi:**
+- ✅ Tworzy arkusz "WC_Pages"
+- ✅ Dodaje 4 domyślne strony: Home, Shop, About, Patronage
+- ✅ Konfiguruje nagłówki i formatowanie
+- ✅ Dodaje menu "🚀 WAAS Phase A" do Google Sheets
+- ✅ Umożliwia eksport do CSV
+
+**Funkcje dostępne:**
+```javascript
+setupPhaseA()           // Główna funkcja - utwórz wszystko
+exportPagesAsCSV()      // Eksportuj arkusz jako CSV
+clearPagesSheet()       // Wyczyść arkusz
+```
+
+**Menu w Google Sheets:**
+Po instalacji zobaczysz menu "🚀 WAAS Phase A" z opcjami:
+- Setup Phase A (utwórz arkusz WC_Pages)
+- Eksportuj jako CSV
+- Wyczyść arkusz WC_Pages
+- Dokumentacja
+
+**⚠️ Uwaga:** To Google Apps Script (.gs) - uruchamiaj w Google Sheets!
+
+**Dokumentacja:** `docs/PHASE_A_PAGE_AUTOMATION.md`
+
+---
+
 ### 📜 `migrate-to-per-site-divi-keys.gs` - Migracja
 
 Skrypt migracyjny dla użytkowników starszej wersji WAAS.
@@ -113,6 +151,25 @@ Skrypt migracyjny dla użytkowników starszej wersji WAAS.
 # - Upload dist/waas-product-manager.zip do WordPress
 # - Wklej dist/WAAS_Complete_Installer.gs do Google Apps Script
 ```
+
+### Metoda 3: Setup Phase A - Automatyczne Tworzenie Stron (NOWE! 🎉)
+
+**W Google Sheets:**
+```
+1. Otwórz swój Google Sheet
+2. Extensions > Apps Script
+3. Skopiuj kod z scripts/setup-phase-a.gs
+4. Uruchom funkcję: setupPhaseA
+5. Arkusz WC_Pages zostanie utworzony automatycznie!
+```
+
+**Następnie:**
+- Edytuj treści stron w kolumnie "content"
+- Dodaj własne strony (skopiuj wiersz i zmień dane)
+- W WC_Structure_Config ustaw execute=TRUE
+- Plugin automatycznie utworzy strony w WordPress
+
+**Dokumentacja:** `docs/PHASE_A_PAGE_AUTOMATION.md`
 
 ---
 
@@ -304,7 +361,10 @@ scripts/
 ├── quickstart.sh              # Menu główne
 ├── install.sh                 # Pełna instalacja
 ├── verify-installation.sh     # Weryfikacja
+├── setup-phase-a.gs           # 🎉 NOWE! Automatyczna konfiguracja Phase A (GAS)
 ├── migrate-to-per-site-divi-keys.gs  # Migracja (GAS)
+├── automate-plugin-installation.js   # Automatyczna instalacja pluginów
+├── install-plugin-*.js/.sh    # Różne metody instalacji pluginów
 └── README.md                  # Ta dokumentacja
 ```
 
