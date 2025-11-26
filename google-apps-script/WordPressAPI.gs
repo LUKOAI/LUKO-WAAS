@@ -1302,3 +1302,223 @@ function getWordPressSiteInfo(site) {
     return null;
   }
 }
+
+// =============================================================================
+// COMPLETE PLUGIN AUTOMATION - DETECT, INSTALL, ACTIVATE
+// =============================================================================
+
+/**
+ * Complete plugin automation - detects if plugin is installed,
+ * activates if inactive, installs if missing
+ *
+ * @param {Object} site - Site object from Sites sheet
+ * @param {string[]} pluginPatterns - Array of plugin slug patterns to search for
+ * @param {string} pluginDownloadUrl - URL to download plugin ZIP if not installed
+ * @returns {Object} Result with success status and action taken
+ */
+function automatePluginInstallation(site, pluginPatterns, pluginDownloadUrl) {
+  try {
+    logInfo('WordPressAPI', 'Starting complete plugin automation...', site.id);
+
+    // STEP 1: Check if plugin is installed
+    logInfo('WordPressAPI', 'Step 1: Checking if plugin is installed...', site.id);
+    const pluginStatus = checkPluginDetailed(site, pluginPatterns);
+
+    if (pluginStatus.installed && pluginStatus.active) {
+      logSuccess('WordPressAPI', 'Plugin is already installed and active - no action needed', site.id);
+      return {
+        success: true,
+        action: 'none',
+        message: 'Plugin already installed and active',
+        plugin: pluginStatus.plugin
+      };
+    }
+
+    if (pluginStatus.installed && !pluginStatus.active) {
+      logInfo('WordPressAPI', 'Plugin is installed but NOT active - activating...', site.id);
+
+      // STEP 2: Activate the plugin
+      logInfo('WordPressAPI', 'Step 2: Activating plugin...', site.id);
+      const activated = activatePluginOnWordPress(site, pluginStatus.plugin.plugin);
+
+      if (activated) {
+        logSuccess('WordPressAPI', 'Plugin activated successfully!', site.id);
+        return {
+          success: true,
+          action: 'activated',
+          message: 'Plugin was installed but inactive - now activated',
+          plugin: pluginStatus.plugin
+        };
+      } else {
+        throw new Error('Failed to activate plugin');
+      }
+    }
+
+    // Plugin not installed - need to install it
+    logInfo('WordPressAPI', 'Plugin not found - installing...', site.id);
+
+    // STEP 2: Download and install plugin
+    logInfo('WordPressAPI', 'Step 2: Downloading and installing plugin...', site.id);
+
+    // Download plugin
+    const pluginBlob = downloadPluginFromUrl(pluginDownloadUrl, site.id);
+    if (!pluginBlob) {
+      throw new Error('Failed to download plugin');
+    }
+
+    // Extract plugin slug from patterns (use first pattern as slug)
+    const pluginSlug = pluginPatterns[0];
+
+    // Install plugin
+    const installed = installPluginOnWordPress(site, pluginBlob, pluginSlug);
+    if (!installed) {
+      throw new Error('Failed to install plugin');
+    }
+
+    // Activate plugin
+    const activated = activatePluginOnWordPress(site, pluginSlug + '/' + pluginSlug + '.php');
+    if (!activated) {
+      logWarning('WordPressAPI', 'Plugin installed but activation may have failed', site.id);
+    }
+
+    logSuccess('WordPressAPI', 'Plugin installed and activated successfully!', site.id);
+    return {
+      success: true,
+      action: 'installed',
+      message: 'Plugin installed and activated successfully',
+      pluginSlug: pluginSlug
+    };
+
+  } catch (error) {
+    logError('WordPressAPI', `Plugin automation failed: ${error.message}`, site.id);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Check plugin status with detailed information
+ *
+ * @param {Object} site - Site object
+ * @param {string[]} pluginPatterns - Array of plugin slug patterns to search for
+ * @returns {Object} Status object with installed, active, and plugin info
+ */
+function checkPluginDetailed(site, pluginPatterns) {
+  try {
+    const plugins = getInstalledPlugins(site);
+
+    if (!plugins || plugins.length === 0) {
+      logInfo('WordPressAPI', 'No plugins found on site', site.id);
+      return { installed: false, active: false };
+    }
+
+    // Search for our plugin using multiple patterns
+    const ourPlugin = plugins.find(plugin =>
+      pluginPatterns.some(pattern =>
+        plugin.plugin.toLowerCase().includes(pattern.toLowerCase()) ||
+        (plugin.name && plugin.name.toLowerCase().includes(pattern.toLowerCase()))
+      )
+    );
+
+    if (ourPlugin) {
+      const isActive = ourPlugin.status === 'active';
+      logInfo('WordPressAPI', `Plugin found: ${ourPlugin.name} (${ourPlugin.plugin}) - Status: ${ourPlugin.status}`, site.id);
+
+      return {
+        installed: true,
+        active: isActive,
+        plugin: ourPlugin
+      };
+    }
+
+    logInfo('WordPressAPI', 'Plugin not found in installed plugins', site.id);
+    return { installed: false, active: false };
+
+  } catch (error) {
+    logError('WordPressAPI', `Error checking plugin: ${error.message}`, site.id);
+    return { installed: false, active: false, error: error.message };
+  }
+}
+
+/**
+ * Download plugin from URL (with retry logic and Google Drive support)
+ *
+ * @param {string} pluginUrl - URL or Google Drive ID/URL
+ * @param {number} siteId - Site ID for logging
+ * @returns {Blob} Plugin blob or null if failed
+ */
+function downloadPluginFromUrl(pluginUrl, siteId) {
+  try {
+    logInfo('WordPressAPI', `Downloading plugin from: ${pluginUrl}`, siteId);
+
+    // Check if it's a Google Drive URL/ID
+    if (isGoogleDriveUrl(pluginUrl)) {
+      logInfo('WordPressAPI', 'Detected Google Drive URL, downloading from Drive...', siteId);
+      const blob = downloadFromGoogleDrive(pluginUrl);
+      if (blob) {
+        const fileSize = blob.getBytes().length;
+        logSuccess('WordPressAPI', `Plugin downloaded from Google Drive (${(fileSize / 1024).toFixed(2)} KB)`, siteId);
+        return blob;
+      } else {
+        logError('WordPressAPI', 'Failed to download from Google Drive', siteId);
+        return null;
+      }
+    }
+
+    // Regular HTTP URL - Retry logic: try up to 3 times
+    const maxRetries = 3;
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        logInfo('WordPressAPI', `Download attempt ${attempt}/${maxRetries}...`, siteId);
+
+        const response = UrlFetchApp.fetch(pluginUrl, {
+          method: 'GET',
+          muteHttpExceptions: true,
+          followRedirects: true,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'application/zip,application/octet-stream,*/*',
+            'Accept-Encoding': 'identity'
+          }
+        });
+
+        const statusCode = response.getResponseCode();
+
+        if (statusCode === 200) {
+          const blob = response.getBlob();
+          const fileSize = blob.getBytes().length;
+          logSuccess('WordPressAPI', `Plugin downloaded successfully (${(fileSize / 1024).toFixed(2)} KB)`, siteId);
+          return blob;
+        } else if (statusCode === 403 || statusCode === 404) {
+          // Don't retry on 403/404
+          throw new Error(`Download failed: HTTP ${statusCode}`);
+        } else {
+          lastError = new Error(`HTTP ${statusCode}`);
+          if (attempt < maxRetries) {
+            logWarning('WordPressAPI', `Attempt ${attempt} failed: HTTP ${statusCode}. Retrying...`, siteId);
+            Utilities.sleep(2000 * attempt); // Exponential backoff
+          }
+        }
+      } catch (error) {
+        lastError = error;
+
+        if (attempt < maxRetries && !error.message.includes('403') && !error.message.includes('404')) {
+          logWarning('WordPressAPI', `Attempt ${attempt} failed: ${error.message}. Retrying...`, siteId);
+          Utilities.sleep(2000 * attempt);
+        } else {
+          throw error; // Don't retry on 403/404 or final attempt
+        }
+      }
+    }
+
+    throw lastError || new Error('Download failed after all retry attempts');
+
+  } catch (error) {
+    logError('WordPressAPI', `Failed to download plugin: ${error.message}`, siteId);
+    return null;
+  }
+}
