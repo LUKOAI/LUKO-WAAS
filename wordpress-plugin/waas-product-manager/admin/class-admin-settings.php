@@ -106,7 +106,7 @@ class WAAS_Admin_Settings {
                 'label_for' => 'partner_tag',
                 'option_name' => self::API_SETTINGS_OPTION,
                 'field_name' => 'partner_tag',
-                'description' => __('Your Amazon Associates ID (e.g., yoursite-20)', 'waas-pm'),
+                'description' => __('Default Amazon Associates ID / Tracking ID (e.g., yoursite-20). Can be overridden per product.', 'waas-pm'),
                 'placeholder' => 'yoursite-20',
             )
         );

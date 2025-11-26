@@ -68,6 +68,7 @@ class WAAS_Product_Manager {
         require_once WAAS_PM_PLUGIN_DIR . 'includes/class-cache-manager.php';
         require_once WAAS_PM_PLUGIN_DIR . 'includes/class-rest-api.php';
         require_once WAAS_PM_PLUGIN_DIR . 'includes/class-product-importer.php';
+        require_once WAAS_PM_PLUGIN_DIR . 'includes/class-structure-api.php';
 
         // WooCommerce integration (only if WooCommerce is active)
         if (class_exists('WooCommerce')) {
@@ -115,6 +116,9 @@ class WAAS_Product_Manager {
 
         // Initialize REST API
         WAAS_REST_API::get_instance();
+
+        // Initialize Structure API
+        WAAS_Structure_API::get_instance();
 
         // Initialize admin if in admin area
         if (is_admin()) {

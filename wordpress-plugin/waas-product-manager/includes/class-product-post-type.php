@@ -232,6 +232,15 @@ class WAAS_Product_Post_Type {
                 <span class="description"><?php _e('Amazon Seller ID or UUID (used for patronage filtering)', 'waas-pm'); ?></span>
             </p>
 
+            <p>
+                <label for="waas_tracking_id"><strong><?php _e('Amazon Tracking ID (Partner Tag)', 'waas-pm'); ?></strong></label><br>
+                <?php
+                $tracking_id = get_post_meta($post->ID, '_waas_tracking_id', true);
+                ?>
+                <input type="text" id="waas_tracking_id" name="waas_tracking_id" value="<?php echo esc_attr($tracking_id); ?>" class="widefat" placeholder="yoursite-20" />
+                <span class="description"><?php _e('Amazon Associate Tag/Tracking ID for this site (e.g., yoursite-20). This tag will be added to all Amazon URLs.', 'waas-pm'); ?></span>
+            </p>
+
             <?php if ($asin): ?>
             <p>
                 <button type="button" class="button button-secondary" id="waas_fetch_from_amazon">
@@ -367,6 +376,7 @@ class WAAS_Product_Post_Type {
             'waas_savings' => 'sanitize_text_field',
             'waas_availability' => 'sanitize_text_field',
             'waas_seller_id' => 'sanitize_text_field',
+            'waas_tracking_id' => 'sanitize_text_field',
         );
 
         foreach ($fields as $field => $sanitize_callback) {

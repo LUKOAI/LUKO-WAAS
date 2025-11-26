@@ -515,14 +515,40 @@ class WAAS_Amazon_API {
      * Generate affiliate link from ASIN
      *
      * @param string $asin ASIN
+     * @param string $tracking_id Optional tracking ID to override default partner_tag
      * @return string Affiliate link
      */
-    private function generate_affiliate_link($asin) {
-        if (empty($this->partner_tag) || empty($asin)) {
+    public function generate_affiliate_link($asin, $tracking_id = null) {
+        $tag = !empty($tracking_id) ? $tracking_id : $this->partner_tag;
+
+        if (empty($tag) || empty($asin)) {
             return '';
         }
 
-        return "https://www.amazon.com/dp/{$asin}/?tag={$this->partner_tag}";
+        return "https://www.amazon.com/dp/{$asin}/?tag={$tag}";
+    }
+
+    /**
+     * Get affiliate link for a product with per-site tracking ID
+     *
+     * @param string $asin ASIN
+     * @param int $post_id Optional WordPress post ID to get tracking_id from
+     * @return string Affiliate link
+     */
+    public function get_product_affiliate_link($asin, $post_id = null) {
+        $tracking_id = null;
+
+        // Try to get tracking_id from product meta
+        if ($post_id) {
+            $tracking_id = get_post_meta($post_id, '_waas_tracking_id', true);
+        }
+
+        // Fallback to global partner_tag if no tracking_id set
+        if (empty($tracking_id)) {
+            $tracking_id = $this->partner_tag;
+        }
+
+        return $this->generate_affiliate_link($asin, $tracking_id);
     }
 
     /**
