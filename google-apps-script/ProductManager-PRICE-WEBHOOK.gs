@@ -114,6 +114,7 @@ function updatePricesInSheet(updates) {
   const priceFormattedColIdx = findColumnIndex('PriceFormatted');
   const priceTextColIdx = findColumnIndex('PriceText');
   const lastPriceUpdateColIdx = findColumnIndex('Last Price Update');
+  const priceSourceColIdx = findColumnIndex('Price Source');
 
   if (asinColIdx === -1) {
     throw new Error('ASIN column not found in Products sheet');
@@ -126,6 +127,7 @@ function updatePricesInSheet(updates) {
   Logger.log(`  PriceFormatted: ${priceFormattedColIdx}`);
   Logger.log(`  PriceText: ${priceTextColIdx}`);
   Logger.log(`  Last Price Update: ${lastPriceUpdateColIdx}`);
+  Logger.log(`  Price Source: ${priceSourceColIdx}`);
 
   let updated = 0;
   let failed = 0;
@@ -138,6 +140,7 @@ function updatePricesInSheet(updates) {
     const priceFormatted = update.price_formatted || '';
     const priceText = update.price_text || '';
     const timestamp = update.last_price_update; // German format: DD.MM.YYYY HH:MM
+    const priceSource = update.price_source || '';
 
     Logger.log(`Processing update for ASIN: ${asin}`);
     Logger.log(`  Price: ${newPrice}`);
@@ -145,6 +148,7 @@ function updatePricesInSheet(updates) {
     Logger.log(`  Formatted: ${priceFormatted}`);
     Logger.log(`  Text: ${priceText}`);
     Logger.log(`  Timestamp: ${timestamp}`);
+    Logger.log(`  Source: ${priceSource}`);
 
     // Find row with this ASIN
     let found = false;
@@ -181,6 +185,12 @@ function updatePricesInSheet(updates) {
         if (lastPriceUpdateColIdx >= 0 && timestamp) {
           sheet.getRange(rowNum, lastPriceUpdateColIdx + 1).setValue(timestamp);
           Logger.log(`  → Updated Last Price Update in row ${rowNum}: ${timestamp}`);
+        }
+
+        // Update Price Source column (v3)
+        if (priceSourceColIdx >= 0 && priceSource) {
+          sheet.getRange(rowNum, priceSourceColIdx + 1).setValue(priceSource);
+          Logger.log(`  → Updated Price Source in row ${rowNum}: ${priceSource}`);
         }
 
         found = true;
@@ -263,6 +273,103 @@ function getWebhookUrl() {
   return url;
 }
 
+// =============================================================================
+// PRICE SYNC TRIGGER (v3 — Phase F)
+// =============================================================================
+
+/**
+ * Trigger price sync for a specific site via REST API.
+ * Calls POST /waas-settings/v1/price-sync on the WordPress site.
+ *
+ * @param {Object} site - Site object from getSiteById()
+ * @returns {Object} { success, data: { updated, failed, skipped, total, source_stats, duration_seconds }, error }
+ */
+function triggerPriceSyncForSite(site) {
+  logInfo('PRICE_SYNC', 'Triggering price sync for: ' + site.name + ' (' + site.domain + ')', site.id);
+
+  var result = makeHttpRequest(site.wpUrl + '/wp-json/waas-settings/v1/price-sync', {
+    method: 'POST',
+    headers: { 'Authorization': getAuthHeader(site), 'Content-Type': 'application/json' },
+    payload: JSON.stringify({})
+  });
+
+  if (!result.success) {
+    logError('PRICE_SYNC', 'Price sync failed: ' + (result.error || 'Unknown error'), site.id);
+    return { success: false, error: result.error || 'API request failed' };
+  }
+
+  var data = result.data || {};
+  logSuccess('PRICE_SYNC',
+    'Price sync completed for ' + site.domain + ': ' +
+    data.updated + ' updated, ' + data.failed + ' failed, ' + data.skipped + ' skipped' +
+    ' (PA-API: ' + (data.source_stats && data.source_stats.pa_api || 0) +
+    ', SP-API: ' + (data.source_stats && data.source_stats.sp_api || 0) + ')' +
+    ' [' + (data.duration_seconds || '?') + 's]',
+    site.id
+  );
+
+  return {
+    success: true,
+    data: data
+  };
+}
+
+/**
+ * Price Sync Dialog — trigger price update for a specific site
+ * Called from Menu.gs
+ */
+function priceSyncDialog() {
+  var ui = SpreadsheetApp.getUi();
+  var result = ui.prompt('Price Sync', 'Podaj Site ID strony do synchronizacji cen:', ui.ButtonSet.OK_CANCEL);
+  if (result.getSelectedButton() !== ui.Button.OK) return;
+
+  var siteId = result.getResponseText().trim();
+  var site = getSiteById(siteId);
+  if (!site) {
+    ui.alert('Błąd', 'Nie znaleziono strony o ID: ' + siteId, ui.ButtonSet.OK);
+    return;
+  }
+
+  // Confirm
+  var confirm = ui.alert('Price Sync',
+    'Uruchomić synchronizację cen dla:\n\n' +
+    'Site: ' + site.name + '\n' +
+    'Domain: ' + site.domain + '\n\n' +
+    'To uruchomi daily price update (PA-API/SP-API) na WordPressie.\n' +
+    'Kontynuować?',
+    ui.ButtonSet.YES_NO
+  );
+  if (confirm !== ui.Button.YES) return;
+
+  // Trigger sync
+  var syncResult = triggerPriceSyncForSite(site);
+
+  if (syncResult.success) {
+    var d = syncResult.data;
+    var sourceInfo = '';
+    if (d.source_stats) {
+      sourceInfo = '\n\nŹródła:\n  PA-API: ' + (d.source_stats.pa_api || 0) + '\n  SP-API: ' + (d.source_stats.sp_api || 0);
+    }
+    ui.alert('Sukces',
+      'Synchronizacja cen zakończona!\n\n' +
+      'Zaktualizowano: ' + (d.updated || 0) + '\n' +
+      'Błędy: ' + (d.failed || 0) + '\n' +
+      'Pominięte: ' + (d.skipped || 0) + '\n' +
+      'Łącznie produktów: ' + (d.total || 0) + '\n' +
+      'Czas: ' + (d.duration_seconds || '?') + 's' +
+      sourceInfo +
+      '\n\nKonfiguracja źródła: ' + (d.price_source_config || 'auto'),
+      ui.ButtonSet.OK
+    );
+  } else {
+    ui.alert('Błąd', 'Price sync nie powiódł się: ' + (syncResult.error || 'Unknown'), ui.ButtonSet.OK);
+  }
+}
+
+// =============================================================================
+// UTILITY FUNCTIONS
+// =============================================================================
+
 /**
  * Create missing price columns in Products sheet
  * Run this once if columns are missing
@@ -283,7 +390,8 @@ function createPriceColumns() {
     'PriceCurrency',
     'PriceFormatted',
     'PriceText',
-    'Last Price Update'
+    'Last Price Update',
+    'Price Source'
   ];
 
   let addedColumns = 0;

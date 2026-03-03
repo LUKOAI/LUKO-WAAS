@@ -26,6 +26,7 @@ function onOpen() {
       .addItem('🔄 Sync All Products', 'syncAllProducts')
       .addItem('📤 Export to WooCommerce', 'showExportToWooCommerceDialog')
       .addSeparator()
+      .addItem('💰 Price Sync (Site)', 'priceSyncDialog')
       .addItem('📊 Product Statistics', 'showProductStats'))
     .addSubMenu(ui.createMenu('📝 Content')
       .addItem('✍️ Generate Content', 'showGenerateContentDialog')

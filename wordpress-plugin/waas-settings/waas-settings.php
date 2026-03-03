@@ -23,6 +23,7 @@
  * - GET /site-info — Full site information (v3)
  * - POST /gsc-verify — Google Search Console verification (v3)
  * - POST /bing-verify — Bing Webmaster verification (v3)
+ * - POST /price-sync — Trigger price sync on demand (v3 Phase F)
  *
  * @package WAAS_Settings
  */
@@ -103,6 +104,7 @@ class WAAS_Settings_API {
                 <li><code>GET /waas-settings/v1/site-info</code> — Full site info</li>
                 <li><code>POST /waas-settings/v1/gsc-verify</code> — GSC verification</li>
                 <li><code>POST /waas-settings/v1/bing-verify</code> — Bing verification</li>
+                <li><code>POST /waas-settings/v1/price-sync</code> — Trigger price sync</li>
             </ul>
             <p><strong>Version:</strong> <?php echo WAAS_SETTINGS_VERSION; ?></p>
         </div>
@@ -263,6 +265,13 @@ class WAAS_Settings_API {
             'args' => array(
                 'verification_code' => array('required' => true, 'type' => 'string'),
             ),
+        ));
+
+        // POST /price-sync — Trigger price sync on demand (v3 Phase F)
+        register_rest_route($ns, '/price-sync', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'trigger_price_sync'),
+            'permission_callback' => array($this, 'check_admin_permission'),
         ));
     }
 
@@ -760,6 +769,43 @@ class WAAS_Settings_API {
             'success' => true,
             'message' => 'Bing Webmaster verification tag saved',
             'code' => $code,
+        ), 200);
+    }
+
+    // =========================================================================
+    // PRICE SYNC (v3 — Phase F)
+    // =========================================================================
+
+    /**
+     * POST /price-sync — Trigger daily price update on demand
+     *
+     * Calls WAAS_Price_Updater::run_daily_update() which returns summary.
+     * Requires waas-product-manager plugin to be active.
+     */
+    public function trigger_price_sync($request) {
+        // Check if WAAS Product Manager is active
+        if (!class_exists('WAAS_Price_Updater')) {
+            return new WP_Error(
+                'plugin_not_active',
+                'WAAS Product Manager plugin is not active or WooCommerce is not loaded',
+                array('status' => 400)
+            );
+        }
+
+        error_log('WAAS Settings: Price sync triggered via REST API');
+
+        $updater = WAAS_Price_Updater::get_instance();
+        $result = $updater->run_daily_update();
+
+        return new WP_REST_Response(array(
+            'success' => true,
+            'updated' => $result['updated'] ?? 0,
+            'failed' => $result['failed'] ?? 0,
+            'skipped' => $result['skipped'] ?? 0,
+            'total' => $result['total'] ?? 0,
+            'source_stats' => $result['source_stats'] ?? array(),
+            'duration_seconds' => $result['duration_seconds'] ?? 0,
+            'price_source_config' => get_option('waas_pm_price_source', 'auto'),
         ), 200);
     }
 

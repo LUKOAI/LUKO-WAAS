@@ -193,9 +193,18 @@ class WAAS_Product_Manager {
         // Flush rewrite rules
         flush_rewrite_rules();
 
-        // Schedule daily cron job for product updates
+        // v3: Schedule daily cron job at random time between 01:00-05:00
+        // Random hour prevents all sites from hitting Amazon API simultaneously
         if (!wp_next_scheduled('waas_pm_daily_update')) {
-            wp_schedule_event(strtotime('02:00:00'), 'daily', 'waas_pm_daily_update');
+            $random_hour = wp_rand(1, 4);   // 1-4
+            $random_min  = wp_rand(0, 59);  // 0-59
+            $cron_time   = strtotime(sprintf('today %02d:%02d:00', $random_hour, $random_min));
+            // If that time already passed today, schedule for tomorrow
+            if ($cron_time < time()) {
+                $cron_time += DAY_IN_SECONDS;
+            }
+            wp_schedule_event($cron_time, 'daily', 'waas_pm_daily_update');
+            error_log(sprintf('WAAS: Daily price sync scheduled at %02d:%02d', $random_hour, $random_min));
         }
 
         // Create database tables if needed
