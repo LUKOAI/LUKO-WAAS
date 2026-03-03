@@ -42,19 +42,19 @@ function onOpen() {
       .addSeparator()
       .addItem('📋 Schema Markup', 'showSchemaSetupDialog'))
     .addSubMenu(ui.createMenu('🌍 Search Engines')
-      .addItem('📡 Register in Google Search Console', 'showGSCRegisterDialog')
-      .addItem('📡 Register in Bing Webmaster', 'showBingRegisterDialog')
+      .addItem('📡 Register in Google Search Console', 'gscRegisterDialog')
+      .addItem('📡 Register in Bing Webmaster', 'bingRegisterDialog')
       .addSeparator()
-      .addItem('🗺️ Submit Sitemap to GSC', 'showGSCSitemapDialog')
-      .addItem('🗺️ Submit Sitemap to Bing', 'showBingSitemapDialog')
+      .addItem('🗺️ Submit Sitemap to GSC', 'gscSitemapDialog')
+      .addItem('🗺️ Submit Sitemap to Bing', 'bingSitemapDialog')
       .addSeparator()
-      .addItem('✅ Verify GSC Ownership', 'showGSCVerifyDialog')
-      .addItem('✅ Verify Bing Ownership', 'showBingVerifyDialog'))
+      .addItem('✅ Verify GSC Ownership', 'gscVerifyDialog')
+      .addItem('✅ Verify Bing Ownership', 'bingVerifyDialog'))
     .addSubMenu(ui.createMenu('📊 Reports')
-      .addItem('📄 Generate Launch Report', 'showLaunchReportDialog')
-      .addItem('📧 Send Launch Email', 'showSendLaunchEmailDialog')
-      .addItem('📝 Export to Notion', 'showExportToNotionDialog')
-      .addItem('💾 Save Report to Drive', 'showSaveReportToDriveDialog'))
+      .addItem('📄 Generate Launch Report', 'launchReportDialog')
+      .addItem('📧 Send Launch Email', 'sendLaunchEmailDialog')
+      .addItem('📝 Export to Notion', 'exportToNotionDialog')
+      .addItem('💾 Save Report to Drive', 'saveReportToDriveDialog'))
     .addSubMenu(ui.createMenu('⚙️ Tasks')
       .addItem('👁️ View Active Tasks', 'focusActiveTasks')
       .addItem('▶️ Run Task Queue', 'runTaskQueue')
@@ -63,7 +63,7 @@ function onOpen() {
       .addItem('🔄 Retry Failed Tasks', 'retryFailedTasks'))
     .addSubMenu(ui.createMenu('🤖 Automation')
       .addItem('🚀 Install Full Stack', 'showInstallFullStackDialog')
-      .addItem('🌟 NEW SITE WIZARD (Full Pipeline)', 'showNewSiteWizardDialog')
+      .addItem('🌟 NEW SITE WIZARD (Full Pipeline)', 'newSiteWizardDialog')
       .addItem('📤 Deploy Selected Content', 'showDeployContentDialog')
       .addSeparator()
       .addItem('⚙️ Process Auto Install Sites', 'processAutoInstallSites')
@@ -927,110 +927,19 @@ function runDeployContent(siteId, contentType, asins, title, autoPublish) {
 }
 
 // =============================================================================
-// STUB DIALOGS — To be implemented in later phases (D, E, G, H)
-// These stubs ensure the menu works without errors until full implementation.
+// DIALOG FUNCTIONS — defined in other modules:
 // =============================================================================
-
-// NOTE: siteCleanupDialog(), siteInfoDialog(), siteBrandingDialog() are defined in SiteCleanup.gs
-// NOTE: showExportToWooCommerceDialog() is defined in ProductManager-WOOCOMMERCE-EXPORT.gs
-
-function showSetupRankMathDialog() {
-  const ui = SpreadsheetApp.getUi();
-  ui.alert('Coming Soon', 'RankMath setup will be implemented in Phase D (SEO.gs).', ui.ButtonSet.OK);
-}
-
-function showGenerateMetaDialog() {
-  const ui = SpreadsheetApp.getUi();
-  ui.alert('Coming Soon', 'Meta tag generation will be implemented in Phase D (SEO.gs).', ui.ButtonSet.OK);
-}
-
-function showSEOAuditDialog() {
-  const ui = SpreadsheetApp.getUi();
-  ui.alert('Coming Soon', 'SEO audit will be implemented in Phase D (SEO.gs).', ui.ButtonSet.OK);
-}
-
-function showFixPermalinksDialog() {
-  const ui = SpreadsheetApp.getUi();
-  ui.alert('Coming Soon', 'Permalink fixing will be implemented in Phase D (SEO.gs).', ui.ButtonSet.OK);
-}
-
-function showSchemaSetupDialog() {
-  const ui = SpreadsheetApp.getUi();
-  ui.alert('Coming Soon', 'Schema markup setup will be implemented in Phase D (SEO.gs).', ui.ButtonSet.OK);
-}
-
-function showGSCRegisterDialog() {
-  const ui = SpreadsheetApp.getUi();
-  ui.alert('Coming Soon', 'Google Search Console registration will be implemented in Phase D (SearchEngines.gs).', ui.ButtonSet.OK);
-}
-
-function showBingRegisterDialog() {
-  const ui = SpreadsheetApp.getUi();
-  ui.alert('Coming Soon', 'Bing Webmaster registration will be implemented in Phase D (SearchEngines.gs).', ui.ButtonSet.OK);
-}
-
-function showGSCSitemapDialog() {
-  const ui = SpreadsheetApp.getUi();
-  ui.alert('Coming Soon', 'GSC sitemap submission will be implemented in Phase D (SearchEngines.gs).', ui.ButtonSet.OK);
-}
-
-function showBingSitemapDialog() {
-  const ui = SpreadsheetApp.getUi();
-  ui.alert('Coming Soon', 'Bing sitemap submission will be implemented in Phase D (SearchEngines.gs).', ui.ButtonSet.OK);
-}
-
-function showGSCVerifyDialog() {
-  const ui = SpreadsheetApp.getUi();
-  ui.alert('Coming Soon', 'GSC ownership verification will be implemented in Phase D (SearchEngines.gs).', ui.ButtonSet.OK);
-}
-
-function showBingVerifyDialog() {
-  const ui = SpreadsheetApp.getUi();
-  ui.alert('Coming Soon', 'Bing ownership verification will be implemented in Phase D (SearchEngines.gs).', ui.ButtonSet.OK);
-}
-
-function showLaunchReportDialog() {
-  const ui = SpreadsheetApp.getUi();
-  ui.alert('Coming Soon', 'Launch report generation will be implemented in Phase D (LaunchReport.gs).', ui.ButtonSet.OK);
-}
-
-function showSendLaunchEmailDialog() {
-  const ui = SpreadsheetApp.getUi();
-  ui.alert('Coming Soon', 'Launch email sending will be implemented in Phase D (LaunchReport.gs).', ui.ButtonSet.OK);
-}
-
-function showExportToNotionDialog() {
-  const ui = SpreadsheetApp.getUi();
-  ui.alert('Coming Soon', 'Notion export will be implemented in Phase D (LaunchReport.gs).', ui.ButtonSet.OK);
-}
-
-function showSaveReportToDriveDialog() {
-  const ui = SpreadsheetApp.getUi();
-  ui.alert('Coming Soon', 'Saving report to Drive will be implemented in Phase D (LaunchReport.gs).', ui.ButtonSet.OK);
-}
-
-function showNewSiteWizardDialog() {
-  const ui = SpreadsheetApp.getUi();
-  const result = ui.prompt(
-    'NEW SITE WIZARD - Full Pipeline',
-    'Enter Site ID for full onboarding pipeline:\n\n' +
-    'This will run ALL steps:\n' +
-    '1. Cleanup cloned site\n' +
-    '2. Setup authentication\n' +
-    '3. Install plugins\n' +
-    '4. Configure branding\n' +
-    '5. Import products\n' +
-    '6. SEO setup\n' +
-    '7. Search engine registration\n' +
-    '8. Content generation\n' +
-    '9. Launch report\n' +
-    '10. Send email',
-    ui.ButtonSet.OK_CANCEL
-  );
-  if (result.getSelectedButton() === ui.Button.OK) {
-    const siteId = parseInt(result.getResponseText());
-    if (siteId) {
-      ui.alert('Coming Soon', 'Full onboarding pipeline (launchNewSite) will be implemented in Phase H.', ui.ButtonSet.OK);
-    }
-  }
-}
+// siteCleanupDialog(), siteInfoDialog(), siteBrandingDialog() → SiteCleanup.gs
+// showExportToWooCommerceDialog() → ProductManager-WOOCOMMERCE-EXPORT.gs
+// priceSyncDialog() → ProductManager-PRICE-WEBHOOK.gs
+// gscRegisterDialog(), gscSitemapDialog(), gscVerifyDialog() → SearchEngines.gs
+// bingRegisterDialog(), bingSitemapDialog(), bingVerifyDialog() → SearchEngines.gs
+// launchReportDialog(), sendLaunchEmailDialog() → LaunchReport.gs
+// exportToNotionDialog(), saveReportToDriveDialog() → LaunchReport.gs
+// newSiteWizardDialog() → Automation.gs
+// SEO dialog stubs — SEO.gs exists but these dialogs are not yet implemented there
+function showSetupRankMathDialog() { SpreadsheetApp.getUi().alert('Coming Soon', 'RankMath setup will be implemented in SEO.gs.', SpreadsheetApp.getUi().ButtonSet.OK); }
+function showGenerateMetaDialog() { SpreadsheetApp.getUi().alert('Coming Soon', 'Meta tag generation will be implemented in SEO.gs.', SpreadsheetApp.getUi().ButtonSet.OK); }
+function showSEOAuditDialog() { SpreadsheetApp.getUi().alert('Coming Soon', 'SEO audit will be implemented in SEO.gs.', SpreadsheetApp.getUi().ButtonSet.OK); }
+function showFixPermalinksDialog() { SpreadsheetApp.getUi().alert('Coming Soon', 'Permalink fixing will be implemented in SEO.gs.', SpreadsheetApp.getUi().ButtonSet.OK); }
+function showSchemaSetupDialog() { SpreadsheetApp.getUi().alert('Coming Soon', 'Schema markup setup will be implemented in SEO.gs.', SpreadsheetApp.getUi().ButtonSet.OK); }
