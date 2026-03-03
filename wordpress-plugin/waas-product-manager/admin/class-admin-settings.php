@@ -42,6 +42,15 @@ class WAAS_Admin_Settings {
         register_setting('waas_pm_settings', 'waas_pm_amazon_secret_key');
         register_setting('waas_pm_settings', 'waas_pm_amazon_partner_tag');
         register_setting('waas_pm_settings', 'waas_pm_sheets_webhook_url');
+
+        // v3: SP-API credentials
+        register_setting('waas_pm_settings', 'waas_pm_sp_api_client_id');
+        register_setting('waas_pm_settings', 'waas_pm_sp_api_client_secret');
+        register_setting('waas_pm_settings', 'waas_pm_sp_api_refresh_token');
+        register_setting('waas_pm_settings', 'waas_pm_sp_api_marketplace_id');
+
+        // v3: Price source selector
+        register_setting('waas_pm_settings', 'waas_pm_price_source');
     }
 
     public function render_settings_page() {
@@ -115,6 +124,95 @@ class WAAS_Admin_Settings {
                     </tr>
                 </table>
 
+                <h2 style="margin-top: 30px;">Amazon SP-API (Selling Partner API)</h2>
+                <p class="description" style="margin-bottom: 15px;">
+                    SP-API is used as fallback when PA-API fails or as primary price source.
+                    Requires <a href="https://developer.amazonservices.com/" target="_blank">Login with Amazon (LWA)</a> app credentials.
+                </p>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">
+                            <label for="waas_pm_price_source">Price Source</label>
+                        </th>
+                        <td>
+                            <?php $price_source = get_option('waas_pm_price_source', 'auto'); ?>
+                            <select id="waas_pm_price_source" name="waas_pm_price_source">
+                                <option value="auto" <?php selected($price_source, 'auto'); ?>>Auto (PA-API → SP-API fallback)</option>
+                                <option value="pa_api" <?php selected($price_source, 'pa_api'); ?>>PA-API only</option>
+                                <option value="sp_api" <?php selected($price_source, 'sp_api'); ?>>SP-API only</option>
+                            </select>
+                            <p class="description">
+                                <strong>Auto</strong> = Try PA-API first, fall back to SP-API if PA-API fails.<br>
+                                <strong>PA-API only</strong> = Use Product Advertising API exclusively.<br>
+                                <strong>SP-API only</strong> = Use Selling Partner API exclusively.
+                            </p>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">
+                            <label for="waas_pm_sp_api_client_id">LWA Client ID</label>
+                        </th>
+                        <td>
+                            <input type="text"
+                                   id="waas_pm_sp_api_client_id"
+                                   name="waas_pm_sp_api_client_id"
+                                   value="<?php echo esc_attr(get_option('waas_pm_sp_api_client_id')); ?>"
+                                   class="regular-text"
+                                   placeholder="amzn1.application-oa2-client.xxx" />
+                            <p class="description">Login with Amazon application Client ID.</p>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">
+                            <label for="waas_pm_sp_api_client_secret">LWA Client Secret</label>
+                        </th>
+                        <td>
+                            <input type="password"
+                                   id="waas_pm_sp_api_client_secret"
+                                   name="waas_pm_sp_api_client_secret"
+                                   value="<?php echo esc_attr(get_option('waas_pm_sp_api_client_secret')); ?>"
+                                   class="regular-text" />
+                            <p class="description">Login with Amazon application Client Secret.</p>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">
+                            <label for="waas_pm_sp_api_refresh_token">SP-API Refresh Token</label>
+                        </th>
+                        <td>
+                            <input type="password"
+                                   id="waas_pm_sp_api_refresh_token"
+                                   name="waas_pm_sp_api_refresh_token"
+                                   value="<?php echo esc_attr(get_option('waas_pm_sp_api_refresh_token')); ?>"
+                                   class="large-text" />
+                            <p class="description">
+                                Refresh token from SP-API authorization flow. This is used to obtain access tokens via LWA.
+                            </p>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">
+                            <label for="waas_pm_sp_api_marketplace_id">Marketplace ID</label>
+                        </th>
+                        <td>
+                            <input type="text"
+                                   id="waas_pm_sp_api_marketplace_id"
+                                   name="waas_pm_sp_api_marketplace_id"
+                                   value="<?php echo esc_attr(get_option('waas_pm_sp_api_marketplace_id', 'A1PA6795UKMFR9')); ?>"
+                                   class="regular-text"
+                                   placeholder="A1PA6795UKMFR9" />
+                            <p class="description">
+                                Amazon Marketplace ID. Default: <code>A1PA6795UKMFR9</code> (Amazon.de).
+                                Other: <code>A1RKKUPIHCS9HS</code> (ES), <code>A13V1IB3VIYBER</code> (FR), <code>A1F83G8C2ARO7P</code> (UK).
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+
                 <h2 style="margin-top: 30px;">Google Sheets Integration</h2>
                 <table class="form-table">
                     <tr>
@@ -168,6 +266,9 @@ class WAAS_Admin_Settings {
                 <li>✅ Product shortcodes with image zoom</li>
                 <li>✅ Google Sheets integration</li>
                 <li>✅ Automatic tracking ID injection</li>
+                <li>✅ SP-API support with LWA authentication (v3)</li>
+                <li>✅ Price source routing: PA-API → SP-API fallback (v3)</li>
+                <li>✅ Rate limiting: 1 req/s PA-API, 5 req/s SP-API (v3)</li>
             </ul>
         </div>
         <?php

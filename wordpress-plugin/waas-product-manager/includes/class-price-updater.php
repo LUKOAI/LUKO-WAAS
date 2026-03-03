@@ -7,8 +7,13 @@
  * - Only updates once per day (24-hour check)
  * - Syncs to Google Sheets with all price columns
  * - Runs via WordPress cron for batch updates
+ * - v3: SP-API support (Login with Amazon → Selling Partner API)
+ * - v3: Price source routing (PA-API → SP-API fallback)
+ * - v3: Rate limiting (1 req/sec PA-API, 5 req/sec SP-API)
+ * - v3: Returns summary from run_daily_update()
  *
  * @package WAAS_Product_Manager
+ * @version 3.0.0
  */
 
 if (!defined('ABSPATH')) {
@@ -21,6 +26,27 @@ class WAAS_Price_Updater {
      * Instance of this class
      */
     protected static $instance = null;
+
+    /**
+     * Rate limiting: timestamps of last requests
+     * @var array
+     */
+    private $last_request_time = array(
+        'pa_api' => 0,
+        'sp_api' => 0,
+    );
+
+    /**
+     * SP-API access token cache
+     * @var string|null
+     */
+    private $sp_api_token = null;
+
+    /**
+     * SP-API token expiry
+     * @var int
+     */
+    private $sp_api_token_expires = 0;
 
     /**
      * Get instance
@@ -36,7 +62,7 @@ class WAAS_Price_Updater {
      * Constructor
      */
     private function __construct() {
-        // Hook into WordPress cron (daily batch update at 2 AM)
+        // Hook into WordPress cron (daily batch update)
         add_action('waas_pm_daily_update', array($this, 'run_daily_update'));
 
         // Hook into single product page view for on-demand updates
@@ -45,8 +71,357 @@ class WAAS_Price_Updater {
         // Hook into product save (admin edit) to sync back to Google Sheets
         add_action('woocommerce_update_product', array($this, 'sync_product_to_sheets_on_save'), 20, 1);
 
-        error_log('WAAS Price Updater: Initialized');
+        error_log('WAAS Price Updater: Initialized (v3 — PA-API + SP-API)');
     }
+
+    // =========================================================================
+    // PRICE SOURCE ROUTER (v3)
+    // =========================================================================
+
+    /**
+     * Get configured price source
+     *
+     * @return string 'pa_api', 'sp_api', or 'auto' (default)
+     */
+    private function get_price_source() {
+        return get_option('waas_pm_price_source', 'auto');
+    }
+
+    /**
+     * Fetch price using configured source with fallback
+     *
+     * auto: PA-API first → SP-API fallback
+     * pa_api: PA-API only
+     * sp_api: SP-API only
+     *
+     * @param string $asin Product ASIN
+     * @return array|WP_Error Price data array or error
+     */
+    private function fetch_price($asin) {
+        $source = $this->get_price_source();
+
+        switch ($source) {
+            case 'pa_api':
+                return $this->fetch_price_from_amazon($asin);
+
+            case 'sp_api':
+                return $this->fetch_price_from_sp_api($asin);
+
+            case 'auto':
+            default:
+                // Try PA-API first
+                $result = $this->fetch_price_from_amazon($asin);
+                if (!is_wp_error($result) && !empty($result['price'])) {
+                    $result['price_source'] = 'pa_api';
+                    return $result;
+                }
+
+                // Fallback to SP-API
+                error_log("WAAS Price Updater: PA-API failed for {$asin}, trying SP-API fallback");
+                $result = $this->fetch_price_from_sp_api($asin);
+                if (!is_wp_error($result) && !empty($result['price'])) {
+                    $result['price_source'] = 'sp_api';
+                    return $result;
+                }
+
+                // Both failed
+                return new WP_Error('both_apis_failed', "Both PA-API and SP-API failed for ASIN: {$asin}");
+        }
+    }
+
+    // =========================================================================
+    // RATE LIMITING (v3)
+    // =========================================================================
+
+    /**
+     * Enforce rate limit before API call
+     *
+     * PA-API: 1 request/second
+     * SP-API: 5 requests/second (200ms between calls)
+     *
+     * @param string $api_type 'pa_api' or 'sp_api'
+     */
+    private function rate_limit($api_type) {
+        $min_interval = ($api_type === 'pa_api') ? 1.0 : 0.2; // seconds
+
+        $now = microtime(true);
+        $elapsed = $now - $this->last_request_time[$api_type];
+
+        if ($elapsed < $min_interval) {
+            $sleep_us = (int) (($min_interval - $elapsed) * 1000000);
+            usleep($sleep_us);
+        }
+
+        $this->last_request_time[$api_type] = microtime(true);
+    }
+
+    // =========================================================================
+    // SP-API METHODS (v3)
+    // =========================================================================
+
+    /**
+     * Check if SP-API credentials are configured
+     *
+     * @return bool
+     */
+    private function has_sp_api_credentials() {
+        $client_id = get_option('waas_pm_sp_api_client_id', '');
+        $client_secret = get_option('waas_pm_sp_api_client_secret', '');
+        $refresh_token = get_option('waas_pm_sp_api_refresh_token', '');
+
+        return !empty($client_id) && !empty($client_secret) && !empty($refresh_token);
+    }
+
+    /**
+     * Get SP-API access token via Login with Amazon (LWA)
+     *
+     * Caches token until expiry.
+     *
+     * @return string|WP_Error Access token or error
+     */
+    private function get_sp_api_access_token() {
+        // Return cached token if still valid (with 60s margin)
+        if ($this->sp_api_token && time() < ($this->sp_api_token_expires - 60)) {
+            return $this->sp_api_token;
+        }
+
+        // Also check transient cache (survives between cron runs)
+        $cached = get_transient('waas_sp_api_token');
+        if ($cached) {
+            $this->sp_api_token = $cached['token'];
+            $this->sp_api_token_expires = $cached['expires'];
+            if (time() < ($this->sp_api_token_expires - 60)) {
+                return $this->sp_api_token;
+            }
+        }
+
+        $client_id = get_option('waas_pm_sp_api_client_id', '');
+        $client_secret = get_option('waas_pm_sp_api_client_secret', '');
+        $refresh_token = get_option('waas_pm_sp_api_refresh_token', '');
+
+        if (empty($client_id) || empty($client_secret) || empty($refresh_token)) {
+            return new WP_Error('sp_api_no_creds', 'SP-API credentials not configured');
+        }
+
+        $response = wp_remote_post('https://api.amazon.com/auth/o2/token', array(
+            'headers' => array('Content-Type' => 'application/x-www-form-urlencoded'),
+            'body' => array(
+                'grant_type'    => 'refresh_token',
+                'refresh_token' => $refresh_token,
+                'client_id'     => $client_id,
+                'client_secret' => $client_secret,
+            ),
+            'timeout' => 15,
+        ));
+
+        if (is_wp_error($response)) {
+            error_log('WAAS Price Updater: LWA token request failed: ' . $response->get_error_message());
+            return $response;
+        }
+
+        $status = wp_remote_retrieve_response_code($response);
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+
+        if ($status !== 200 || empty($body['access_token'])) {
+            $error_msg = $body['error_description'] ?? $body['error'] ?? 'Unknown LWA error';
+            error_log("WAAS Price Updater: LWA token error (HTTP {$status}): {$error_msg}");
+            return new WP_Error('sp_api_token_error', $error_msg);
+        }
+
+        // Cache token
+        $this->sp_api_token = $body['access_token'];
+        $this->sp_api_token_expires = time() + (int) ($body['expires_in'] ?? 3600);
+
+        set_transient('waas_sp_api_token', array(
+            'token'   => $this->sp_api_token,
+            'expires' => $this->sp_api_token_expires,
+        ), $body['expires_in'] ?? 3600);
+
+        error_log('WAAS Price Updater: SP-API access token obtained (expires in ' . ($body['expires_in'] ?? 3600) . 's)');
+
+        return $this->sp_api_token;
+    }
+
+    /**
+     * Fetch price from Amazon SP-API (Catalog Items API)
+     *
+     * @param string $asin Product ASIN
+     * @return array|WP_Error Price data or error
+     */
+    private function fetch_price_from_sp_api($asin) {
+        if (!$this->has_sp_api_credentials()) {
+            return new WP_Error('sp_api_no_creds', 'SP-API credentials not configured');
+        }
+
+        $token = $this->get_sp_api_access_token();
+        if (is_wp_error($token)) {
+            return $token;
+        }
+
+        // Rate limit
+        $this->rate_limit('sp_api');
+
+        $marketplace_id = get_option('waas_pm_sp_api_marketplace_id', 'A1PA6795UKMFR9'); // Amazon.de default
+        $endpoint = 'https://sellingpartnerapi-eu.amazon.com';
+
+        // SP-API Catalog Items v2022-04-01
+        $url = $endpoint . '/catalog/2022-04-01/items/' . urlencode($asin)
+            . '?marketplaceIds=' . urlencode($marketplace_id)
+            . '&includedData=summaries';
+
+        $response = wp_remote_get($url, array(
+            'headers' => array(
+                'x-amz-access-token' => $token,
+                'Content-Type'       => 'application/json',
+            ),
+            'timeout' => 15,
+        ));
+
+        if (is_wp_error($response)) {
+            error_log('WAAS Price Updater: SP-API request failed: ' . $response->get_error_message());
+            return $response;
+        }
+
+        $status = wp_remote_retrieve_response_code($response);
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+
+        if ($status !== 200) {
+            $error_msg = $body['errors'][0]['message'] ?? "HTTP {$status}";
+            error_log("WAAS Price Updater: SP-API error for {$asin}: {$error_msg}");
+            return new WP_Error('sp_api_error', $error_msg);
+        }
+
+        // Extract price from SP-API response
+        return $this->parse_sp_api_price($body, $asin);
+    }
+
+    /**
+     * Parse SP-API catalog response to extract price data
+     *
+     * @param array  $body SP-API response body
+     * @param string $asin ASIN for logging
+     * @return array|WP_Error
+     */
+    private function parse_sp_api_price($body, $asin) {
+        // SP-API Catalog Items returns summaries
+        $summaries = $body['summaries'] ?? array();
+
+        if (empty($summaries)) {
+            return new WP_Error('sp_api_no_data', "No catalog data for ASIN: {$asin}");
+        }
+
+        // Get the first summary (main marketplace)
+        $summary = $summaries[0];
+
+        // SP-API may not always have price in catalog endpoint
+        // Try buyingPrice from the summary
+        $price = null;
+        $currency = 'EUR';
+
+        if (isset($summary['buyingPrice']['amount'])) {
+            $price = floatval($summary['buyingPrice']['amount']);
+            $currency = $summary['buyingPrice']['currencyCode'] ?? 'EUR';
+        } elseif (isset($summary['listPrice']['amount'])) {
+            $price = floatval($summary['listPrice']['amount']);
+            $currency = $summary['listPrice']['currencyCode'] ?? 'EUR';
+        }
+
+        if ($price === null || $price <= 0) {
+            // Try Pricing API as fallback
+            return $this->fetch_price_from_sp_api_pricing($asin);
+        }
+
+        $formatted_price = number_format($price, 2, ',', '.') . ' €';
+
+        return array(
+            'price'           => $price,
+            'currency'        => $currency,
+            'formatted_price' => $formatted_price,
+            'price_text'      => '',
+            'price_source'    => 'sp_api',
+        );
+    }
+
+    /**
+     * Fetch price from SP-API Pricing API (getItemOffers)
+     *
+     * @param string $asin Product ASIN
+     * @return array|WP_Error
+     */
+    private function fetch_price_from_sp_api_pricing($asin) {
+        $token = $this->get_sp_api_access_token();
+        if (is_wp_error($token)) {
+            return $token;
+        }
+
+        $this->rate_limit('sp_api');
+
+        $marketplace_id = get_option('waas_pm_sp_api_marketplace_id', 'A1PA6795UKMFR9');
+        $endpoint = 'https://sellingpartnerapi-eu.amazon.com';
+
+        $url = $endpoint . '/products/pricing/v0/items/' . urlencode($asin) . '/offers'
+            . '?MarketplaceId=' . urlencode($marketplace_id)
+            . '&ItemCondition=New';
+
+        $response = wp_remote_get($url, array(
+            'headers' => array(
+                'x-amz-access-token' => $token,
+                'Content-Type'       => 'application/json',
+            ),
+            'timeout' => 15,
+        ));
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        $status = wp_remote_retrieve_response_code($response);
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+
+        if ($status !== 200) {
+            $error_msg = $body['errors'][0]['message'] ?? "HTTP {$status}";
+            return new WP_Error('sp_api_pricing_error', $error_msg);
+        }
+
+        // Parse offers response
+        $offers = $body['payload']['Offers'] ?? array();
+        if (empty($offers)) {
+            return new WP_Error('sp_api_no_offers', "No offers found for ASIN: {$asin}");
+        }
+
+        // Get lowest price from offers
+        $lowest_price = null;
+        $currency = 'EUR';
+
+        foreach ($offers as $offer) {
+            $listing_price = $offer['ListingPrice']['Amount'] ?? null;
+            if ($listing_price !== null) {
+                $p = floatval($listing_price);
+                if ($lowest_price === null || $p < $lowest_price) {
+                    $lowest_price = $p;
+                    $currency = $offer['ListingPrice']['CurrencyCode'] ?? 'EUR';
+                }
+            }
+        }
+
+        if ($lowest_price === null || $lowest_price <= 0) {
+            return new WP_Error('sp_api_no_price', "No valid price in offers for ASIN: {$asin}");
+        }
+
+        $formatted_price = number_format($lowest_price, 2, ',', '.') . ' €';
+
+        return array(
+            'price'           => $lowest_price,
+            'currency'        => $currency,
+            'formatted_price' => $formatted_price,
+            'price_text'      => '',
+            'price_source'    => 'sp_api',
+        );
+    }
+
+    // =========================================================================
+    // EXISTING METHODS (updated for v3)
+    // =========================================================================
 
     /**
      * Sync product to Google Sheets when saved in admin
@@ -161,8 +536,8 @@ class WAAS_Price_Updater {
 
         error_log("WAAS Price Updater: Updating price for product #{$product_id} (ASIN: {$asin}) on page view");
 
-        // Fetch fresh price from Amazon PA-API
-        $price_data = $this->fetch_price_from_amazon($asin);
+        // v3: Use price router (PA-API → SP-API fallback)
+        $price_data = $this->fetch_price($asin);
 
         if (is_wp_error($price_data) || empty($price_data['price'])) {
             error_log("WAAS Price Updater: Failed to fetch price for {$asin}");
@@ -180,7 +555,7 @@ class WAAS_Price_Updater {
      * Update product price and meta
      *
      * @param int $product_id WooCommerce product ID
-     * @param array $price_data Array with price, currency, formatted_price
+     * @param array $price_data Array with price, currency, formatted_price, price_source
      */
     private function update_product_price($product_id, $price_data) {
         if (!function_exists('wc_get_product')) {
@@ -210,13 +585,24 @@ class WAAS_Price_Updater {
         update_post_meta($product_id, '_waas_last_price_update', $current_time);
         update_post_meta($product_id, '_waas_last_price_sync_date', $current_time);
 
-        error_log("WAAS Price Updater: ✓ Updated price for product #{$product_id}: {$new_price} (synced at {$current_time})");
+        // v3: Save price source
+        if (!empty($price_data['price_source'])) {
+            update_post_meta($product_id, '_waas_price_source', $price_data['price_source']);
+        }
+
+        $source_label = $price_data['price_source'] ?? 'unknown';
+        error_log("WAAS Price Updater: Updated product #{$product_id}: {$new_price} (source: {$source_label}, synced at {$current_time})");
     }
 
     /**
-     * Run daily price update (called by WordPress cron at 2 AM)
+     * Run daily price update (called by WordPress cron)
+     *
+     * v3: Returns summary array for REST API endpoint.
+     *
+     * @return array Summary { updated, failed, skipped, total, source_stats, duration_seconds }
      */
     public function run_daily_update() {
+        $start = microtime(true);
         error_log('WAAS Price Updater: Starting daily price update');
 
         // Get all products with auto-update enabled
@@ -224,7 +610,14 @@ class WAAS_Price_Updater {
 
         if (empty($products)) {
             error_log('WAAS Price Updater: No products with auto-update enabled');
-            return;
+            return array(
+                'updated' => 0,
+                'failed' => 0,
+                'skipped' => 0,
+                'total' => 0,
+                'source_stats' => array('pa_api' => 0, 'sp_api' => 0),
+                'duration_seconds' => round(microtime(true) - $start, 2),
+            );
         }
 
         error_log('WAAS Price Updater: Found ' . count($products) . ' products to update');
@@ -232,6 +625,7 @@ class WAAS_Price_Updater {
         $updated = 0;
         $failed = 0;
         $skipped = 0;
+        $source_stats = array('pa_api' => 0, 'sp_api' => 0);
         $sheets_updates = array();
 
         foreach ($products as $product) {
@@ -252,8 +646,8 @@ class WAAS_Price_Updater {
 
             error_log("WAAS Price Updater: Updating product #{$product_id} (ASIN: {$asin})");
 
-            // Fetch fresh price from Amazon PA-API
-            $price_data = $this->fetch_price_from_amazon($asin);
+            // v3: Use price router (PA-API → SP-API fallback)
+            $price_data = $this->fetch_price($asin);
 
             if (is_wp_error($price_data) || empty($price_data['price'])) {
                 error_log("WAAS Price Updater: Failed to fetch price for {$asin}");
@@ -264,6 +658,12 @@ class WAAS_Price_Updater {
             // Update WooCommerce product
             $this->update_product_price($product_id, $price_data);
 
+            // Track price source
+            $used_source = $price_data['price_source'] ?? 'pa_api';
+            if (isset($source_stats[$used_source])) {
+                $source_stats[$used_source]++;
+            }
+
             // Prepare Google Sheets update
             $sheets_updates[] = array(
                 'asin' => $asin,
@@ -271,21 +671,30 @@ class WAAS_Price_Updater {
                 'price_currency' => $price_data['currency'] ?? 'EUR',
                 'price_formatted' => $price_data['formatted_price'] ?? number_format($price_data['price'], 2, ',', '.') . ' €',
                 'price_text' => $price_data['price_text'] ?? '',
+                'price_source' => $used_source,
                 'last_price_update' => date_i18n('d.m.Y H:i') // German format
             );
 
             $updated++;
-
-            // Rate limiting - don't hammer Amazon API
-            sleep(1);
         }
 
-        error_log("WAAS Price Updater: Update complete. Success: {$updated}, Failed: {$failed}, Skipped: {$skipped}");
+        $duration = round(microtime(true) - $start, 2);
+
+        error_log("WAAS Price Updater: Update complete. Success: {$updated}, Failed: {$failed}, Skipped: {$skipped} (PA-API: {$source_stats['pa_api']}, SP-API: {$source_stats['sp_api']}) [{$duration}s]");
 
         // Sync all updates to Google Sheets in one batch
         if (!empty($sheets_updates)) {
             $this->sync_prices_to_google_sheets($sheets_updates);
         }
+
+        return array(
+            'updated'          => $updated,
+            'failed'           => $failed,
+            'skipped'          => $skipped,
+            'total'            => count($products),
+            'source_stats'     => $source_stats,
+            'duration_seconds' => $duration,
+        );
     }
 
     /**
@@ -302,6 +711,7 @@ class WAAS_Price_Updater {
                 'price_currency' => $price_data['currency'] ?? 'EUR',
                 'price_formatted' => $price_data['formatted_price'] ?? number_format($price_data['price'], 2, ',', '.') . ' €',
                 'price_text' => $price_data['price_text'] ?? '',
+                'price_source' => $price_data['price_source'] ?? '',
                 'last_price_update' => date_i18n('d.m.Y H:i') // German format
             )
         );
@@ -343,6 +753,9 @@ class WAAS_Price_Updater {
             return new WP_Error('no_api', 'Amazon API class not found');
         }
 
+        // Rate limit
+        $this->rate_limit('pa_api');
+
         try {
             $amazon_api = WAAS_Amazon_API::get_instance();
             $product_data = $amazon_api->get_item($asin);
@@ -359,7 +772,8 @@ class WAAS_Price_Updater {
                     'price' => $price,
                     'currency' => $product_data['currency'] ?? 'EUR',
                     'formatted_price' => $product_data['formatted_price'] ?? $price_string,
-                    'price_text' => $product_data['price_text'] ?? ''
+                    'price_text' => $product_data['price_text'] ?? '',
+                    'price_source' => 'pa_api',
                 );
             }
 
@@ -463,7 +877,7 @@ class WAAS_Price_Updater {
         $body = wp_remote_retrieve_body($response);
 
         if ($status_code === 200) {
-            error_log('WAAS Price Updater: ✓ Successfully synced prices to Google Sheets');
+            error_log('WAAS Price Updater: Successfully synced prices to Google Sheets');
             error_log('WAAS Price Updater: Response: ' . $body);
         } else {
             error_log("WAAS Price Updater: Google Sheets sync failed (HTTP {$status_code}): {$body}");
