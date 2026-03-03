@@ -3,7 +3,7 @@
  * Plugin Name: LUKO-WAAS Product Manager
  * Plugin URI: https://github.com/LUKOAI/LUKO-WAAS
  * Description: Automated WordPress Affiliate Site Framework for Amazon Sellers - Product management, shortcodes, and PA-API integration
- * Version: 1.0.0
+ * Version: 1.2.4
  * Author: LUKO AI
  * Author URI: https://github.com/LUKOAI
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('WAAS_PM_VERSION', '1.0.0');
+define('WAAS_PM_VERSION', '1.2.4');
 define('WAAS_PM_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WAAS_PM_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WAAS_PM_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -68,12 +68,18 @@ class WAAS_Product_Manager {
         require_once WAAS_PM_PLUGIN_DIR . 'includes/class-cache-manager.php';
         require_once WAAS_PM_PLUGIN_DIR . 'includes/class-rest-api.php';
         require_once WAAS_PM_PLUGIN_DIR . 'includes/class-product-importer.php';
-        require_once WAAS_PM_PLUGIN_DIR . 'includes/class-structure-api.php';
 
-        // WooCommerce integration (only if WooCommerce is active)
-        if (class_exists('WooCommerce')) {
-            require_once WAAS_PM_PLUGIN_DIR . 'includes/class-woocommerce-sync.php';
+        // Enhanced shortcodes (if available)
+        if (file_exists(WAAS_PM_PLUGIN_DIR . 'includes/class-shortcodes-enhanced.php')) {
+            require_once WAAS_PM_PLUGIN_DIR . 'includes/class-shortcodes-enhanced.php';
         }
+
+        // Comparison shortcodes (product comparisons, direct Amazon links, grids, tables)
+        if (file_exists(WAAS_PM_PLUGIN_DIR . 'includes/class-shortcodes-comparison.php')) {
+            require_once WAAS_PM_PLUGIN_DIR . 'includes/class-shortcodes-comparison.php';
+        }
+
+        // WooCommerce integration files - loaded in init_components() when WooCommerce is available
 
         // Admin functionality
         if (is_admin()) {
@@ -90,8 +96,11 @@ class WAAS_Product_Manager {
         register_activation_hook(__FILE__, array($this, 'activate'));
         register_deactivation_hook(__FILE__, array($this, 'deactivate'));
 
-        // Initialize components
-        add_action('plugins_loaded', array($this, 'init_components'));
+        // Initialize components after all plugins are loaded
+        add_action('plugins_loaded', array($this, 'init_components'), 20);
+
+        // WooCommerce integration - delay to 'init' hook for safety
+        add_action('init', array($this, 'init_woocommerce_integration'), 0);
 
         // Enqueue scripts and styles
         add_action('wp_enqueue_scripts', array($this, 'enqueue_frontend_assets'));
@@ -102,6 +111,9 @@ class WAAS_Product_Manager {
 
         // Load plugin textdomain
         add_action('init', array($this, 'load_textdomain'));
+
+        // Add affiliate disclaimer to site footer
+        add_action('wp_footer', array($this, 'add_footer_disclaimer'), 99);
     }
 
     /**
@@ -114,17 +126,58 @@ class WAAS_Product_Manager {
         // Initialize shortcodes
         WAAS_Shortcodes::get_instance();
 
-        // Initialize REST API
-        WAAS_REST_API::get_instance();
+        // Initialize enhanced shortcodes (if available)
+        if (class_exists('WAAS_Product_Shortcodes')) {
+            WAAS_Product_Shortcodes::get_instance();
+        }
 
-        // Initialize Structure API
-        WAAS_Structure_API::get_instance();
+        // Initialize comparison shortcodes (if available)
+        if (class_exists('WAAS_Shortcodes_Comparison')) {
+            WAAS_Shortcodes_Comparison::get_instance();
+        }
+
+        // Initialize REST API V2 (with direct WooCommerce sync)
+        if (file_exists(WAAS_PM_PLUGIN_DIR . 'includes/class-rest-api-v2.php')) {
+            require_once WAAS_PM_PLUGIN_DIR . 'includes/class-rest-api-v2.php';
+            WAAS_REST_API_V2::get_instance();
+        } else {
+            // Fallback to V1
+            WAAS_REST_API::get_instance();
+        }
 
         // Initialize admin if in admin area
         if (is_admin()) {
             WAAS_Admin_Dashboard::get_instance();
             WAAS_Admin_Settings::get_instance();
         }
+    }
+
+    /**
+     * Initialize WooCommerce integration
+     * Called on 'woocommerce_loaded' hook to ensure WooCommerce is fully available
+     */
+    public function init_woocommerce_integration() {
+        // Only proceed if WooCommerce is active
+        if (!class_exists('WooCommerce')) {
+            return;
+        }
+
+        // Prevent double initialization
+        static $initialized = false;
+        if ($initialized) {
+            return;
+        }
+        $initialized = true;
+
+        // Load WooCommerce integration files
+        require_once WAAS_PM_PLUGIN_DIR . 'includes/class-woocommerce-sync.php';
+        require_once WAAS_PM_PLUGIN_DIR . 'includes/class-price-disclaimer.php';
+        require_once WAAS_PM_PLUGIN_DIR . 'includes/class-price-updater.php';
+
+        // Initialize components
+        WAAS_WooCommerce_Sync::get_instance();
+        WAAS_Price_Disclaimer::get_instance();
+        WAAS_Price_Updater::get_instance();
     }
 
     /**
@@ -144,6 +197,21 @@ class WAAS_Product_Manager {
 
         // Create database tables if needed
         $this->create_tables();
+
+        // CRITICAL: Set WooCommerce settings to German format
+        // This ensures the settings are applied even if filters don't work
+        if (class_exists('WooCommerce')) {
+            // German price format: 115,00 € (comma for decimal, dot for thousands)
+            update_option('woocommerce_price_decimal_sep', ',');
+            update_option('woocommerce_price_thousand_sep', '.');
+            update_option('woocommerce_price_num_decimals', 2);
+            update_option('woocommerce_currency_pos', 'right_space'); // Price then symbol: 115,00 €
+
+            error_log('WAAS: German price format settings applied');
+        }
+
+        // Create Amazon-Vorteile page
+        $this->create_amazon_vorteile_page();
     }
 
     /**
@@ -200,9 +268,157 @@ class WAAS_Product_Manager {
     }
 
     /**
+     * Create Amazon-Vorteile page
+     * NEW: Per latest requirements - page promoting Amazon services
+     */
+    private function create_amazon_vorteile_page() {
+        // Check if page already exists
+        $existing_page = get_page_by_path('amazon-vorteile');
+        if ($existing_page) {
+            error_log('WAAS: Amazon-Vorteile page already exists');
+            return;
+        }
+
+        // Get tracking ID from settings (from WAAS Product Manager Settings)
+        $tracking_id = get_option('waas_pm_amazon_partner_tag', '');
+        if (empty($tracking_id)) {
+            $tracking_id = 'YOUR_TRACKING_ID'; // Fallback if not configured
+        }
+
+        // Page content with all Amazon services
+        $content = '
+<div class="amazon-vorteile" style="max-width: 1200px; margin: 0 auto; padding: 20px;">
+    <div style="text-align: center; margin-bottom: 40px;">
+        <h1 style="font-size: 2.5em; color: #232F3E; margin-bottom: 15px;">Amazon-Vorteile entdecken</h1>
+        <p style="font-size: 1.2em; color: #666;">Entdecken Sie die besten Services von Amazon</p>
+    </div>
+
+    <!-- Amazon Prime -->
+    <div class="service-box" style="background: linear-gradient(135deg, #00A8E1 0%, #0073CF 100%); padding: 40px; margin-bottom: 30px; border-radius: 10px; color: white;">
+        <h2 style="color: white; font-size: 2em; margin-bottom: 15px;">🎁 Amazon Prime</h2>
+        <p style="font-size: 1.1em; margin-bottom: 20px; line-height: 1.6;">
+            Schneller, kostenloser Versand, exklusive Deals und unbegrenztes Streaming von Filmen und Serien.
+            Genießen Sie Prime Video, Prime Music, Prime Reading und vieles mehr – alles in einer Mitgliedschaft!
+        </p>
+        <ul style="font-size: 1em; margin-bottom: 25px; line-height: 1.8;">
+            <li>✓ Kostenloser Premium-Versand</li>
+            <li>✓ Prime Video: Unbegrenzt Filme & Serien streamen</li>
+            <li>✓ Prime Music: Millionen Songs werbefrei</li>
+            <li>✓ Exklusive Angebote und früher Zugang zu Deals</li>
+            <li>✓ 30 Tage kostenlos testen</li>
+        </ul>
+        <a href="https://www.amazon.de/prime?tag=' . $tracking_id . '" target="_blank" rel="nofollow noopener" style="display: inline-block; background-color: #FF9900; color: #000; padding: 15px 40px; font-size: 1.2em; font-weight: bold; text-decoration: none; border-radius: 5px; transition: all 0.3s;">
+            Jetzt 30 Tage kostenlos testen →
+        </a>
+    </div>
+
+    <!-- Prime Video -->
+    <div class="service-box" style="background: linear-gradient(135deg, #1A98FF 0%, #0D47A1 100%); padding: 40px; margin-bottom: 30px; border-radius: 10px; color: white;">
+        <h2 style="color: white; font-size: 2em; margin-bottom: 15px;">🎬 Prime Video</h2>
+        <p style="font-size: 1.1em; margin-bottom: 20px; line-height: 1.6;">
+            Streamen Sie tausende Filme und Serien, darunter preisgekrönte Amazon Originals.
+            Auf jedem Gerät verfügbar – zu Hause oder unterwegs.
+        </p>
+        <ul style="font-size: 1em; margin-bottom: 25px; line-height: 1.8;">
+            <li>✓ Tausende Filme und Serien</li>
+            <li>✓ Exklusive Amazon Originals</li>
+            <li>✓ Auf allen Geräten verfügbar</li>
+            <li>✓ Download für Offline-Viewing</li>
+        </ul>
+        <a href="https://www.amazon.de/primevideo?tag=' . $tracking_id . '" target="_blank" rel="nofollow noopener" style="display: inline-block; background-color: #FF9900; color: #000; padding: 15px 40px; font-size: 1.2em; font-weight: bold; text-decoration: none; border-radius: 5px; transition: all 0.3s;">
+            Prime Video entdecken →
+        </a>
+    </div>
+
+    <!-- Audible -->
+    <div class="service-box" style="background: linear-gradient(135deg, #FF9900 0%, #FF6600 100%); padding: 40px; margin-bottom: 30px; border-radius: 10px; color: white;">
+        <h2 style="color: white; font-size: 2em; margin-bottom: 15px;">🎧 Audible</h2>
+        <p style="font-size: 1.1em; margin-bottom: 20px; line-height: 1.6;">
+            Hörbücher und Hörspiele von Bestseller-Autoren. Perfekt für unterwegs, beim Sport oder zum Einschlafen.
+        </p>
+        <ul style="font-size: 1em; margin-bottom: 25px; line-height: 1.8;">
+            <li>✓ Über 200.000 Hörbücher und Podcasts</li>
+            <li>✓ Exklusive Audible Originals</li>
+            <li>✓ Offline hörbar</li>
+            <li>✓ 30 Tage kostenlos testen</li>
+        </ul>
+        <a href="https://www.amazon.de/hz/audible/mlp?tag=' . $tracking_id . '" target="_blank" rel="nofollow noopener" style="display: inline-block; background-color: #232F3E; color: white; padding: 15px 40px; font-size: 1.2em; font-weight: bold; text-decoration: none; border-radius: 5px; transition: all 0.3s;">
+            Audible kostenlos testen →
+        </a>
+    </div>
+
+    <!-- Music Unlimited -->
+    <div class="service-box" style="background: linear-gradient(135deg, #FF4081 0%, #C51162 100%); padding: 40px; margin-bottom: 30px; border-radius: 10px; color: white;">
+        <h2 style="color: white; font-size: 2em; margin-bottom: 15px;">🎵 Amazon Music Unlimited</h2>
+        <p style="font-size: 1.1em; margin-bottom: 20px; line-height: 1.6;">
+            Über 100 Millionen Songs in HD-Qualität. Werbefreies Streaming auf allen Geräten.
+        </p>
+        <ul style="font-size: 1em; margin-bottom: 25px; line-height: 1.8;">
+            <li>✓ 100 Millionen Songs</li>
+            <li>✓ HD und Ultra HD Qualität</li>
+            <li>✓ Offline-Modus</li>
+            <li>✓ Alexa-Integration</li>
+            <li>✓ 30 Tage kostenlos testen</li>
+        </ul>
+        <a href="https://www.amazon.de/music/unlimited?tag=' . $tracking_id . '" target="_blank" rel="nofollow noopener" style="display: inline-block; background-color: #232F3E; color: white; padding: 15px 40px; font-size: 1.2em; font-weight: bold; text-decoration: none; border-radius: 5px; transition: all 0.3s;">
+            Music Unlimited testen →
+        </a>
+    </div>
+
+    <!-- Amazon Geräte -->
+    <div class="service-box" style="background: linear-gradient(135deg, #232F3E 0%, #131A22 100%); padding: 40px; margin-bottom: 30px; border-radius: 10px; color: white;">
+        <h2 style="color: white; font-size: 2em; margin-bottom: 15px;">📱 Amazon Geräte</h2>
+        <p style="font-size: 1.1em; margin-bottom: 20px; line-height: 1.6;">
+            Echo, Kindle, Fire TV und mehr – entdecken Sie die innovativen Geräte von Amazon für Ihr Smart Home.
+        </p>
+        <ul style="font-size: 1em; margin-bottom: 25px; line-height: 1.8;">
+            <li>✓ Echo & Alexa: Sprachassistent für Ihr Zuhause</li>
+            <li>✓ Kindle: E-Reader für Leseratten</li>
+            <li>✓ Fire TV: Streaming-Stick & Smart TVs</li>
+            <li>✓ Ring: Smarte Türklingeln & Sicherheit</li>
+            <li>✓ eero: WLAN-Mesh-Systeme</li>
+        </ul>
+        <a href="https://www.amazon.de/b?node=10925051&tag=' . $tracking_id . '" target="_blank" rel="nofollow noopener" style="display: inline-block; background-color: #FF9900; color: #000; padding: 15px 40px; font-size: 1.2em; font-weight: bold; text-decoration: none; border-radius: 5px; transition: all 0.3s;">
+            Amazon Geräte entdecken →
+        </a>
+    </div>
+
+    <!-- Footer Disclaimer -->
+    <div style="text-align: center; margin-top: 50px; padding: 20px; background-color: #f5f5f5; border-radius: 5px;">
+        <p style="font-size: 0.9em; color: #666; margin: 0;">
+            * Als Amazon-Partner verdienen wir an qualifizierten Verkäufen. Die Preise können sich ändern.
+            Alle Angaben ohne Gewähr. Letzte Aktualisierung am ' . date('d.m.Y') . '.
+        </p>
+    </div>
+</div>
+';
+
+        // Create the page
+        $page_data = array(
+            'post_title'    => 'Amazon-Vorteile entdecken',
+            'post_content'  => $content,
+            'post_status'   => 'publish',
+            'post_type'     => 'page',
+            'post_name'     => 'amazon-vorteile',
+            'post_author'   => 1,
+            'comment_status' => 'closed',
+            'ping_status'   => 'closed'
+        );
+
+        $page_id = wp_insert_post($page_data);
+
+        if ($page_id && !is_wp_error($page_id)) {
+            error_log("WAAS: Created Amazon-Vorteile page (ID: {$page_id})");
+        } else {
+            error_log("WAAS: Failed to create Amazon-Vorteile page");
+        }
+    }
+
+    /**
      * Enqueue frontend assets
      */
     public function enqueue_frontend_assets() {
+        // Original frontend styles
         wp_enqueue_style(
             'waas-pm-frontend',
             WAAS_PM_PLUGIN_URL . 'assets/css/frontend.css',
@@ -210,6 +426,17 @@ class WAAS_Product_Manager {
             WAAS_PM_VERSION
         );
 
+        // Shortcodes styles (if file exists)
+        if (file_exists(WAAS_PM_PLUGIN_DIR . 'assets/css/shortcodes.css')) {
+            wp_enqueue_style(
+                'waas-pm-shortcodes',
+                WAAS_PM_PLUGIN_URL . 'assets/css/shortcodes.css',
+                array(),
+                WAAS_PM_VERSION
+            );
+        }
+
+        // Original frontend script
         wp_enqueue_script(
             'waas-pm-frontend',
             WAAS_PM_PLUGIN_URL . 'assets/js/frontend.js',
@@ -218,10 +445,23 @@ class WAAS_Product_Manager {
             true
         );
 
+        // Shortcodes script (if file exists)
+        if (file_exists(WAAS_PM_PLUGIN_DIR . 'assets/js/shortcodes.js')) {
+            wp_enqueue_script(
+                'waas-pm-shortcodes',
+                WAAS_PM_PLUGIN_URL . 'assets/js/shortcodes.js',
+                array('jquery'),
+                WAAS_PM_VERSION,
+                true
+            );
+        }
+
         wp_localize_script('waas-pm-frontend', 'waasPM', array(
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('waas_pm_nonce')
         ));
+
+        // Product meta disclaimer - DISABLED, handled by class-price-disclaimer.php
     }
 
     /**
@@ -273,6 +513,50 @@ class WAAS_Product_Manager {
             false,
             dirname(WAAS_PM_PLUGIN_BASENAME) . '/languages'
         );
+    }
+
+    /**
+     * Add affiliate disclaimer to site footer
+     * Outputs custom CSS and a fallback PHP-based footer injection
+     */
+    public function add_footer_disclaimer() {
+        // Output custom CSS for footer styling
+        ?>
+        <style type="text/css">
+            /* WAAS Footer Styling - Override theme styles */
+            #footer-bottom,
+            .footer-bottom,
+            #main-footer .bottom-nav-wrap,
+            .et_pb_bottom_footer_container {
+                background-color: #ffffff !important;
+            }
+
+            #footer-info,
+            .waas-affiliate-footer,
+            #footer-bottom .container,
+            .et_pb_bottom_footer_container .container {
+                background-color: #ffffff !important;
+                color: #888888 !important;
+                font-size: 0.85em !important;
+                text-align: center !important;
+                line-height: 1.5 !important;
+                padding: 15px 0 !important;
+            }
+
+            /* Ensure contrast */
+            #footer-info a,
+            .waas-affiliate-footer a {
+                color: #666666 !important;
+            }
+        </style>
+
+        <!-- PHP Fallback Footer (hidden, revealed by JS if needed) -->
+        <div id="waas-footer-fallback" style="display: none; background-color: #ffffff; color: #888888; font-size: 0.85em; text-align: center; line-height: 1.5; padding: 15px 0;">
+            &copy; 2025 Passgenaue LKW-Fußmatten | * Affiliate-Link (Werbung). Preise inkl. MwSt., ggf. zzgl. Versandkosten.<br>
+            Als Amazon-Partner verdienen wir an qualifizierten Käufen eine kleine<br>
+            Provision, die den Produktpreis nicht beeinflusst.
+        </div>
+        <?php
     }
 }
 

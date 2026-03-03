@@ -2,155 +2,159 @@
  * WAAS Product Manager - Frontend JavaScript
  *
  * @package WAAS_Product_Manager
- * @version 1.0.0
  */
 
 (function($) {
     'use strict';
 
-    /**
-     * WAAS Frontend Handler
-     */
-    const WaasProPM = {
-
-        /**
-         * Initialize
-         */
-        init: function() {
-            this.bindEvents();
-            this.lazyLoadImages();
-        },
-
-        /**
-         * Bind events
-         */
-        bindEvents: function() {
-            // Track affiliate link clicks
-            $(document).on('click', '.waas-button, .waas-grid-button', this.trackAffiliateClick);
-
-            // Handle dynamic product loading if needed
-            this.handleDynamicLoading();
-        },
-
-        /**
-         * Track affiliate link clicks (for analytics)
-         */
-        trackAffiliateClick: function(e) {
-            const $link = $(this);
-            const asin = $link.closest('[data-asin]').attr('data-asin');
-
-            // Send tracking event if analytics is available
-            if (typeof ga !== 'undefined') {
-                ga('send', 'event', 'Amazon Product', 'Click', asin);
-            }
-
-            if (typeof gtag !== 'undefined') {
-                gtag('event', 'amazon_product_click', {
-                    'event_category': 'Amazon Product',
-                    'event_label': asin
-                });
-            }
-
-            // Log to console for debugging
-            console.log('WAAS: Affiliate link clicked for ASIN:', asin);
-        },
-
-        /**
-         * Lazy load product images
-         */
-        lazyLoadImages: function() {
-            if ('IntersectionObserver' in window) {
-                const imageObserver = new IntersectionObserver(function(entries, observer) {
-                    entries.forEach(function(entry) {
-                        if (entry.isIntersecting) {
-                            const img = entry.target;
-                            img.src = img.dataset.src;
-                            img.classList.remove('waas-lazy');
-                            imageObserver.unobserve(img);
-                        }
-                    });
-                });
-
-                document.querySelectorAll('.waas-product-image img.waas-lazy, .waas-grid-image img.waas-lazy').forEach(function(img) {
-                    imageObserver.observe(img);
-                });
-            }
-        },
-
-        /**
-         * Handle dynamic product loading
-         */
-        handleDynamicLoading: function() {
-            // Check if there are any products marked for dynamic loading
-            $('.waas-product[data-dynamic-load="true"]').each(function() {
-                const $product = $(this);
-                const asin = $product.attr('data-asin');
-
-                if (asin) {
-                    WaasProPM.loadProductData(asin, $product);
-                }
-            });
-        },
-
-        /**
-         * Load product data via AJAX
-         */
-        loadProductData: function(asin, $container) {
-            $container.addClass('waas-loading');
-
-            $.ajax({
-                url: waasPM.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'waas_get_product',
-                    nonce: waasPM.nonce,
-                    asin: asin
-                },
-                success: function(response) {
-                    if (response.success) {
-                        $container.html(response.data.html);
-                        $container.removeClass('waas-loading');
-                    } else {
-                        console.error('WAAS: Failed to load product', asin);
-                        $container.removeClass('waas-loading');
-                    }
-                },
-                error: function(xhr, status, error) {
-                    console.error('WAAS: AJAX error', error);
-                    $container.removeClass('waas-loading');
-                }
-            });
-        },
-
-        /**
-         * Refresh product price (for real-time updates)
-         */
-        refreshPrice: function(asin, $priceContainer) {
-            $.ajax({
-                url: waasPM.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'waas_get_product_price',
-                    nonce: waasPM.nonce,
-                    asin: asin
-                },
-                success: function(response) {
-                    if (response.success && response.data.price) {
-                        $priceContainer.html(response.data.price_html);
-                    }
-                }
-            });
-        }
-    };
-
-    /**
-     * Document ready
-     */
     $(document).ready(function() {
-        WaasProPM.init();
-    });
+        console.log('WAAS Product Manager: Frontend loaded');
 
-    // Make WaasProPM globally accessible
-    window.WaasProPM = WaasProPM;
+        // DEBUG: Check if product meta data is available
+        if (typeof waasProductMeta !== 'undefined') {
+            console.log('WAAS: waasProductMeta is defined:', waasProductMeta);
+        } else {
+            console.log('WAAS: waasProductMeta is NOT defined - product may not be external type or not on product page');
+        }
+
+        // Add product meta disclaimer (if data is available)
+        if (typeof waasProductMeta !== 'undefined' && waasProductMeta.timestamp) {
+            var disclaimerHTML = '<div class="waas-price-disclaimer-meta" style="display: block !important; visibility: visible !important; margin-top: 15px !important; margin-bottom: 15px !important; padding: 10px !important; background-color: #f9f9f9 !important; border-left: 3px solid #e0e0e0 !important; font-size: 0.85em !important; color: #666 !important; font-style: italic !important; line-height: 1.6 !important;">' +
+                '<strong>' + waasProductMeta.disclaimer + '</strong><br>' +
+                'Preisstand: ' + waasProductMeta.timestamp +
+                '</div>';
+
+            if ($('.product_meta').length > 0) {
+                $('.product_meta').after(disclaimerHTML);
+                console.log('WAAS: Product meta disclaimer inserted after .product_meta');
+            } else {
+                console.log('WAAS: .product_meta not found, disclaimer not inserted');
+            }
+        }
+
+        // ============================================
+        // FOOTER CUSTOMIZATION
+        // ============================================
+
+        // New footer text per user specification
+        var newFooterText = '© 2025 Passgenaue LKW-Fußmatten | * Affiliate-Link (Werbung). Preise inkl. MwSt., ggf. zzgl. Versandkosten.<br>' +
+            'Als Amazon-Partner verdienen wir an qualifizierten Käufen eine kleine<br>' +
+            'Provision, die den Produktpreis nicht beeinflusst.';
+
+        // Footer styling (white background, gray text, smaller font)
+        var footerStyles = {
+            'background-color': '#ffffff',
+            'color': '#888888',
+            'font-size': '0.85em',
+            'padding': '15px 0',
+            'text-align': 'center',
+            'line-height': '1.5'
+        };
+
+        // Old text pattern to find
+        var oldTextPatterns = [
+            'Als Amazon-Partner verdienen wir an qualifizierten Verkäufen',
+            'Amazon-Partner',
+            'qualifizierten Verkäufen'
+        ];
+
+        // Function to update footer
+        function updateFooter() {
+            var footerUpdated = false;
+
+            // Method 1: Try #footer-info (common in many themes)
+            if ($('#footer-info').length > 0) {
+                $('#footer-info').html(newFooterText).css(footerStyles);
+                $('#footer-bottom').css({
+                    'background-color': '#ffffff',
+                    'padding': '15px 0'
+                });
+                footerUpdated = true;
+                console.log('WAAS: Footer updated via #footer-info');
+            }
+
+            // Method 2: Try Divi footer bottom
+            if (!footerUpdated && $('#footer-bottom .container').length > 0) {
+                $('#footer-bottom .container').html('<div id="footer-info" style="' +
+                    'background-color: #ffffff; color: #888888; font-size: 0.85em; ' +
+                    'text-align: center; line-height: 1.5;">' + newFooterText + '</div>');
+                $('#footer-bottom').css({
+                    'background-color': '#ffffff',
+                    'padding': '15px 0'
+                });
+                footerUpdated = true;
+                console.log('WAAS: Footer updated via #footer-bottom .container (Divi)');
+            }
+
+            // Method 3: Try .footer-bottom (common class name)
+            if (!footerUpdated && $('.footer-bottom').length > 0) {
+                var $footerBottom = $('.footer-bottom');
+                var currentText = $footerBottom.text();
+
+                for (var i = 0; i < oldTextPatterns.length; i++) {
+                    if (currentText.indexOf(oldTextPatterns[i]) !== -1) {
+                        $footerBottom.html('<div style="' +
+                            'background-color: #ffffff; color: #888888; font-size: 0.85em; ' +
+                            'text-align: center; line-height: 1.5; padding: 15px;">' +
+                            newFooterText + '</div>');
+                        footerUpdated = true;
+                        console.log('WAAS: Footer updated via .footer-bottom');
+                        break;
+                    }
+                }
+            }
+
+            // Method 4: Try #main-footer (Divi specific)
+            if (!footerUpdated && $('#main-footer .bottom-nav').length > 0) {
+                $('#main-footer .bottom-nav').html(newFooterText);
+                $('#main-footer').find('.bottom-nav').parent().css({
+                    'background-color': '#ffffff',
+                    'color': '#888888',
+                    'font-size': '0.85em'
+                });
+                footerUpdated = true;
+                console.log('WAAS: Footer updated via #main-footer .bottom-nav');
+            }
+
+            // Method 5: Generic search - look for any element containing the old text
+            if (!footerUpdated) {
+                $('footer, #footer, .footer, #main-footer').find('*').each(function() {
+                    var $elem = $(this);
+                    var elemText = $elem.text();
+
+                    // Skip if element has many children (container element)
+                    if ($elem.children().length > 2) return true;
+
+                    for (var i = 0; i < oldTextPatterns.length; i++) {
+                        if (elemText.indexOf(oldTextPatterns[i]) !== -1) {
+                            $elem.html(newFooterText).css(footerStyles);
+                            // Also style parent if it's a container
+                            $elem.parent().css({
+                                'background-color': '#ffffff',
+                                'padding': '15px 0'
+                            });
+                            footerUpdated = true;
+                            console.log('WAAS: Footer updated via generic search');
+                            return false; // break .each loop
+                        }
+                    }
+                });
+            }
+
+            if (!footerUpdated) {
+                console.log('WAAS: Footer not found - manual configuration may be needed');
+            }
+        }
+
+        // Run footer update
+        updateFooter();
+
+        // Also run after a small delay (some themes load footer dynamically)
+        setTimeout(function() {
+            if ($('#footer-info').length === 0 || $('#footer-info').html().indexOf('Provision') === -1) {
+                updateFooter();
+            }
+        }, 1000);
+    });
 
 })(jQuery);

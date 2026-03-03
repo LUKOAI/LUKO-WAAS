@@ -15,9 +15,28 @@ if (!defined('ABSPATH')) {
 class WAAS_WooCommerce_Sync {
 
     /**
+     * Instance of this class
+     *
+     * @var object
+     */
+    protected static $instance = null;
+
+    /**
+     * Get instance of this class
+     *
+     * @return object
+     */
+    public static function get_instance() {
+        if (null === self::$instance) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
+
+    /**
      * Constructor
      */
-    public function __construct() {
+    private function __construct() {
         // Hook do synchronizacji po imporcie produktu
         add_action('waas_product_imported', array($this, 'sync_to_woocommerce'), 10, 2);
         add_action('waas_product_updated', array($this, 'sync_to_woocommerce'), 10, 2);
@@ -68,16 +87,21 @@ class WAAS_WooCommerce_Sync {
         $asin = get_post_meta($post_id, '_waas_asin', true);
 
         if (empty($asin)) {
+            error_log('WAAS WooCommerce Sync: Product has no ASIN (Post ID: ' . $post_id . ')');
             return new WP_Error('no_asin', 'Product has no ASIN');
         }
+
+        error_log("WAAS WooCommerce Sync: Starting sync for ASIN {$asin} (Post ID: {$post_id})");
 
         // Sprawdź czy produkt WooCommerce już istnieje dla tego ASIN
         $wc_product_id = $this->get_woocommerce_product_by_asin($asin);
 
         if ($wc_product_id) {
+            error_log("WAAS WooCommerce Sync: Found existing WooCommerce product #{$wc_product_id} for ASIN {$asin}");
             // Update istniejącego produktu
             return $this->update_woocommerce_product($wc_product_id, $post_id, $product_data);
         } else {
+            error_log("WAAS WooCommerce Sync: Creating new WooCommerce product for ASIN {$asin}");
             // Utwórz nowy produkt
             return $this->create_woocommerce_product($post_id, $product_data);
         }
@@ -117,11 +141,15 @@ class WAAS_WooCommerce_Sync {
      */
     private function create_woocommerce_product($waas_post_id, $product_data) {
         try {
+            error_log("WAAS WooCommerce Sync: create_woocommerce_product() called for post #{$waas_post_id}");
+
             // Pobierz dane z WAAS product
             $asin = get_post_meta($waas_post_id, '_waas_asin', true);
             $title = get_the_title($waas_post_id);
             $description = get_post_field('post_content', $waas_post_id);
             $short_description = get_post_field('post_excerpt', $waas_post_id);
+
+            error_log("WAAS WooCommerce Sync: Product title: {$title}");
 
             // Pobierz meta
             $price = get_post_meta($waas_post_id, '_waas_price', true);
@@ -129,6 +157,13 @@ class WAAS_WooCommerce_Sync {
             $image_url = get_post_meta($waas_post_id, '_waas_image_url', true);
             $affiliate_link = get_post_meta($waas_post_id, '_waas_affiliate_link', true);
             $features = get_post_meta($waas_post_id, '_waas_features', true);
+
+            error_log("WAAS WooCommerce Sync: Price: {$price}, Brand: {$brand}, Image: {$image_url}");
+
+            // Sprawdź czy klasa WC_Product_External istnieje
+            if (!class_exists('WC_Product_External')) {
+                throw new Exception('WC_Product_External class not found. Is WooCommerce fully loaded?');
+            }
 
             // Utwórz produkt WooCommerce typu External/Affiliate
             $product = new WC_Product_External();
@@ -138,18 +173,18 @@ class WAAS_WooCommerce_Sync {
             $product->set_status('publish');
             $product->set_catalog_visibility('visible');
 
-            // Opis
-            if (!empty($description)) {
+            error_log("WAAS WooCommerce Sync: Set basic product data");
+
+            // Description - use features/BulletPoints as main description
+            if (!empty($features)) {
+                $features_html = $this->format_features_html($features);
+                $product->set_description($features_html);
+            } else if (!empty($description)) {
                 $product->set_description($description);
             }
 
-            if (!empty($short_description)) {
-                $product->set_short_description($short_description);
-            } else if (!empty($features)) {
-                // Jeśli brak short description, użyj features
-                $features_html = $this->format_features_html($features);
-                $product->set_short_description($features_html);
-            }
+            // Short description - always empty per user request
+            $product->set_short_description('');
 
             // Cena (display only - External products nie mają własnej ceny)
             if (!empty($price)) {
@@ -157,21 +192,31 @@ class WAAS_WooCommerce_Sync {
                 if ($price_numeric) {
                     $product->set_regular_price($price_numeric);
                     $product->set_price($price_numeric);
+                    error_log("WAAS WooCommerce Sync: Set price: {$price_numeric}");
                 }
             }
 
             // External product URL (link do Amazon)
             if (!empty($affiliate_link)) {
                 $product->set_product_url($affiliate_link);
-                $product->set_button_text('View on Amazon');
+                $product->set_button_text('Auf Amazon anschauen');
+                error_log("WAAS WooCommerce Sync: Set affiliate link: {$affiliate_link}");
+            }
+
+            // Set ASIN as SKU (Artikelnummer)
+            if (!empty($asin)) {
+                $product->set_sku($asin);
+                error_log("WAAS WooCommerce Sync: Set SKU (ASIN): {$asin}");
             }
 
             // Zapisz produkt
             $wc_product_id = $product->save();
 
             if (!$wc_product_id) {
-                throw new Exception('Failed to create WooCommerce product');
+                throw new Exception('Failed to create WooCommerce product - save() returned false');
             }
+
+            error_log("WAAS WooCommerce Sync: Product saved with ID: {$wc_product_id}");
 
             // Zapisz ASIN jako meta (do późniejszego wyszukiwania)
             update_post_meta($wc_product_id, '_waas_asin', $asin);
@@ -190,12 +235,13 @@ class WAAS_WooCommerce_Sync {
             // Synchronizuj kategorie z WAAS product do WooCommerce
             $this->sync_categories($waas_post_id, $wc_product_id);
 
-            error_log("WAAS WooCommerce Sync: Created product #{$wc_product_id} for ASIN {$asin}");
+            error_log("WAAS WooCommerce Sync: ✓ Successfully created WooCommerce product #{$wc_product_id} for ASIN {$asin}");
 
             return $wc_product_id;
 
         } catch (Exception $e) {
-            error_log('WAAS WooCommerce Sync Error: ' . $e->getMessage());
+            error_log('WAAS WooCommerce Sync ERROR: ' . $e->getMessage());
+            error_log('WAAS WooCommerce Sync ERROR Stack: ' . $e->getTraceAsString());
             return new WP_Error('create_failed', $e->getMessage());
         }
     }
@@ -259,12 +305,12 @@ class WAAS_WooCommerce_Sync {
             // Synchronizuj kategorie
             $this->sync_categories($waas_post_id, $wc_product_id);
 
-            error_log("WAAS WooCommerce Sync: Updated product #{$wc_product_id}");
+            error_log("WAAS WooCommerce Sync: ✓ Updated WooCommerce product #{$wc_product_id}");
 
             return $wc_product_id;
 
         } catch (Exception $e) {
-            error_log('WAAS WooCommerce Sync Update Error: ' . $e->getMessage());
+            error_log('WAAS WooCommerce Sync Update ERROR: ' . $e->getMessage());
             return new WP_Error('update_failed', $e->getMessage());
         }
     }
@@ -438,9 +484,4 @@ class WAAS_WooCommerce_Sync {
 
         return $stats;
     }
-}
-
-// Initialize
-if (class_exists('WooCommerce')) {
-    new WAAS_WooCommerce_Sync();
 }
