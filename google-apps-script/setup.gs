@@ -19,7 +19,9 @@
  *    - DiviAPI.gs
  *    - WordPressAPI.gs
  *    - AmazonPA.gs
- *    - Migration.gs
+ *    - ProductManager-WOOCOMMERCE-EXPORT.gs
+ *    - ProductImportHelper.gs
+ *    - ProductManager-PRICE-WEBHOOK.gs
  *    - appsscript.json
  * 5. Zapisz projekt (Ctrl+S)
  * 6. Uruchom funkcję: installWAAS()
@@ -529,62 +531,4 @@ function initializeSettings() {
   Logger.log('💡 Remember: Per-site credentials should be set in Sites sheet (columns 7-9)');
 }
 
-// =============================================================================
-// MENU
-// =============================================================================
-
-function onOpen() {
-  const ui = SpreadsheetApp.getUi();
-  ui.createMenu('⚡ WAAS')
-    .addSubMenu(ui.createMenu('🌐 Sites')
-      .addItem('➕ Add New Site', 'showAddSiteDialog')
-      .addItem('✅ Check Site Status', 'showCheckSiteDialog')
-      .addItem('🎨 Install Divi on Site', 'showInstallDiviDialog')
-      .addItem('🔌 Install Plugin on Site', 'showInstallPluginDialog')
-      .addSeparator()
-      .addItem('🔄 Refresh All Sites', 'refreshAllSites'))
-    .addSubMenu(ui.createMenu('📦 Products')
-      .addItem('📥 Import from Amazon', 'showImportProductsDialog')
-      .addItem('🔄 Update Product Data', 'showUpdateProductsDialog')
-      .addItem('🔄 Sync All Products', 'syncAllProducts')
-      .addSeparator()
-      .addItem('📊 Product Statistics', 'showProductStats'))
-    .addSubMenu(ui.createMenu('📝 Content')
-      .addItem('✍️ Generate Content', 'showGenerateContentDialog')
-      .addItem('📤 Publish Scheduled Content', 'publishScheduledContent')
-      .addItem('📋 View Content Queue', 'focusContentQueue')
-      .addSeparator()
-      .addItem('🗑️ Clear Failed Content', 'clearFailedContent'))
-    .addSubMenu(ui.createMenu('⚙️ Tasks')
-      .addItem('👁️ View Active Tasks', 'focusActiveTasks')
-      .addItem('▶️ Run Task Queue', 'runTaskQueue')
-      .addItem('🗑️ Clear Completed Tasks', 'clearCompletedTasks')
-      .addSeparator()
-      .addItem('🔄 Retry Failed Tasks', 'retryFailedTasks'))
-    .addSubMenu(ui.createMenu('🤖 Automation')
-      .addItem('🚀 Install Full Stack', 'showInstallFullStackDialog')
-      .addItem('📤 Deploy Selected Content', 'showDeployContentDialog')
-      .addSeparator()
-      .addItem('⚡ Process Auto Install Sites', 'processAutoInstallSites')
-      .addItem('⚡ Process Content Deployment', 'processContentDeployment')
-      .addSeparator()
-      .addItem('⏰ Setup Automated Triggers', 'setupAutomatedTriggers')
-      .addItem('🗑️ Remove Automated Triggers', 'removeAutomatedTriggers')
-      .addSeparator()
-      .addItem('🔄 Run Daily Amazon Sync', 'dailyAmazonSync')
-      .addItem('🔄 Run Hourly Check', 'hourlyAutomationCheck'))
-    .addSubMenu(ui.createMenu('🔧 Settings')
-      .addItem('🔑 Configure API Keys', 'showAPIKeyInstructions')
-      .addItem('⚙️ System Settings', 'showSettingsDialog')
-      .addItem('🧪 Test Connections', 'testAllConnections')
-      .addSeparator()
-      .addItem('🔄 Migrate to Per-Site Divi Keys', 'migrateToPerSiteDiviKeys')
-      .addItem('✅ Verify Migration', 'verifyMigration')
-      .addSeparator()
-      .addItem('📊 View Logs', 'focusLogs')
-      .addItem('🗑️ Clear Old Logs', 'clearOldLogs'))
-    .addSeparator()
-    .addItem('📖 Documentation', 'showDocumentation')
-    .addItem('ℹ️ About WAAS', 'showAbout')
-    .addToUi();
-}
+// NOTE: onOpen() menu is defined in Menu.gs (canonical version)

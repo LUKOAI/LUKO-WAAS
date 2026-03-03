@@ -312,12 +312,10 @@ function installFullStack(siteId, options = {}) {
     if (result.success) {
       logSuccess('AUTOMATION', `Full stack installation completed: ${successfulSteps}/${totalSteps} steps successful (${result.duration}s)`, siteId);
 
-      // Update site status in Sites sheet
-      updateSiteStatus(siteId, {
-        status: 'Active',
+      // Update site status in Sites sheet (uses SiteManager.gs signature)
+      updateSiteStatus(siteId, 'Active', {
         diviInstalled: 'Yes',
-        pluginInstalled: 'Yes',
-        lastCheck: new Date()
+        pluginInstalled: 'Yes'
       });
     } else {
       logError('AUTOMATION', `Full stack installation incomplete: only ${successfulSteps}/${totalSteps} steps successful`, siteId);
@@ -331,104 +329,9 @@ function installFullStack(siteId, options = {}) {
   }
 }
 
-/**
- * Install WooCommerce on a WordPress site
- *
- * @param {number} siteId - Site ID from Sites sheet
- * @returns {Object} Result with success status and message
- */
-function installWooCommerceOnSite(siteId) {
-  try {
-    const site = getSiteById(siteId);
-    if (!site) {
-      throw new Error(`Site with ID ${siteId} not found`);
-    }
-
-    logInfo('WOOCOMMERCE', `Installing WooCommerce on ${site.name}`, siteId);
-
-    // WordPress REST API endpoint for plugin installation
-    const endpoint = `${site.wpUrl}/wp-json/wp/v2/plugins`;
-
-    // WooCommerce plugin slug
-    const pluginData = {
-      slug: 'woocommerce',
-      status: 'active'
-    };
-
-    const options = {
-      method: 'post',
-      headers: {
-        'Authorization': 'Basic ' + Utilities.base64Encode(site.adminUser + ':' + site.adminPass),
-        'Content-Type': 'application/json'
-      },
-      payload: JSON.stringify(pluginData),
-      muteHttpExceptions: true
-    };
-
-    const response = UrlFetchApp.fetch(endpoint, options);
-    const responseCode = response.getResponseCode();
-    const responseText = response.getContentText();
-
-    if (responseCode === 200 || responseCode === 201) {
-      logSuccess('WOOCOMMERCE', 'WooCommerce installed and activated successfully', siteId);
-      return {
-        success: true,
-        message: 'WooCommerce installed and activated'
-      };
-    } else if (responseText.includes('already installed') || responseText.includes('Plugin already installed')) {
-      logInfo('WOOCOMMERCE', 'WooCommerce already installed', siteId);
-      return {
-        success: true,
-        message: 'WooCommerce already installed'
-      };
-    } else {
-      throw new Error(`HTTP ${responseCode}: ${responseText}`);
-    }
-
-  } catch (error) {
-    logError('WOOCOMMERCE', `Failed to install WooCommerce: ${error.message}`, siteId);
-    return {
-      success: false,
-      message: error.message
-    };
-  }
-}
-
-/**
- * Update site status in Sites sheet
- *
- * @param {number} siteId - Site ID
- * @param {Object} updates - Fields to update
- */
-function updateSiteStatus(siteId, updates) {
-  try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Sites');
-    const data = sheet.getDataRange().getValues();
-
-    // Find site row (skip header)
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][0] === siteId) {
-        const row = i + 1;
-
-        // Update fields
-        if (updates.status) sheet.getRange(row, 10).setValue(updates.status);
-        if (updates.diviInstalled) sheet.getRange(row, 11).setValue(updates.diviInstalled);
-        if (updates.pluginInstalled) sheet.getRange(row, 12).setValue(updates.pluginInstalled);
-        if (updates.lastCheck) sheet.getRange(row, 14).setValue(updates.lastCheck);
-
-        logInfo('SITE', `Updated site status for site ${siteId}`, siteId);
-        return true;
-      }
-    }
-
-    logWarning('SITE', `Site ${siteId} not found in Sites sheet`, siteId);
-    return false;
-
-  } catch (error) {
-    logError('SITE', `Failed to update site status: ${error.message}`, siteId);
-    return false;
-  }
-}
+// NOTE: installWooCommerceOnSite() is defined in SiteManager.gs (canonical version)
+// NOTE: updateSiteStatus() is defined in SiteManager.gs (canonical version)
+// Signature: updateSiteStatus(siteId, status, updates = {})
 
 /**
  * Install WAAS Patronage Manager plugin on a WordPress site

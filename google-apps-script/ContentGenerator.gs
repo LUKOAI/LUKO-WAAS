@@ -325,18 +325,19 @@ function publishScheduledContent() {
 
       if (status === 'Scheduled' && scheduledDate <= now) {
         try {
-          const content = {
-            title: data[i][3],
-            content: data[i][12]
-          };
+          // Use canonical publishContentToWordPress from Automation.gs
+          const publishResult = publishContentToWordPress(siteId, contentId, {
+            status: getSetting('default_post_status', 'draft')
+          });
 
-          const postId = publishContentToWordPress(siteId, content);
-
-          if (postId) {
+          if (publishResult.success) {
             // Aktualizuj status
             sheet.getRange(i + 1, 5).setValue('Published');
             sheet.getRange(i + 1, 9).setValue(new Date());
-            sheet.getRange(i + 1, 10).setValue(postId);
+            sheet.getRange(i + 1, 10).setValue(publishResult.postId);
+            if (publishResult.postUrl) {
+              sheet.getRange(i + 1, 11).setValue(publishResult.postUrl);
+            }
             published++;
 
             logSuccess('ContentGenerator', `Content published (ID: ${contentId})`, siteId);
@@ -372,19 +373,5 @@ function publishScheduledContent() {
   }
 }
 
-function publishContentToWordPress(siteId, content) {
-  const site = getSiteById(siteId);
-  if (!site) {
-    throw new Error(`Site not found: ${siteId}`);
-  }
-
-  // Użyj WordPress API do opublikowania
-  const postData = {
-    title: content.title,
-    content: content.content,
-    status: getSetting('default_post_status', 'draft')
-  };
-
-  const postId = createWordPressPost(site, postData);
-  return postId;
-}
+// NOTE: publishContentToWordPress() is defined in Automation.gs (canonical version)
+// Signature: publishContentToWordPress(siteId, contentId, options = {})

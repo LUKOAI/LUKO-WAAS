@@ -15,12 +15,14 @@ function onOpen() {
       .addItem('✅ Check Site Status', 'showCheckSiteDialog')
       .addItem('🎨 Install Divi on Site', 'showInstallDiviDialog')
       .addItem('🔌 Install Plugin on Site', 'showInstallPluginDialog')
+      .addItem('🧹 Cleanup Cloned Site', 'showCleanupSiteDialog')
       .addSeparator()
       .addItem('🔄 Refresh All Sites', 'refreshAllSites'))
     .addSubMenu(ui.createMenu('📦 Products')
       .addItem('📥 Import from Amazon', 'showImportProductsDialog')
       .addItem('🔄 Update Product Data', 'showUpdateProductsDialog')
       .addItem('🔄 Sync All Products', 'syncAllProducts')
+      .addItem('📤 Export to WooCommerce', 'showExportToWooCommerceDialog')
       .addSeparator()
       .addItem('📊 Product Statistics', 'showProductStats'))
     .addSubMenu(ui.createMenu('📝 Content')
@@ -29,6 +31,27 @@ function onOpen() {
       .addItem('📋 View Content Queue', 'focusContentQueue')
       .addSeparator()
       .addItem('🗑️ Clear Failed Content', 'clearFailedContent'))
+    .addSubMenu(ui.createMenu('🔍 SEO')
+      .addItem('🔧 Setup RankMath', 'showSetupRankMathDialog')
+      .addItem('📝 Generate Meta Tags', 'showGenerateMetaDialog')
+      .addItem('📊 SEO Audit', 'showSEOAuditDialog')
+      .addItem('🔗 Fix Permalinks', 'showFixPermalinksDialog')
+      .addSeparator()
+      .addItem('📋 Schema Markup', 'showSchemaSetupDialog'))
+    .addSubMenu(ui.createMenu('🌍 Search Engines')
+      .addItem('📡 Register in Google Search Console', 'showGSCRegisterDialog')
+      .addItem('📡 Register in Bing Webmaster', 'showBingRegisterDialog')
+      .addSeparator()
+      .addItem('🗺️ Submit Sitemap to GSC', 'showGSCSitemapDialog')
+      .addItem('🗺️ Submit Sitemap to Bing', 'showBingSitemapDialog')
+      .addSeparator()
+      .addItem('✅ Verify GSC Ownership', 'showGSCVerifyDialog')
+      .addItem('✅ Verify Bing Ownership', 'showBingVerifyDialog'))
+    .addSubMenu(ui.createMenu('📊 Reports')
+      .addItem('📄 Generate Launch Report', 'showLaunchReportDialog')
+      .addItem('📧 Send Launch Email', 'showSendLaunchEmailDialog')
+      .addItem('📝 Export to Notion', 'showExportToNotionDialog')
+      .addItem('💾 Save Report to Drive', 'showSaveReportToDriveDialog'))
     .addSubMenu(ui.createMenu('⚙️ Tasks')
       .addItem('👁️ View Active Tasks', 'focusActiveTasks')
       .addItem('▶️ Run Task Queue', 'runTaskQueue')
@@ -37,6 +60,7 @@ function onOpen() {
       .addItem('🔄 Retry Failed Tasks', 'retryFailedTasks'))
     .addSubMenu(ui.createMenu('🤖 Automation')
       .addItem('🚀 Install Full Stack', 'showInstallFullStackDialog')
+      .addItem('🌟 NEW SITE WIZARD (Full Pipeline)', 'showNewSiteWizardDialog')
       .addItem('📤 Deploy Selected Content', 'showDeployContentDialog')
       .addSeparator()
       .addItem('⚙️ Process Auto Install Sites', 'processAutoInstallSites')
@@ -52,9 +76,7 @@ function onOpen() {
       .addItem('⚙️ System Settings', 'showSettingsDialog')
       .addItem('🧪 Test Connections', 'testAllConnections')
       .addSeparator()
-      .addItem('🔐 Migrate Auth for All Sites', 'migrateAllSitesToAutoAuth')
       .addItem('🔐 Setup Auth for Site', 'showSetupAuthDialog')
-      .addItem('📊 View Auth Status', 'showAuthMigrationStatus')
       .addSeparator()
       .addItem('📊 View Logs', 'focusLogs')
       .addItem('🗑️ Clear Old Logs', 'clearOldLogs'))
@@ -898,5 +920,128 @@ function runDeployContent(siteId, contentType, asins, title, autoPublish) {
   } catch (error) {
     logError('AUTOMATION', `Content deployment error: ${error.message}`, siteId);
     throw error;
+  }
+}
+
+// =============================================================================
+// STUB DIALOGS — To be implemented in later phases (D, E, G, H)
+// These stubs ensure the menu works without errors until full implementation.
+// =============================================================================
+
+function showCleanupSiteDialog() {
+  const ui = SpreadsheetApp.getUi();
+  const result = ui.prompt(
+    'Cleanup Cloned Site',
+    'Enter Site ID to cleanup after cloning:',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (result.getSelectedButton() === ui.Button.OK) {
+    const siteId = parseInt(result.getResponseText());
+    if (siteId) {
+      ui.alert('Coming Soon', 'Site cleanup will be implemented in Phase D (SiteCleanup.gs).', ui.ButtonSet.OK);
+    }
+  }
+}
+
+// NOTE: showExportToWooCommerceDialog() is defined in ProductManager-WOOCOMMERCE-EXPORT.gs
+
+function showSetupRankMathDialog() {
+  const ui = SpreadsheetApp.getUi();
+  ui.alert('Coming Soon', 'RankMath setup will be implemented in Phase D (SEO.gs).', ui.ButtonSet.OK);
+}
+
+function showGenerateMetaDialog() {
+  const ui = SpreadsheetApp.getUi();
+  ui.alert('Coming Soon', 'Meta tag generation will be implemented in Phase D (SEO.gs).', ui.ButtonSet.OK);
+}
+
+function showSEOAuditDialog() {
+  const ui = SpreadsheetApp.getUi();
+  ui.alert('Coming Soon', 'SEO audit will be implemented in Phase D (SEO.gs).', ui.ButtonSet.OK);
+}
+
+function showFixPermalinksDialog() {
+  const ui = SpreadsheetApp.getUi();
+  ui.alert('Coming Soon', 'Permalink fixing will be implemented in Phase D (SEO.gs).', ui.ButtonSet.OK);
+}
+
+function showSchemaSetupDialog() {
+  const ui = SpreadsheetApp.getUi();
+  ui.alert('Coming Soon', 'Schema markup setup will be implemented in Phase D (SEO.gs).', ui.ButtonSet.OK);
+}
+
+function showGSCRegisterDialog() {
+  const ui = SpreadsheetApp.getUi();
+  ui.alert('Coming Soon', 'Google Search Console registration will be implemented in Phase D (SearchEngines.gs).', ui.ButtonSet.OK);
+}
+
+function showBingRegisterDialog() {
+  const ui = SpreadsheetApp.getUi();
+  ui.alert('Coming Soon', 'Bing Webmaster registration will be implemented in Phase D (SearchEngines.gs).', ui.ButtonSet.OK);
+}
+
+function showGSCSitemapDialog() {
+  const ui = SpreadsheetApp.getUi();
+  ui.alert('Coming Soon', 'GSC sitemap submission will be implemented in Phase D (SearchEngines.gs).', ui.ButtonSet.OK);
+}
+
+function showBingSitemapDialog() {
+  const ui = SpreadsheetApp.getUi();
+  ui.alert('Coming Soon', 'Bing sitemap submission will be implemented in Phase D (SearchEngines.gs).', ui.ButtonSet.OK);
+}
+
+function showGSCVerifyDialog() {
+  const ui = SpreadsheetApp.getUi();
+  ui.alert('Coming Soon', 'GSC ownership verification will be implemented in Phase D (SearchEngines.gs).', ui.ButtonSet.OK);
+}
+
+function showBingVerifyDialog() {
+  const ui = SpreadsheetApp.getUi();
+  ui.alert('Coming Soon', 'Bing ownership verification will be implemented in Phase D (SearchEngines.gs).', ui.ButtonSet.OK);
+}
+
+function showLaunchReportDialog() {
+  const ui = SpreadsheetApp.getUi();
+  ui.alert('Coming Soon', 'Launch report generation will be implemented in Phase D (LaunchReport.gs).', ui.ButtonSet.OK);
+}
+
+function showSendLaunchEmailDialog() {
+  const ui = SpreadsheetApp.getUi();
+  ui.alert('Coming Soon', 'Launch email sending will be implemented in Phase D (LaunchReport.gs).', ui.ButtonSet.OK);
+}
+
+function showExportToNotionDialog() {
+  const ui = SpreadsheetApp.getUi();
+  ui.alert('Coming Soon', 'Notion export will be implemented in Phase D (LaunchReport.gs).', ui.ButtonSet.OK);
+}
+
+function showSaveReportToDriveDialog() {
+  const ui = SpreadsheetApp.getUi();
+  ui.alert('Coming Soon', 'Saving report to Drive will be implemented in Phase D (LaunchReport.gs).', ui.ButtonSet.OK);
+}
+
+function showNewSiteWizardDialog() {
+  const ui = SpreadsheetApp.getUi();
+  const result = ui.prompt(
+    'NEW SITE WIZARD - Full Pipeline',
+    'Enter Site ID for full onboarding pipeline:\n\n' +
+    'This will run ALL steps:\n' +
+    '1. Cleanup cloned site\n' +
+    '2. Setup authentication\n' +
+    '3. Install plugins\n' +
+    '4. Configure branding\n' +
+    '5. Import products\n' +
+    '6. SEO setup\n' +
+    '7. Search engine registration\n' +
+    '8. Content generation\n' +
+    '9. Launch report\n' +
+    '10. Send email',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (result.getSelectedButton() === ui.Button.OK) {
+    const siteId = parseInt(result.getResponseText());
+    if (siteId) {
+      ui.alert('Coming Soon', 'Full onboarding pipeline (launchNewSite) will be implemented in Phase H.', ui.ButtonSet.OK);
+    }
   }
 }
