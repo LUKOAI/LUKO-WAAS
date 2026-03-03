@@ -15,7 +15,9 @@ function onOpen() {
       .addItem('✅ Check Site Status', 'showCheckSiteDialog')
       .addItem('🎨 Install Divi on Site', 'showInstallDiviDialog')
       .addItem('🔌 Install Plugin on Site', 'showInstallPluginDialog')
-      .addItem('🧹 Cleanup Cloned Site', 'showCleanupSiteDialog')
+      .addItem('🧹 Cleanup Cloned Site', 'siteCleanupDialog')
+      .addItem('ℹ️ Site Full Info', 'siteInfoDialog')
+      .addItem('🎨 Update Branding', 'siteBrandingDialog')
       .addSeparator()
       .addItem('🔄 Refresh All Sites', 'refreshAllSites'))
     .addSubMenu(ui.createMenu('📦 Products')
@@ -929,21 +931,7 @@ function runDeployContent(siteId, contentType, asins, title, autoPublish) {
 // These stubs ensure the menu works without errors until full implementation.
 // =============================================================================
 
-function showCleanupSiteDialog() {
-  const ui = SpreadsheetApp.getUi();
-  const result = ui.prompt(
-    'Cleanup Cloned Site',
-    'Enter Site ID to cleanup after cloning:',
-    ui.ButtonSet.OK_CANCEL
-  );
-  if (result.getSelectedButton() === ui.Button.OK) {
-    const siteId = parseInt(result.getResponseText());
-    if (siteId) {
-      ui.alert('Coming Soon', 'Site cleanup will be implemented in Phase D (SiteCleanup.gs).', ui.ButtonSet.OK);
-    }
-  }
-}
-
+// NOTE: siteCleanupDialog(), siteInfoDialog(), siteBrandingDialog() are defined in SiteCleanup.gs
 // NOTE: showExportToWooCommerceDialog() is defined in ProductManager-WOOCOMMERCE-EXPORT.gs
 
 function showSetupRankMathDialog() {
