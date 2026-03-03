@@ -608,11 +608,11 @@ class WAAS_Shortcodes_Comparison {
     }
 
     /**
-     * Get product by ASIN
+     * Get product by ASIN (v3 — WooCommerce only, no waas_product fallback)
      */
     private function get_product_by_asin($asin) {
         $args = array(
-            'post_type' => 'waas_product',
+            'post_type' => 'product',
             'meta_query' => array(
                 array(
                     'key' => '_waas_asin',
@@ -629,13 +629,30 @@ class WAAS_Shortcodes_Comparison {
         }
 
         $post = $posts[0];
+        $wc_product = wc_get_product($post->ID);
+
+        // Get image from WC product thumbnail, fallback to meta
+        $image_url = get_the_post_thumbnail_url($post->ID, 'medium');
+        if (empty($image_url)) {
+            $image_url = get_post_meta($post->ID, '_waas_image_url', true);
+        }
+
+        // Get affiliate link from WC External product URL
+        $affiliate_link = '';
+        if ($wc_product && method_exists($wc_product, 'get_product_url')) {
+            $affiliate_link = $wc_product->get_product_url();
+        }
+        if (empty($affiliate_link)) {
+            $affiliate_link = get_post_meta($post->ID, '_waas_affiliate_link', true);
+        }
+
         return (object) array(
             'id' => $post->ID,
             'asin' => $asin,
             'name' => $post->post_title,
-            'image_url' => get_post_meta($post->ID, '_waas_image_url', true),
-            'price' => get_post_meta($post->ID, '_waas_price', true),
-            'affiliate_link' => get_post_meta($post->ID, '_waas_affiliate_link', true),
+            'image_url' => $image_url,
+            'price' => $wc_product ? $wc_product->get_regular_price() : '',
+            'affiliate_link' => $affiliate_link,
             'rating' => get_post_meta($post->ID, '_waas_rating', true),
             'review_count' => get_post_meta($post->ID, '_waas_review_count', true),
         );

@@ -172,7 +172,9 @@ class WAAS_Product_Shortcodes {
             return '';
         }
 
-        $price = get_post_meta($product->ID, '_waas_price', true);
+        // v3: Get price from WC product
+        $wc_product = wc_get_product($product->ID);
+        $price = $wc_product ? $wc_product->get_regular_price() : '';
 
         if (empty($price)) {
             return '';
@@ -206,7 +208,11 @@ class WAAS_Product_Shortcodes {
             return '';
         }
 
-        $image_url = get_post_meta($product->ID, '_waas_image_url', true);
+        // v3: Get image from WC product thumbnail, fallback to meta
+        $image_url = get_the_post_thumbnail_url($product->ID, 'medium');
+        if (empty($image_url)) {
+            $image_url = get_post_meta($product->ID, '_waas_image_url', true);
+        }
         if (empty($image_url)) {
             return '';
         }
@@ -273,32 +279,11 @@ class WAAS_Product_Shortcodes {
     }
 
     /**
-     * Get product by ASIN
+     * Get product by ASIN (v3 — WooCommerce only, no waas_product fallback)
      */
     private function get_product_by_asin($asin) {
-        // First try to get from WooCommerce
-        if (class_exists('WooCommerce')) {
-            $args = array(
-                'post_type' => 'product',
-                'meta_query' => array(
-                    array(
-                        'key' => '_waas_asin',
-                        'value' => $asin,
-                        'compare' => '='
-                    )
-                ),
-                'posts_per_page' => 1,
-            );
-
-            $products = get_posts($args);
-            if (!empty($products)) {
-                return $products[0];
-            }
-        }
-
-        // Fallback to WAAS products
         $args = array(
-            'post_type' => 'waas_product',
+            'post_type' => 'product',
             'meta_query' => array(
                 array(
                     'key' => '_waas_asin',
@@ -315,9 +300,18 @@ class WAAS_Product_Shortcodes {
 
     /**
      * Get product URL based on redirect setting
+     * v3: Uses WC product's external URL (product_url) as primary source
      */
     private function get_product_url($product, $redirect = 'amazon') {
         if ($redirect === 'amazon') {
+            $wc_product = wc_get_product($product->ID);
+            if ($wc_product && method_exists($wc_product, 'get_product_url')) {
+                $product_url = $wc_product->get_product_url();
+                if (!empty($product_url)) {
+                    return $product_url;
+                }
+            }
+            // Fallback to meta
             $affiliate_link = get_post_meta($product->ID, '_waas_affiliate_link', true);
             return !empty($affiliate_link) ? $affiliate_link : get_permalink($product->ID);
         }
@@ -395,10 +389,15 @@ class WAAS_Product_Shortcodes {
 
     /**
      * Render box template
+     * v3: Gets data from WC product + WAAS meta
      */
     private function render_box_template($product, $atts) {
-        $image_url = get_post_meta($product->ID, '_waas_image_url', true);
-        $price = get_post_meta($product->ID, '_waas_price', true);
+        $wc_product = wc_get_product($product->ID);
+        $image_url = get_the_post_thumbnail_url($product->ID, 'medium');
+        if (empty($image_url)) {
+            $image_url = get_post_meta($product->ID, '_waas_image_url', true);
+        }
+        $price = $wc_product ? $wc_product->get_regular_price() : '';
         $rating = get_post_meta($product->ID, '_waas_rating', true);
         $review_count = get_post_meta($product->ID, '_waas_review_count', true);
         $url = $this->get_product_url($product, $atts['redirect']);
@@ -456,10 +455,15 @@ class WAAS_Product_Shortcodes {
 
     /**
      * Render horizontal template
+     * v3: Gets data from WC product + WAAS meta
      */
     private function render_horizontal_template($product, $atts) {
-        $image_url = get_post_meta($product->ID, '_waas_image_url', true);
-        $price = get_post_meta($product->ID, '_waas_price', true);
+        $wc_product = wc_get_product($product->ID);
+        $image_url = get_the_post_thumbnail_url($product->ID, 'medium');
+        if (empty($image_url)) {
+            $image_url = get_post_meta($product->ID, '_waas_image_url', true);
+        }
+        $price = $wc_product ? $wc_product->get_regular_price() : '';
         $rating = get_post_meta($product->ID, '_waas_rating', true);
         $url = $this->get_product_url($product, $atts['redirect']);
 

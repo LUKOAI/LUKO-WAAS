@@ -729,12 +729,13 @@ function createWooCommerceProduct_(site, product) {
       const productResult = result.data.results[0];
 
       if (productResult && productResult.status === 'success') {
-        logSuccess('WooCommerce', `Product exported: ${product.asin} -> WP Post ID: ${productResult.post_id}, WC ID: ${productResult.wc_product_id || 'N/A'}`);
+        // v3: Products are created directly in WooCommerce (no intermediate waas_product)
+        const wcId = productResult.wc_product_id;
+        logSuccess('WooCommerce', `Product exported: ${product.asin} -> WC Product ID: ${wcId}`);
 
-        // Zwróć obiekt z oboma ID
         return {
-          post_id: productResult.post_id,
-          wc_product_id: productResult.wc_product_id
+          post_id: wcId,  // For backward compat, post_id = wc_product_id
+          wc_product_id: wcId
         };
       } else if (productResult && productResult.status === 'error') {
         throw new Error(productResult.message || 'Product import failed');

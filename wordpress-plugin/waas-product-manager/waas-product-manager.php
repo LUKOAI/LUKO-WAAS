@@ -3,7 +3,7 @@
  * Plugin Name: LUKO-WAAS Product Manager
  * Plugin URI: https://github.com/LUKOAI/LUKO-WAAS
  * Description: Automated WordPress Affiliate Site Framework for Amazon Sellers - Product management, shortcodes, and PA-API integration
- * Version: 1.2.4
+ * Version: 3.0.0
  * Author: LUKO AI
  * Author URI: https://github.com/LUKOAI
  * License: GPL v2 or later
@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('WAAS_PM_VERSION', '1.2.4');
+define('WAAS_PM_VERSION', '3.0.0');
 define('WAAS_PM_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WAAS_PM_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WAAS_PM_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -118,9 +118,12 @@ class WAAS_Product_Manager {
 
     /**
      * Initialize plugin components
+     *
+     * v3: waas_product CPT is deprecated — kept only for migration.
+     * Products are now imported directly to WooCommerce.
      */
     public function init_components() {
-        // Initialize custom post type
+        // Initialize deprecated custom post type (hidden, for migration only)
         WAAS_Product_Post_Type::get_instance();
 
         // Initialize shortcodes
@@ -136,7 +139,7 @@ class WAAS_Product_Manager {
             WAAS_Shortcodes_Comparison::get_instance();
         }
 
-        // Initialize REST API V2 (with direct WooCommerce sync)
+        // Initialize REST API V2 (v3 — direct WooCommerce import + migration)
         if (file_exists(WAAS_PM_PLUGIN_DIR . 'includes/class-rest-api-v2.php')) {
             require_once WAAS_PM_PLUGIN_DIR . 'includes/class-rest-api-v2.php';
             WAAS_REST_API_V2::get_instance();
