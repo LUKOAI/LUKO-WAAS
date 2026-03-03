@@ -939,8 +939,3 @@ function runDeployContent(siteId, contentType, asins, title, autoPublish) {
 // exportToNotionDialog(), saveReportToDriveDialog() → LaunchReport.gs
 // newSiteWizardDialog() → Automation.gs
 // SEO dialog stubs — SEO.gs exists but these dialogs are not yet implemented there
-function showSetupRankMathDialog() { SpreadsheetApp.getUi().alert('Coming Soon', 'RankMath setup will be implemented in SEO.gs.', SpreadsheetApp.getUi().ButtonSet.OK); }
-function showGenerateMetaDialog() { SpreadsheetApp.getUi().alert('Coming Soon', 'Meta tag generation will be implemented in SEO.gs.', SpreadsheetApp.getUi().ButtonSet.OK); }
-function showSEOAuditDialog() { SpreadsheetApp.getUi().alert('Coming Soon', 'SEO audit will be implemented in SEO.gs.', SpreadsheetApp.getUi().ButtonSet.OK); }
-function showFixPermalinksDialog() { SpreadsheetApp.getUi().alert('Coming Soon', 'Permalink fixing will be implemented in SEO.gs.', SpreadsheetApp.getUi().ButtonSet.OK); }
-function showSchemaSetupDialog() { SpreadsheetApp.getUi().alert('Coming Soon', 'Schema markup setup will be implemented in SEO.gs.', SpreadsheetApp.getUi().ButtonSet.OK); }
