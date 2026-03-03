@@ -52,7 +52,7 @@ class WAAS_REST_API_V2 {
      * Register REST API routes
      */
     public function register_routes() {
-        // Import products with direct WooCommerce sync
+        // Import products DIRECTLY to WooCommerce (v3 — no waas_product intermediate)
         register_rest_route($this->namespace, '/products/import', array(
             'methods' => 'POST',
             'callback' => array($this, 'import_products'),
@@ -74,23 +74,37 @@ class WAAS_REST_API_V2 {
             ),
         ));
 
-        // Get product list
+        // Get product list (now reads from WooCommerce products)
         register_rest_route($this->namespace, '/products/list', array(
             'methods' => 'GET',
             'callback' => array($this, 'list_products'),
             'permission_callback' => array($this, 'check_read_permission'),
         ));
 
-        // Bulk sync to WooCommerce
+        // Bulk sync legacy waas_product to WooCommerce (kept for backwards compat)
         register_rest_route($this->namespace, '/products/sync-woocommerce', array(
             'methods' => 'POST',
             'callback' => array($this, 'bulk_sync_woocommerce'),
             'permission_callback' => array($this, 'check_admin_permission'),
         ));
+
+        // Migrate all waas_product posts to WooCommerce products
+        register_rest_route($this->namespace, '/products/migrate-to-wc', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'migrate_waas_products_to_wc'),
+            'permission_callback' => array($this, 'check_admin_permission'),
+            'args' => array(
+                'delete_originals' => array(
+                    'type' => 'boolean',
+                    'default' => false,
+                    'description' => __('Delete waas_product posts after migration', 'waas-pm'),
+                ),
+            ),
+        ));
     }
 
     /**
-     * Import products with DIRECT WooCommerce sync
+     * Import products DIRECTLY to WooCommerce (v3 — no waas_product intermediate)
      *
      * @param WP_REST_Request $request Request object
      * @return WP_REST_Response|WP_Error Response
@@ -104,17 +118,20 @@ class WAAS_REST_API_V2 {
             return new WP_Error('invalid_data', __('Invalid product data', 'waas-pm'), array('status' => 400));
         }
 
-        error_log("WAAS REST API: Importing " . count($products) . " products");
+        if (!class_exists('WooCommerce') || !class_exists('WC_Product_External')) {
+            return new WP_Error('wc_not_active', __('WooCommerce is required for product import', 'waas-pm'), array('status' => 400));
+        }
+
+        error_log("WAAS REST API v3: Importing " . count($products) . " products directly to WooCommerce");
         if ($tracking_id) {
-            error_log("WAAS REST API: Using tracking ID: {$tracking_id}");
+            error_log("WAAS REST API v3: Using tracking ID: {$tracking_id}");
         }
 
         $results = array();
-        $importer = new WAAS_Product_Importer();
 
         foreach ($products as $product_data) {
             try {
-                // Dodaj tracking ID do affiliate link jeśli podano
+                // Add tracking ID to affiliate link if provided
                 if ($tracking_id && isset($product_data['affiliate_link'])) {
                     $product_data['affiliate_link'] = $this->add_tracking_id_to_url(
                         $product_data['affiliate_link'],
@@ -122,42 +139,29 @@ class WAAS_REST_API_V2 {
                     );
                 }
 
-                // Importuj produkt (utworzy WAAS product post)
-                $post_id = $importer->import_product($product_data);
+                // Import DIRECTLY to WooCommerce (no waas_product intermediate)
+                $wc_product_id = $this->create_woocommerce_product_direct(null, $product_data, $tracking_id);
 
-                if (is_wp_error($post_id)) {
+                if (is_wp_error($wc_product_id)) {
+                    error_log("WAAS REST API v3: WooCommerce import failed: " . $wc_product_id->get_error_message());
                     $results[] = array(
                         'status' => 'error',
                         'asin' => $product_data['asin'] ?? 'unknown',
-                        'message' => $post_id->get_error_message(),
+                        'message' => $wc_product_id->get_error_message(),
                     );
                     continue;
                 }
 
-                error_log("WAAS REST API: Created WAAS product #{$post_id}");
-
-                // BEZPOŚREDNIO utwórz produkt WooCommerce
-                $wc_product_id = null;
-                if (class_exists('WooCommerce')) {
-                    $wc_product_id = $this->create_woocommerce_product_direct($post_id, $product_data, $tracking_id);
-
-                    if (is_wp_error($wc_product_id)) {
-                        error_log("WAAS REST API: WooCommerce sync failed: " . $wc_product_id->get_error_message());
-                        $wc_product_id = null;
-                    } else {
-                        error_log("WAAS REST API: ✓ Created WooCommerce product #{$wc_product_id}");
-                    }
-                }
+                error_log("WAAS REST API v3: Created WooCommerce product #{$wc_product_id}");
 
                 $results[] = array(
                     'status' => 'success',
-                    'post_id' => $post_id,
                     'wc_product_id' => $wc_product_id,
                     'asin' => $product_data['asin'] ?? '',
                 );
 
             } catch (Exception $e) {
-                error_log("WAAS REST API: Import error: " . $e->getMessage());
+                error_log("WAAS REST API v3: Import error: " . $e->getMessage());
                 $results[] = array(
                     'status' => 'error',
                     'asin' => $product_data['asin'] ?? 'unknown',
@@ -175,9 +179,11 @@ class WAAS_REST_API_V2 {
     }
 
     /**
-     * Create WooCommerce product DIRECTLY (bypass hooks)
+     * Create WooCommerce product DIRECTLY
      *
-     * @param int $waas_post_id WAAS product post ID
+     * v3: waas_post_id is now optional (null = direct import without waas_product)
+     *
+     * @param int|null $waas_post_id Legacy WAAS product post ID (null for direct import)
      * @param array $product_data Product data
      * @param string $tracking_id Amazon Partner Tag
      * @return int|WP_Error WooCommerce product ID or error
@@ -188,7 +194,7 @@ class WAAS_REST_API_V2 {
                 throw new Exception('WooCommerce not available or WC_Product_External class not found');
             }
 
-            $asin = $product_data['asin'] ?? get_post_meta($waas_post_id, '_waas_asin', true);
+            $asin = $product_data['asin'] ?? ($waas_post_id ? get_post_meta($waas_post_id, '_waas_asin', true) : '');
 
             // Sprawdź czy produkt już istnieje
             $existing_wc_id = $this->find_woocommerce_product_by_asin($asin);
@@ -201,7 +207,7 @@ class WAAS_REST_API_V2 {
             $product = new WC_Product_External();
 
             // === NAZWA PRODUKTU ===
-            $title = $product_data['title'] ?? $product_data['product_name'] ?? get_the_title($waas_post_id);
+            $title = $product_data['title'] ?? $product_data['product_name'] ?? ($waas_post_id ? get_the_title($waas_post_id) : 'Untitled Product');
             $product->set_name(sanitize_text_field($title));
 
             // === OPIS PRODUKTU (Features jako główny opis!) ===
@@ -223,7 +229,7 @@ class WAAS_REST_API_V2 {
             // Short Description pozostaje puste
 
             // === CENA ===
-            $price = $product_data['price'] ?? get_post_meta($waas_post_id, '_waas_price', true);
+            $price = $product_data['price'] ?? ($waas_post_id ? get_post_meta($waas_post_id, '_waas_price', true) : '');
             if ($price) {
                 $price_numeric = $this->extract_price($price);
                 if ($price_numeric > 0) {
@@ -233,7 +239,7 @@ class WAAS_REST_API_V2 {
             }
 
             // === AFFILIATE LINK (z tracking ID) ===
-            $affiliate_link = $product_data['affiliate_link'] ?? get_post_meta($waas_post_id, '_waas_affiliate_link', true);
+            $affiliate_link = $product_data['affiliate_link'] ?? ($waas_post_id ? get_post_meta($waas_post_id, '_waas_affiliate_link', true) : '');
             if ($affiliate_link) {
                 // Dodaj tracking ID jeśli podano
                 if ($tracking_id) {
@@ -257,9 +263,38 @@ class WAAS_REST_API_V2 {
                 throw new Exception('Failed to save WooCommerce product');
             }
 
-            // === META DATA ===
+            // === META DATA (v3 — all product data stored on WC product) ===
             update_post_meta($wc_product_id, '_waas_asin', $asin);
-            update_post_meta($wc_product_id, '_waas_source_post_id', $waas_post_id);
+            if ($waas_post_id) {
+                update_post_meta($wc_product_id, '_waas_source_post_id', $waas_post_id);
+            }
+
+            // v3 meta keys per specification
+            if ($tracking_id) {
+                update_post_meta($wc_product_id, '_waas_partner_tag', sanitize_text_field($tracking_id));
+            }
+            if (!empty($affiliate_link)) {
+                update_post_meta($wc_product_id, '_waas_affiliate_link', esc_url_raw($affiliate_link));
+            }
+            update_post_meta($wc_product_id, '_waas_source', 'amazon');
+            update_post_meta($wc_product_id, '_waas_last_sync', current_time('mysql'));
+
+            // Features as JSON
+            $features_raw = $product_data['features'] ?? $product_data['bullet_points'] ?? null;
+            if ($features_raw) {
+                if (is_array($features_raw)) {
+                    update_post_meta($wc_product_id, '_waas_features', wp_json_encode($features_raw));
+                } elseif (is_string($features_raw)) {
+                    update_post_meta($wc_product_id, '_waas_features', $features_raw);
+                }
+            }
+
+            // Original price and currency
+            if (!empty($product_data['price'])) {
+                update_post_meta($wc_product_id, '_waas_original_price', sanitize_text_field($product_data['price']));
+            }
+            $currency = $product_data['currency'] ?? 'EUR';
+            update_post_meta($wc_product_id, '_waas_currency', sanitize_text_field($currency));
 
             // CRITICAL: Disable reviews for external products (multiple methods)
             update_post_meta($wc_product_id, '_waas_reviews_disabled', 'yes');
@@ -364,12 +399,12 @@ class WAAS_REST_API_V2 {
                 }
             }
 
-            // FALLBACK: Check meta if no images found
-            if (empty($gallery_images)) {
+            // FALLBACK: Check meta from legacy waas_product if no images found
+            if (empty($gallery_images) && $waas_post_id) {
                 $meta_image = get_post_meta($waas_post_id, '_waas_image_url', true);
                 if ($meta_image) {
                     $gallery_images[] = $meta_image;
-                    error_log("WAAS: Found meta image: " . $meta_image);
+                    error_log("WAAS: Found meta image from legacy post: " . $meta_image);
                 }
             }
 
@@ -714,13 +749,19 @@ class WAAS_REST_API_V2 {
     }
 
     /**
-     * List products
+     * List products (v3 — reads from WooCommerce products with _waas_asin meta)
      */
     public function list_products($request) {
         $args = array(
-            'post_type' => 'waas_product',
+            'post_type' => 'product',
             'posts_per_page' => -1,
             'post_status' => 'publish',
+            'meta_query' => array(
+                array(
+                    'key' => '_waas_asin',
+                    'compare' => 'EXISTS',
+                ),
+            ),
         );
 
         $query = new WP_Query($args);
@@ -730,14 +771,21 @@ class WAAS_REST_API_V2 {
             while ($query->have_posts()) {
                 $query->the_post();
                 $post_id = get_the_ID();
+                $wc_product = wc_get_product($post_id);
 
                 $products[] = array(
                     'id' => $post_id,
                     'title' => get_the_title(),
                     'asin' => get_post_meta($post_id, '_waas_asin', true),
-                    'price' => get_post_meta($post_id, '_waas_price', true),
-                    'availability' => get_post_meta($post_id, '_waas_availability', true),
+                    'price' => $wc_product ? $wc_product->get_regular_price() : '',
+                    'original_price' => get_post_meta($post_id, '_waas_original_price', true),
+                    'currency' => get_post_meta($post_id, '_waas_currency', true),
+                    'partner_tag' => get_post_meta($post_id, '_waas_partner_tag', true),
+                    'affiliate_link' => get_post_meta($post_id, '_waas_affiliate_link', true),
+                    'source' => get_post_meta($post_id, '_waas_source', true),
                     'last_sync' => get_post_meta($post_id, '_waas_last_sync', true),
+                    'rating' => get_post_meta($post_id, '_waas_rating', true),
+                    'review_count' => get_post_meta($post_id, '_waas_review_count', true),
                     'permalink' => get_permalink(),
                 );
             }
@@ -922,6 +970,125 @@ class WAAS_REST_API_V2 {
         }
 
         error_log("WAAS: ✓ Total images processed: " . count($image_urls) . " (1 featured + " . count($gallery_ids) . " gallery)");
+    }
+
+    /**
+     * Migrate all waas_product posts to WooCommerce products (C4)
+     *
+     * POST /waas/v1/products/migrate-to-wc
+     *
+     * @param WP_REST_Request $request Request object
+     * @return WP_REST_Response Migration results
+     */
+    public function migrate_waas_products_to_wc($request) {
+        if (!class_exists('WooCommerce') || !class_exists('WC_Product_External')) {
+            return new WP_Error('wc_not_active', 'WooCommerce is required for migration', array('status' => 400));
+        }
+
+        $delete_originals = $request->get_param('delete_originals');
+
+        // Get all waas_product posts
+        $waas_products = get_posts(array(
+            'post_type' => 'waas_product',
+            'posts_per_page' => -1,
+            'post_status' => 'any',
+        ));
+
+        $results = array(
+            'total' => count($waas_products),
+            'migrated' => 0,
+            'skipped' => 0,
+            'failed' => 0,
+            'deleted' => 0,
+            'details' => array(),
+        );
+
+        foreach ($waas_products as $waas_post) {
+            $asin = get_post_meta($waas_post->ID, '_waas_asin', true);
+
+            if (empty($asin)) {
+                $results['skipped']++;
+                $results['details'][] = array(
+                    'waas_id' => $waas_post->ID,
+                    'status' => 'skipped',
+                    'reason' => 'No ASIN',
+                );
+                continue;
+            }
+
+            // Check if WC product already exists for this ASIN
+            $existing_wc_id = $this->find_woocommerce_product_by_asin($asin);
+            if ($existing_wc_id) {
+                $results['skipped']++;
+                $results['details'][] = array(
+                    'waas_id' => $waas_post->ID,
+                    'asin' => $asin,
+                    'status' => 'skipped',
+                    'reason' => 'WC product already exists',
+                    'wc_product_id' => $existing_wc_id,
+                );
+
+                // Delete original if requested
+                if ($delete_originals) {
+                    wp_delete_post($waas_post->ID, true);
+                    $results['deleted']++;
+                }
+                continue;
+            }
+
+            // Build product_data from waas_product meta
+            $product_data = array(
+                'asin' => $asin,
+                'title' => $waas_post->post_title,
+                'price' => get_post_meta($waas_post->ID, '_waas_price', true),
+                'affiliate_link' => get_post_meta($waas_post->ID, '_waas_affiliate_link', true),
+                'image_url' => get_post_meta($waas_post->ID, '_waas_image_url', true),
+                'rating' => get_post_meta($waas_post->ID, '_waas_rating', true),
+                'review_count' => get_post_meta($waas_post->ID, '_waas_review_count', true),
+                'brand' => get_post_meta($waas_post->ID, '_waas_brand', true),
+                'color_name' => get_post_meta($waas_post->ID, '_waas_color', true),
+            );
+
+            // Features
+            $features = get_post_meta($waas_post->ID, '_waas_features', true);
+            if ($features) {
+                $product_data['features'] = $features;
+            }
+
+            // Migrate
+            $wc_product_id = $this->create_woocommerce_product_direct($waas_post->ID, $product_data);
+
+            if (is_wp_error($wc_product_id)) {
+                $results['failed']++;
+                $results['details'][] = array(
+                    'waas_id' => $waas_post->ID,
+                    'asin' => $asin,
+                    'status' => 'failed',
+                    'error' => $wc_product_id->get_error_message(),
+                );
+            } else {
+                $results['migrated']++;
+                $results['details'][] = array(
+                    'waas_id' => $waas_post->ID,
+                    'asin' => $asin,
+                    'status' => 'migrated',
+                    'wc_product_id' => $wc_product_id,
+                );
+
+                // Delete original if requested
+                if ($delete_originals) {
+                    wp_delete_post($waas_post->ID, true);
+                    $results['deleted']++;
+                }
+            }
+        }
+
+        error_log("WAAS Migration: {$results['migrated']} migrated, {$results['skipped']} skipped, {$results['failed']} failed, {$results['deleted']} deleted");
+
+        return new WP_REST_Response(array(
+            'success' => true,
+            'results' => $results,
+        ), 200);
     }
 
     /**

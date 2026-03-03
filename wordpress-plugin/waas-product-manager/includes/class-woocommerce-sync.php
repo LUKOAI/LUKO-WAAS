@@ -1,11 +1,13 @@
 <?php
 /**
- * WAAS WooCommerce Sync
+ * WAAS WooCommerce Sync (Legacy)
  *
- * Synchronizuje produkty Amazon z WooCommerce jako External/Affiliate products
+ * v3 Note: New imports go directly to WC via WAAS_REST_API_V2::import_products().
+ * This class handles legacy sync from waas_product → WC for backward compatibility.
  *
  * @package WAAS_Product_Manager
  * @since 1.0.0
+ * @deprecated 3.0.0 Direct WC import via REST API v2
  */
 
 if (!defined('ABSPATH')) {
