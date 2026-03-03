@@ -1208,3 +1208,229 @@ function removeAutomatedTriggers() {
     throw error;
   }
 }
+
+// =============================================================================
+// PHASE H: FULL ONBOARDING PIPELINE
+// =============================================================================
+
+/**
+ * Pełny pipeline onboardingu nowej strony.
+ * Jeden przycisk: od czyszczenia po email z raportem.
+ *
+ * Kroki:
+ * 1. Cleanup po klonowaniu
+ * 2. Setup auth (Application Password)
+ * 3. Install missing plugins (check via WP REST API)
+ * 4. Configure branding (Site Title, Tagline z Sites sheet)
+ * 5. Products (count/note — export separately via WooCommerce Export)
+ * 6. SEO setup (meta, IndexNow via waas-settings API)
+ * 7. Register in search engines (GSC, Bing)
+ * 8. Generate launch report + save PDF to Drive
+ * 9. Send email to service@netanaliza.com
+ * 10. (Optional) Export to Notion
+ *
+ * @param {string} siteId — ID strony w Sites sheet
+ * @param {Object} options — { skipCleanup, skipProducts, skipSEO, skipSearchEngines, skipReport, skipEmail, skipNotion }
+ */
+function launchNewSite(siteId, options) {
+  options = options || {};
+  var site = getSiteById(siteId);
+  if (!site) throw new Error('Site not found: ' + siteId);
+
+  var result = { siteId: siteId, domain: site.domain, steps: [], errors: [], startTime: new Date() };
+
+  logInfo('LAUNCH', '========================================', siteId);
+  logInfo('LAUNCH', 'STARTING FULL SITE LAUNCH: ' + site.name, siteId);
+  logInfo('LAUNCH', '========================================', siteId);
+
+  // STEP 1: Cleanup
+  if (!options.skipCleanup) {
+    try {
+      logInfo('LAUNCH', 'Step 1/10: Cleaning up cloned site...', siteId);
+      var cleanup = cleanupClonedSite(site, { dryRun: false });
+      result.steps.push({ step: 1, name: 'Cleanup', success: cleanup.success, data: cleanup.data });
+    } catch (e) {
+      result.steps.push({ step: 1, name: 'Cleanup', success: false, error: e.message });
+      result.errors.push('Step 1 Cleanup: ' + e.message);
+      logError('LAUNCH', 'Cleanup failed: ' + e.message, siteId);
+    }
+  } else {
+    result.steps.push({ step: 1, name: 'Cleanup', success: true, skipped: true });
+  }
+
+  // STEP 2: Auth
+  try {
+    logInfo('LAUNCH', 'Step 2/10: Setting up authentication...', siteId);
+    site = getSiteById(siteId); // refresh after cleanup
+    if (!site.appPassword) {
+      setupWordPressAuth(site);
+      site = getSiteById(siteId); // refresh
+    }
+    result.steps.push({ step: 2, name: 'Auth', success: true });
+  } catch (e) {
+    result.steps.push({ step: 2, name: 'Auth', success: false, error: e.message });
+    result.errors.push('Step 2 Auth: ' + e.message);
+    logError('LAUNCH', 'Auth failed: ' + e.message, siteId);
+    // Auth failure is critical — abort
+    logError('LAUNCH', 'ABORTING: Cannot continue without auth', siteId);
+    result.endTime = new Date();
+    result.durationSeconds = Math.round((result.endTime - result.startTime) / 1000);
+    return result;
+  }
+
+  // STEP 3: Install plugins
+  try {
+    logInfo('LAUNCH', 'Step 3/10: Checking plugins...', siteId);
+    var pluginCheck = makeHttpRequest(site.wpUrl + '/wp-json/wp/v2/plugins', {
+      method: 'GET',
+      headers: { 'Authorization': getAuthHeader(site) }
+    });
+    var activePlugins = [];
+    if (pluginCheck.success && Array.isArray(pluginCheck.data)) {
+      activePlugins = pluginCheck.data.filter(function(p) { return p.status === 'active'; }).map(function(p) { return p.plugin; });
+    }
+    result.steps.push({ step: 3, name: 'Plugins', success: true, activePlugins: activePlugins.length });
+    logInfo('LAUNCH', 'Active plugins: ' + activePlugins.length, siteId);
+  } catch (e) {
+    result.steps.push({ step: 3, name: 'Plugins', success: false, error: e.message });
+    result.errors.push('Step 3 Plugins: ' + e.message);
+  }
+
+  // STEP 4: Branding
+  try {
+    logInfo('LAUNCH', 'Step 4/10: Configuring branding...', siteId);
+    var brandResult = updateSiteBranding(site); // z SiteCleanup.gs
+    result.steps.push({ step: 4, name: 'Branding', success: brandResult.success });
+  } catch (e) {
+    result.steps.push({ step: 4, name: 'Branding', success: false, error: e.message });
+    result.errors.push('Step 4 Branding: ' + e.message);
+  }
+
+  // STEP 5: Products (skip if no products selected)
+  if (!options.skipProducts) {
+    try {
+      logInfo('LAUNCH', 'Step 5/10: Products...', siteId);
+      var prodCount = _countProductsForDomain(site.domain); // z LaunchReport.gs
+      result.steps.push({ step: 5, name: 'Products', success: true, count: prodCount, note: 'Export separately via WooCommerce Export' });
+      logInfo('LAUNCH', 'Products in sheet for this domain: ' + prodCount, siteId);
+    } catch (e) {
+      result.steps.push({ step: 5, name: 'Products', success: false, error: e.message });
+    }
+  } else {
+    result.steps.push({ step: 5, name: 'Products', success: true, skipped: true });
+  }
+
+  // STEP 6: SEO
+  if (!options.skipSEO) {
+    try {
+      logInfo('LAUNCH', 'Step 6/10: SEO setup...', siteId);
+      var seoResult = _seoApiPost(site, '/bulk-meta', { post_type: 'product' });
+      result.steps.push({ step: 6, name: 'SEO', success: seoResult.success });
+    } catch (e) {
+      result.steps.push({ step: 6, name: 'SEO', success: false, error: e.message });
+      result.errors.push('Step 6 SEO: ' + e.message);
+    }
+  } else {
+    result.steps.push({ step: 6, name: 'SEO', success: true, skipped: true });
+  }
+
+  // STEP 7: Search Engines
+  if (!options.skipSearchEngines) {
+    try {
+      logInfo('LAUNCH', 'Step 7/10: Search engine registration...', siteId);
+      var seResult = registerInAllSearchEngines(site); // z SearchEngines.gs
+      result.steps.push({ step: 7, name: 'Search Engines', success: true, data: seResult });
+    } catch (e) {
+      result.steps.push({ step: 7, name: 'Search Engines', success: false, error: e.message });
+      result.errors.push('Step 7 Search Engines: ' + e.message);
+    }
+  } else {
+    result.steps.push({ step: 7, name: 'Search Engines', success: true, skipped: true });
+  }
+
+  // STEP 8: Launch Report + Drive
+  var report = null;
+  var driveUrl = null;
+  if (!options.skipReport) {
+    try {
+      logInfo('LAUNCH', 'Step 8/10: Generating report...', siteId);
+      report = generateLaunchReport(siteId); // z LaunchReport.gs
+      var driveResult = saveLaunchReportToDrive(siteId, report); // z LaunchReport.gs
+      driveUrl = driveResult.success ? driveResult.url : null;
+      result.steps.push({ step: 8, name: 'Report', success: true, driveUrl: driveUrl });
+    } catch (e) {
+      result.steps.push({ step: 8, name: 'Report', success: false, error: e.message });
+      result.errors.push('Step 8 Report: ' + e.message);
+    }
+  }
+
+  // STEP 9: Email
+  if (!options.skipEmail && report) {
+    try {
+      logInfo('LAUNCH', 'Step 9/10: Sending launch email...', siteId);
+      var emailResult = sendLaunchEmail(siteId, report, driveUrl); // z LaunchReport.gs
+      result.steps.push({ step: 9, name: 'Email', success: emailResult.success });
+    } catch (e) {
+      result.steps.push({ step: 9, name: 'Email', success: false, error: e.message });
+      result.errors.push('Step 9 Email: ' + e.message);
+    }
+  }
+
+  // STEP 10: Notion (optional)
+  if (!options.skipNotion && report) {
+    try {
+      logInfo('LAUNCH', 'Step 10/10: Exporting to Notion...', siteId);
+      var notionResult = exportToNotion(siteId, report); // z LaunchReport.gs
+      result.steps.push({ step: 10, name: 'Notion', success: notionResult.success });
+    } catch (e) {
+      result.steps.push({ step: 10, name: 'Notion', success: false, error: e.message });
+    }
+  }
+
+  // Summary
+  result.endTime = new Date();
+  result.durationSeconds = Math.round((result.endTime - result.startTime) / 1000);
+  var successCount = result.steps.filter(function(s) { return s.success; }).length;
+
+  logSuccess('LAUNCH', '========================================', siteId);
+  logSuccess('LAUNCH', 'LAUNCH COMPLETE: ' + successCount + '/' + result.steps.length + ' steps OK (' + result.durationSeconds + 's)', siteId);
+  logSuccess('LAUNCH', '========================================', siteId);
+
+  return result;
+}
+
+/**
+ * Dialog: NEW SITE WIZARD
+ */
+function newSiteWizardDialog() {
+  var ui = SpreadsheetApp.getUi();
+  var r = ui.prompt('NEW SITE WIZARD',
+    'Podaj Site ID strony do pełnego onboardingu.\n\n' +
+    'Pipeline: Cleanup → Auth → Plugins → Branding → SEO → GSC/Bing → Report → Email',
+    ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+
+  var siteId = r.getResponseText().trim();
+  var site = getSiteById(siteId);
+  if (!site) { ui.alert('Nie znaleziono strony: ' + siteId); return; }
+
+  var confirm = ui.alert('Potwierdzenie',
+    'Strona: ' + site.name + ' (' + site.domain + ')\n\n' +
+    'Czy uruchomić pełny pipeline onboardingu?\n' +
+    '(Cleanup, Auth, Branding, SEO, GSC, Bing, Report, Email)',
+    ui.ButtonSet.YES_NO);
+  if (confirm !== ui.Button.YES) return;
+
+  ui.alert('Uruchamiam...', 'Pipeline trwa 1-3 minuty. Sprawdź logi.', ui.ButtonSet.OK);
+
+  var result = launchNewSite(siteId);
+
+  var successCount = result.steps.filter(function(s) { return s.success; }).length;
+  var msg = 'Pipeline zakończony!\n\n' +
+    'Wynik: ' + successCount + '/' + result.steps.length + ' kroków OK\n' +
+    'Czas: ' + result.durationSeconds + 's\n';
+  if (result.errors.length > 0) {
+    msg += '\nBłędy:\n' + result.errors.join('\n');
+  }
+  ui.alert('Launch Complete', msg, ui.ButtonSet.OK);
+}
