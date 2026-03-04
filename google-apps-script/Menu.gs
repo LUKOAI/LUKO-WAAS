@@ -21,13 +21,25 @@ function onOpen() {
       .addSeparator()
       .addItem('🔄 Refresh All Sites', 'refreshAllSites'))
     .addSubMenu(ui.createMenu('📦 Products')
-      .addItem('📥 Import from Amazon', 'showImportProductsDialog')
+      .addItem('📥 Import by ASIN', 'showImportByAsinDialog')
+      .addItem('🔍 Import by Search', 'showImportProductsDialog')
       .addItem('🔄 Update Product Data', 'showUpdateProductsDialog')
       .addItem('🔄 Sync All Products', 'syncAllProducts')
-      .addItem('📤 Export to WooCommerce', 'showExportToWooCommerceDialog')
       .addSeparator()
+      .addItem('📊 Product Statistics', 'showProductStats')
       .addItem('💰 Price Sync (Site)', 'priceSyncDialog')
-      .addItem('📊 Product Statistics', 'showProductStats'))
+      .addItem('🏗️ Setup Products Sheet', 'setupProductsSheet'))
+    .addSubMenu(ui.createMenu('🛒 WooCommerce Export')
+      .addItem('✅ Select All Products', 'selectAllProducts')
+      .addItem('❌ Deselect All Products', 'deselectAllProducts')
+      .addSeparator()
+      .addItem('📤 Export Selected Products', 'showExportToWooCommerceDialog')
+      .addItem('📤 Export All Products', 'exportAllToWooCommerce')
+      .addSeparator()
+      .addItem('🔄 Sync from WordPress', 'syncProductsFromWordPress')
+      .addSeparator()
+      .addItem('⚙️ Setup Export Columns', 'setupWooCommerceExportColumns')
+      .addItem('🔄 Refresh Domain Dropdown', 'refreshTargetDomainDropdown'))
     .addSubMenu(ui.createMenu('📝 Content')
       .addItem('✍️ Generate Content', 'showGenerateContentDialog')
       .addItem('📤 Publish Scheduled Content', 'publishScheduledContent')
@@ -244,6 +256,159 @@ function showInstallPluginDialog() {
 
 // =============================================================================
 // DIALOGI - PRODUCTS
+// =============================================================================
+
+// =============================================================================
+// IMPORT BY ASIN DIALOG (restored from original)
+// =============================================================================
+
+function showImportByAsinDialog() {
+  const ui = SpreadsheetApp.getUi();
+
+  const html = HtmlService.createHtmlOutput(`
+    <style>
+      body { font-family: Arial, sans-serif; padding: 20px; }
+      .form-group { margin-bottom: 15px; }
+      label { display: block; margin-bottom: 5px; font-weight: bold; }
+      input, textarea, select { width: 100%; padding: 8px; box-sizing: border-box; }
+      textarea { min-height: 150px; font-family: monospace; }
+      button { background: #34a853; color: white; padding: 10px 20px; border: none; cursor: pointer; }
+      button:hover { background: #2d8e47; }
+      .info { background: #e8f0fe; padding: 10px; border-radius: 4px; margin-bottom: 15px; font-size: 12px; }
+      .info code { background: #d4e4fa; padding: 2px 4px; border-radius: 2px; }
+    </style>
+
+    <div class="info">
+      <strong>Import Products by ASIN</strong><br>
+      Enter Amazon ASINs (one per line). ASINs are 10-character codes like <code>B08N5WRWNW</code>.
+    </div>
+
+    <div class="form-group">
+      <label>ASINs (one per line):</label>
+      <textarea id="asins" placeholder="B08N5WRWNW
+B07XJ8C8F5
+B09G9FPHY6"></textarea>
+    </div>
+
+    <div class="form-group">
+      <label>Category (optional):</label>
+      <select id="category">
+        <option value="">Auto-detect from Amazon</option>
+        <option value="Automotive">Automotive</option>
+        <option value="Electronics">Electronics</option>
+        <option value="Home">Home & Kitchen</option>
+        <option value="Sports">Sports & Outdoors</option>
+        <option value="Tools">Tools & Home Improvement</option>
+        <option value="Garden">Garden & Outdoor</option>
+        <option value="Kitchen">Kitchen & Dining</option>
+      </select>
+    </div>
+
+    <button onclick="importByAsin()">Import Products</button>
+
+    <script>
+      function importByAsin() {
+        const asins = document.getElementById('asins').value.trim();
+        const category = document.getElementById('category').value;
+
+        if (!asins) {
+          alert('Please enter at least one ASIN');
+          return;
+        }
+
+        const asinList = asins.split(/[\\n,]+/).map(a => a.trim()).filter(a => a.length > 0);
+        
+        google.script.run
+          .withSuccessHandler(function(result) {
+            alert('Import complete! ' + (result || asinList.length + ' ASINs processed.') + ' Check the Products sheet.');
+            google.script.host.close();
+          })
+          .withFailureHandler(function(err) {
+            alert('Import error: ' + err.message);
+          })
+          .importProductsFromAmazon({
+            asins: asinList,
+            category: category,
+            keywords: ''
+          });
+          
+        alert('Import started for ' + asinList.length + ' ASINs. Check the Logs sheet for progress.');
+      }
+    </script>
+  `)
+    .setWidth(450)
+    .setHeight(500);
+
+  ui.showModalDialog(html, 'Import Products by ASIN');
+}
+
+// =============================================================================
+// REFRESH DOMAIN DROPDOWN (restored from original)
+// =============================================================================
+
+function refreshTargetDomainDropdown() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const productsSheet = ss.getSheetByName('Products');
+    const sitesSheet = ss.getSheetByName('Sites');
+
+    if (!sitesSheet || !productsSheet) {
+      throw new Error('Required sheets not found');
+    }
+
+    const sitesData = sitesSheet.getDataRange().getValues();
+    const domains = [];
+
+    for (let i = 1; i < sitesData.length; i++) {
+      const domain = sitesData[i][2];
+      if (domain) {
+        domains.push(domain);
+      }
+    }
+
+    if (domains.length === 0) {
+      throw new Error('No domains found in Sites sheet');
+    }
+
+    const headers = productsSheet.getRange(1, 1, 1, productsSheet.getLastColumn()).getValues()[0];
+    const domainColIdx = headers.indexOf('Target Domain');
+
+    if (domainColIdx === -1) {
+      throw new Error('Target Domain column not found. Run Setup Export Columns first.');
+    }
+
+    const lastRow = Math.max(productsSheet.getLastRow(), 2);
+    if (lastRow > 1) {
+      const domainValidation = SpreadsheetApp.newDataValidation()
+        .requireValueInList(domains, true)
+        .build();
+      productsSheet.getRange(2, domainColIdx + 1, lastRow - 1, 1).setDataValidation(domainValidation);
+    }
+
+    SpreadsheetApp.getUi().alert(
+      'Success',
+      'Domain dropdown updated with ' + domains.length + ' domains:\n' + domains.join('\n'),
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+
+    logSuccess('Products', 'Domain dropdown refreshed with ' + domains.length + ' domains');
+  } catch (error) {
+    SpreadsheetApp.getUi().alert(
+      'Error',
+      'Failed to refresh dropdown: ' + error.message,
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+    logError('Products', 'Failed to refresh dropdown: ' + error.message);
+  }
+}
+
+// Alias
+function setupProductsSheet() {
+  setupWooCommerceExportColumns();
+}
+
+// =============================================================================
+// PRODUCTS DIALOGS (existing)
 // =============================================================================
 
 function showImportProductsDialog() {
