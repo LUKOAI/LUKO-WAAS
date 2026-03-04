@@ -1697,160 +1697,196 @@ function setupAllExistingSitesDialog() {
  * No existing plugin or app password needed — uses admin credentials from sheet.
  */
 function installWaasSettingsPlugin(site) {
+  var headers = { 'Cookie': '', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' };
+  
   try {
-    // Step 1: Login via cookies
+    // Step 1: Login
     logInfo('SETUP', 'Logging in to WordPress admin...', site.id);
     var loginResult = wordpressLogin(site);
-    if (!loginResult.success) {
-      return { success: false, error: 'Login failed: ' + loginResult.error };
-    }
-    var cookies = loginResult.cookies;
+    if (!loginResult.success) return { success: false, error: 'Login failed: ' + loginResult.error };
+    headers['Cookie'] = loginResult.cookies;
     
-    // Step 2: Check if plugin is already in plugins list
+    var fetchOpts = function(method) {
+      return { method: method || 'get', headers: headers, muteHttpExceptions: true, followRedirects: true };
+    };
+    
+    // Step 2: Check plugins page
     logInfo('SETUP', 'Checking plugins page...', site.id);
     var pluginsUrl = site.wpUrl + '/wp-admin/plugins.php';
-    var pluginsResp = UrlFetchApp.fetch(pluginsUrl, {
-      method: 'get',
-      headers: { 'Cookie': cookies, 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-      muteHttpExceptions: true, followRedirects: true
-    });
-    var html = pluginsResp.getContentText();
+    var html = UrlFetchApp.fetch(pluginsUrl, fetchOpts()).getContentText();
     
-    var isActive = html.indexOf('waas-settings') > -1 && html.indexOf('action=deactivate') > -1 && 
-                   html.indexOf('waas-settings') < html.indexOf('action=deactivate', html.indexOf('waas-settings'));
+    var hasPlugin = html.indexOf('waas-settings') > -1;
+    var isActive = hasPlugin && html.indexOf('waas-settings') < html.length && 
+                   (function() {
+                     var idx = html.indexOf('data-slug="waas-settings"');
+                     if (idx === -1) idx = html.indexOf('waas-settings/waas-settings.php');
+                     if (idx === -1) return false;
+                     var chunk = html.substring(idx, Math.min(html.length, idx + 2000));
+                     return chunk.indexOf('action=deactivate') > -1;
+                   })();
     
-    // More reliable check: look for deactivate link near waas-settings
-    var waasIdx = html.indexOf('data-slug="waas-settings"');
-    if (waasIdx === -1) waasIdx = html.indexOf('waas-settings/waas-settings.php');
+    // Check if new version already working
+    var endpointWorks = false;
+    try {
+      var ep = UrlFetchApp.fetch('https://' + site.domain + '/wp-json/waas-settings/v1/header-debug', { muteHttpExceptions: true });
+      endpointWorks = (ep.getResponseCode() === 200);
+    } catch(e) {}
     
-    if (waasIdx > -1) {
-      // Plugin exists in list - check if active (deactivate link present nearby)
-      var nearbyHtml = html.substring(Math.max(0, waasIdx - 500), Math.min(html.length, waasIdx + 2000));
-      if (nearbyHtml.indexOf('action=deactivate') > -1) {
-        logInfo('SETUP', 'waas-settings found active in plugins list', site.id);
-        
-        // Check if it's the NEW version (has REST endpoints)
-        var verifyUrl = 'https://' + site.domain + '/wp-json/waas-settings/v1/header-debug';
-        var verifyResp = UrlFetchApp.fetch(verifyUrl, { muteHttpExceptions: true });
-        if (verifyResp.getResponseCode() === 200) {
-          logInfo('SETUP', 'waas-settings v2.1+ confirmed — already up to date', site.id);
-          return { success: true, note: 'already_active' };
-        }
-        
-        // Old version — need to update. Deactivate first, then re-upload.
-        logInfo('SETUP', 'Old plugin version detected (no REST endpoints). Updating...', site.id);
-        var deactivateMatch = nearbyHtml.match(/href="([^"]*action=deactivate[^"]*waas-settings[^"]*)"/);
-        if (deactivateMatch) {
-          var deactivateUrl = deactivateMatch[1].replace(/&amp;/g, '&');
-          if (deactivateUrl.indexOf('http') !== 0) deactivateUrl = site.wpUrl + '/wp-admin/' + deactivateUrl;
-          UrlFetchApp.fetch(deactivateUrl, {
-            method: 'get', headers: { 'Cookie': cookies, 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-            muteHttpExceptions: true, followRedirects: true
-          });
-          logInfo('SETUP', 'Old version deactivated', site.id);
-          
-          // Delete old plugin
-          // Re-fetch plugins page for delete nonce
-          var pluginsResp2 = UrlFetchApp.fetch(pluginsUrl, {
-            method: 'get', headers: { 'Cookie': cookies, 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-            muteHttpExceptions: true, followRedirects: true
-          });
-          var html2 = pluginsResp2.getContentText();
-          var deleteMatch = html2.match(/href="([^"]*action=delete-selected[^"]*waas-settings[^"]*)"/);
-          if (!deleteMatch) {
-            // Try checkbox-based delete
-            var nonceMatch = html2.match(/id="delete-selected"[^>]*value="([^"]*)"/);
-            // Just upload over it — WP will ask to replace
-            logInfo('SETUP', 'Uploading new version over old...', site.id);
-          }
-        }
-        
-        // Upload new version
-        var githubUrl = 'https://github.com/LUKOAI/LUKO-WAAS/raw/main/wordpress-plugin/waas-settings.zip';
-        var zipResp = UrlFetchApp.fetch(githubUrl, { muteHttpExceptions: true, followRedirects: true });
-        if (zipResp.getResponseCode() !== 200) {
-          return { success: false, error: 'Failed to download new plugin from GitHub' };
-        }
-        var pluginBlob = zipResp.getBlob().setName('waas-settings.zip');
-        logInfo('SETUP', 'Downloaded new version: ' + (pluginBlob.getBytes().length / 1024).toFixed(0) + ' KB', site.id);
-        
-        // Upload via WP admin
-        var installed = installPluginOnWordPress(site, pluginBlob, 'waas-settings');
-        if (!installed) {
-          return { success: false, error: 'Plugin upload/update failed' };
-        }
-        
-        // Activate new version
-        activatePluginOnWordPress(site, 'waas-settings/waas-settings.php');
-      }
-      
-      // Plugin installed but inactive - find activation link
-      logInfo('SETUP', 'Plugin installed but inactive, activating...', site.id);
-      var activateMatch = nearbyHtml.match(/href="([^"]*action=activate[^"]*waas-settings[^"]*)"/);
-      if (!activateMatch) {
-        activateMatch = nearbyHtml.match(/href="([^"]*waas-settings[^"]*action=activate[^"]*)"/);
-      }
-      
-      if (activateMatch) {
-        var activateUrl = activateMatch[1].replace(/&amp;/g, '&');
-        if (activateUrl.indexOf('http') !== 0) {
-          activateUrl = site.wpUrl + '/wp-admin/' + activateUrl;
-        }
-        logInfo('SETUP', 'Activating via: ' + activateUrl.substring(0, 100), site.id);
-        var actResp = UrlFetchApp.fetch(activateUrl, {
-          method: 'get',
-          headers: { 'Cookie': cookies, 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-          muteHttpExceptions: true, followRedirects: true
-        });
-        if (actResp.getResponseCode() === 200) {
-          logSuccess('SETUP', 'Plugin activated!', site.id);
-        }
-      } else {
-        logWarning('SETUP', 'Could not find activation link, trying direct activate URL...', site.id);
-        // Try direct activation URL format
-        var directUrl = site.wpUrl + '/wp-admin/plugins.php?action=activate&plugin=waas-settings%2Fwaas-settings.php&_wpnonce=';
-        // Get nonce from page
-        var nonceMatch = html.match(/action=activate&amp;plugin=waas-settings[^"]*_wpnonce=([a-f0-9]+)/);
-        if (nonceMatch) {
-          directUrl = site.wpUrl + '/wp-admin/plugins.php?action=activate&plugin=waas-settings%2Fwaas-settings.php&_wpnonce=' + nonceMatch[1];
-          UrlFetchApp.fetch(directUrl, {
-            method: 'get',
-            headers: { 'Cookie': cookies, 'User-Agent': 'Mozilla/5.0' },
-            muteHttpExceptions: true, followRedirects: true
-          });
-        }
-      }
-    } else {
-      // Plugin not installed — upload it
-      logInfo('SETUP', 'Plugin not found, uploading...', site.id);
-      var githubUrl = 'https://github.com/LUKOAI/LUKO-WAAS/raw/main/wordpress-plugin/waas-settings.zip';
-      var zipResp = UrlFetchApp.fetch(githubUrl, { muteHttpExceptions: true, followRedirects: true });
-      if (zipResp.getResponseCode() !== 200) {
-        return { success: false, error: 'Failed to download ZIP from GitHub' };
-      }
-      var pluginBlob = zipResp.getBlob().setName('waas-settings.zip');
-      logInfo('SETUP', 'Downloaded: ' + (pluginBlob.getBytes().length / 1024).toFixed(0) + ' KB', site.id);
-      
-      var installed = installPluginOnWordPress(site, pluginBlob, 'waas-settings');
-      if (!installed) {
-        return { success: false, error: 'Plugin upload failed' };
-      }
-      
-      // After upload, WP usually auto-activates or shows activate link
-      // Try activation
-      activatePluginOnWordPress(site, 'waas-settings/waas-settings.php');
+    if (isActive && endpointWorks) {
+      logInfo('SETUP', 'waas-settings v2.1+ already active', site.id);
+      return { success: true, note: 'already_active' };
     }
     
-    // Step 3: Verify plugin is active by hitting its endpoint
+    // Step 3: If old version active, deactivate it
+    if (isActive && !endpointWorks) {
+      logInfo('SETUP', 'Old version active — deactivating...', site.id);
+      var deactMatch = html.match(/href="([^"]*action=deactivate[^"]*waas-settings[^"]*)"/);
+      if (deactMatch) {
+        var deactUrl = deactMatch[1].replace(/&amp;/g, '&');
+        if (deactUrl.indexOf('http') !== 0) deactUrl = site.wpUrl + '/wp-admin/' + deactUrl;
+        UrlFetchApp.fetch(deactUrl, fetchOpts());
+        logInfo('SETUP', 'Deactivated', site.id);
+        Utilities.sleep(1000);
+      }
+      
+      // Delete old plugin
+      logInfo('SETUP', 'Deleting old version...', site.id);
+      html = UrlFetchApp.fetch(pluginsUrl, fetchOpts()).getContentText();
+      
+      // Find delete link for waas-settings
+      var deleteMatch = html.match(/href="([^"]*action=delete-selected[^"]*waas-settings[^"]*)"/);
+      if (deleteMatch) {
+        var deleteUrl = deleteMatch[1].replace(/&amp;/g, '&');
+        if (deleteUrl.indexOf('http') !== 0) deleteUrl = site.wpUrl + '/wp-admin/' + deleteUrl;
+        // GET delete confirmation page
+        var confirmHtml = UrlFetchApp.fetch(deleteUrl, fetchOpts()).getContentText();
+        // Find and submit the confirmation form
+        var confirmNonce = confirmHtml.match(/name="_wpnonce"\s+value="([^"]+)"/);
+        if (confirmNonce) {
+          UrlFetchApp.fetch(pluginsUrl, {
+            method: 'post',
+            headers: headers,
+            payload: {
+              'verify-delete': '1',
+              'action': 'delete-selected',
+              'checked[]': 'waas-settings/waas-settings.php',
+              '_wpnonce': confirmNonce[1]
+            },
+            muteHttpExceptions: true, followRedirects: true
+          });
+          logInfo('SETUP', 'Old version deleted', site.id);
+          Utilities.sleep(1000);
+        }
+      } else {
+        logWarning('SETUP', 'Could not find delete link, proceeding with upload anyway...', site.id);
+      }
+      hasPlugin = false; // Force fresh upload
+    }
+    
+    // Step 4: If inactive but installed, just delete
+    if (hasPlugin && !isActive) {
+      logInfo('SETUP', 'Plugin inactive — deleting before fresh install...', site.id);
+      html = UrlFetchApp.fetch(pluginsUrl, fetchOpts()).getContentText();
+      var deleteMatch2 = html.match(/href="([^"]*action=delete-selected[^"]*waas-settings[^"]*)"/);
+      if (deleteMatch2) {
+        var deleteUrl2 = deleteMatch2[1].replace(/&amp;/g, '&');
+        if (deleteUrl2.indexOf('http') !== 0) deleteUrl2 = site.wpUrl + '/wp-admin/' + deleteUrl2;
+        var confirmHtml2 = UrlFetchApp.fetch(deleteUrl2, fetchOpts()).getContentText();
+        var confirmNonce2 = confirmHtml2.match(/name="_wpnonce"\s+value="([^"]+)"/);
+        if (confirmNonce2) {
+          UrlFetchApp.fetch(pluginsUrl, {
+            method: 'post', headers: headers,
+            payload: { 'verify-delete': '1', 'action': 'delete-selected', 'checked[]': 'waas-settings/waas-settings.php', '_wpnonce': confirmNonce2[1] },
+            muteHttpExceptions: true, followRedirects: true
+          });
+          logInfo('SETUP', 'Deleted inactive plugin', site.id);
+          Utilities.sleep(1000);
+        }
+      }
+    }
+    
+    // Step 5: Download new plugin from GitHub
+    logInfo('SETUP', 'Downloading waas-settings v2.1 from GitHub...', site.id);
+    var githubUrl = 'https://github.com/LUKOAI/LUKO-WAAS/raw/main/wordpress-plugin/waas-settings.zip';
+    var zipResp = UrlFetchApp.fetch(githubUrl, { muteHttpExceptions: true, followRedirects: true });
+    if (zipResp.getResponseCode() !== 200) {
+      return { success: false, error: 'GitHub download failed: HTTP ' + zipResp.getResponseCode() };
+    }
+    var pluginBlob = zipResp.getBlob().setName('waas-settings.zip');
+    logInfo('SETUP', 'Downloaded: ' + (pluginBlob.getBytes().length / 1024).toFixed(0) + ' KB', site.id);
+    
+    // Step 6: Upload via WP admin plugin-install.php
+    logInfo('SETUP', 'Uploading plugin...', site.id);
+    var installPageUrl = site.wpUrl + '/wp-admin/plugin-install.php?tab=upload';
+    var installPage = UrlFetchApp.fetch(installPageUrl, fetchOpts()).getContentText();
+    var uploadNonce = installPage.match(/<input[^>]*name="_wpnonce"[^>]*value="([^"]+)"/i);
+    if (!uploadNonce) uploadNonce = installPage.match(/name="_wpnonce"[^>]*value="([^"]+)"/i);
+    if (!uploadNonce) return { success: false, error: 'Could not get upload nonce' };
+    
+    var boundary = '----WaasUpload' + Math.random().toString(36).substring(2);
+    var bodyParts = [];
+    bodyParts.push('--' + boundary);
+    bodyParts.push('Content-Disposition: form-data; name="pluginzip"; filename="waas-settings.zip"');
+    bodyParts.push('Content-Type: application/zip');
+    bodyParts.push('');
+    var headerBuf = Utilities.newBlob(bodyParts.join('\r\n') + '\r\n').getBytes();
+    var fileBuf = pluginBlob.getBytes();
+    var tailStr = '\r\n--' + boundary + '\r\nContent-Disposition: form-data; name="_wpnonce"\r\n\r\n' + uploadNonce[1] +
+                  '\r\n--' + boundary + '\r\nContent-Disposition: form-data; name="action"\r\n\r\ninstall-plugin-upload' +
+                  '\r\n--' + boundary + '\r\nContent-Disposition: form-data; name="install-plugin-submit"\r\n\r\nInstall Now' +
+                  '\r\n--' + boundary + '--';
+    var tailBuf = Utilities.newBlob(tailStr).getBytes();
+    var allBytes = [];
+    for (var i = 0; i < headerBuf.length; i++) allBytes.push(headerBuf[i]);
+    for (var i = 0; i < fileBuf.length; i++) allBytes.push(fileBuf[i]);
+    for (var i = 0; i < tailBuf.length; i++) allBytes.push(tailBuf[i]);
+    
+    var uploadUrl = site.wpUrl + '/wp-admin/update.php?action=upload-plugin';
+    var uploadResp = UrlFetchApp.fetch(uploadUrl, {
+      method: 'post',
+      headers: { 'Cookie': headers['Cookie'], 'Content-Type': 'multipart/form-data; boundary=' + boundary, 'User-Agent': headers['User-Agent'] },
+      payload: Utilities.newBlob(allBytes, 'multipart/form-data').getBytes(),
+      muteHttpExceptions: true, followRedirects: true
+    });
+    var uploadHtml = uploadResp.getContentText();
+    logInfo('SETUP', 'Upload response: HTTP ' + uploadResp.getResponseCode() + ' (' + uploadHtml.length + ' bytes)', site.id);
+    
+    // Check if WP asks to overwrite existing
+    if (uploadHtml.indexOf('overwrite') > -1) {
+      logInfo('SETUP', 'WordPress asking to overwrite — confirming...', site.id);
+      var overwriteMatch = uploadHtml.match(/href="([^"]*overwrite[^"]*)"/);
+      if (overwriteMatch) {
+        var overwriteUrl = overwriteMatch[1].replace(/&amp;/g, '&');
+        if (overwriteUrl.indexOf('http') !== 0) overwriteUrl = site.wpUrl + '/wp-admin/' + overwriteUrl;
+        UrlFetchApp.fetch(overwriteUrl, fetchOpts());
+        logInfo('SETUP', 'Overwrite confirmed', site.id);
+      }
+    }
+    
+    // Step 7: Activate
+    logInfo('SETUP', 'Activating plugin...', site.id);
+    Utilities.sleep(2000);
+    html = UrlFetchApp.fetch(pluginsUrl, fetchOpts()).getContentText();
+    var actMatch = html.match(/href="([^"]*action=activate[^"]*waas-settings[^"]*)"/);
+    if (actMatch) {
+      var actUrl = actMatch[1].replace(/&amp;/g, '&');
+      if (actUrl.indexOf('http') !== 0) actUrl = site.wpUrl + '/wp-admin/' + actUrl;
+      UrlFetchApp.fetch(actUrl, fetchOpts());
+      logSuccess('SETUP', 'Plugin activated', site.id);
+    } else if (html.indexOf('waas-settings') > -1 && html.indexOf('action=deactivate') > -1) {
+      logInfo('SETUP', 'Plugin already active after upload', site.id);
+    }
+    
+    // Step 8: Verify
     Utilities.sleep(2000);
     var verifyUrl = 'https://' + site.domain + '/wp-json/waas-settings/v1/header-debug';
     var verifyResp = UrlFetchApp.fetch(verifyUrl, { muteHttpExceptions: true });
     if (verifyResp.getResponseCode() === 200) {
-      logSuccess('SETUP', 'waas-settings plugin verified active!', site.id);
+      logSuccess('SETUP', 'waas-settings v2.1 verified and active!', site.id);
       return { success: true };
     } else {
-      logWarning('SETUP', 'Plugin endpoint returned ' + verifyResp.getResponseCode() + ' — may need manual activation', site.id);
-      return { success: false, error: 'Plugin installed but endpoint not responding (HTTP ' + verifyResp.getResponseCode() + ')' };
+      logWarning('SETUP', 'Endpoint returned HTTP ' + verifyResp.getResponseCode(), site.id);
+      return { success: false, error: 'Plugin installed but REST endpoint not responding' };
     }
   } catch (e) {
     return { success: false, error: e.message };
