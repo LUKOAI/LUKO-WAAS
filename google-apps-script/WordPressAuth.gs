@@ -644,18 +644,17 @@ function saveAuthCredentials(siteId, authData) {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Sites');
     const data = sheet.getDataRange().getValues();
 
-    // Find site row
+    // Find site row (use String comparison to avoid type mismatch)
     for (let i = 1; i < data.length; i++) {
-      if (data[i][0] === siteId) {
+      if (String(data[i][0]) === String(siteId)) {
         const row = i + 1;
 
-        // Add new column for Application Password if needed
-        // We'll use column 15 (after Notes column 14)
+        // Column P (16) = App Password, Column Q (17) = Auth Type
         if (authData.appPassword) {
-          sheet.getRange(row, 15).setValue(authData.appPassword);
-          sheet.getRange(row, 16).setValue(authData.authType);
+          sheet.getRange(row, 16).setValue(authData.appPassword);
+          sheet.getRange(row, 17).setValue(authData.authType || 'application_password');
         } else {
-          sheet.getRange(row, 16).setValue(authData.authType);
+          sheet.getRange(row, 17).setValue(authData.authType);
         }
 
         logInfo('AUTH', `Saved auth credentials for site ${siteId}`, siteId);
