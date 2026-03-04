@@ -655,7 +655,7 @@ class WAAS_Settings_API {
         $dry_run = (bool) $request->get_param('dry_run');
 
         if (empty($targets) || !is_array($targets)) {
-            $targets = array('products', 'posts', 'pages', 'waas_products', 'taxonomies');
+            $targets = array('products', 'posts', 'waas_products', 'taxonomies');
         }
 
         $deleted = array();
