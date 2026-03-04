@@ -1047,38 +1047,59 @@ class WAAS_Settings_API {
      * Shows exactly what headers reach WordPress REST API
      */
     public function header_debug($request) {
-        $auth_headers = array();
-        $all_http = array();
+        $php_user = isset($_SERVER['PHP_AUTH_USER']) ? $_SERVER['PHP_AUTH_USER'] : null;
+        $php_pass = isset($_SERVER['PHP_AUTH_PW']) ? $_SERVER['PHP_AUTH_PW'] : null;
         
-        foreach ($_SERVER as $key => $value) {
-            if (strpos($key, 'HTTP_') === 0) {
-                $all_http[$key] = substr($value, 0, 80);
+        // Deep Application Password diagnostic
+        $diag = array();
+        if ($php_user && $php_pass) {
+            $user = get_user_by('login', $php_user);
+            $diag['user_exists'] = $user ? true : false;
+            $diag['user_id'] = $user ? $user->ID : null;
+            $diag['user_roles'] = $user ? $user->roles : null;
+            
+            if ($user) {
+                $diag['feature_available'] = wp_is_application_passwords_available();
+                $diag['available_for_user'] = wp_is_application_passwords_available_for_user($user);
+                
+                // List stored app passwords
+                $stored = WP_Application_Passwords::get_user_application_passwords($user->ID);
+                $diag['stored_count'] = count($stored);
+                $diag['stored'] = array();
+                foreach ($stored as $sp) {
+                    $diag['stored'][] = array('name' => $sp['name'], 'uuid' => $sp['uuid'], 'created' => $sp['created']);
+                }
+                
+                // Try manual validation
+                $auth_result = wp_authenticate_application_password(null, $php_user, $php_pass);
+                if (is_wp_error($auth_result)) {
+                    $diag['validation'] = 'ERROR: ' . $auth_result->get_error_code() . ' - ' . $auth_result->get_error_message();
+                } elseif ($auth_result instanceof WP_User) {
+                    $diag['validation'] = 'SUCCESS: ' . $auth_result->user_login;
+                } else {
+                    $diag['validation'] = 'NULL/passthrough (type: ' . gettype($auth_result) . ')';
+                }
+                
+                // Check filters blocking auth
+                global $wp_filter;
+                if (isset($wp_filter['wp_is_application_passwords_available'])) {
+                    foreach ($wp_filter['wp_is_application_passwords_available']->callbacks as $pri => $cbs) {
+                        foreach ($cbs as $k => $v) { $diag['app_pass_filters'][] = $pri . ':' . $k; }
+                    }
+                }
+                if (isset($wp_filter['application_password_did_authenticate'])) {
+                    foreach ($wp_filter['application_password_did_authenticate']->callbacks as $pri => $cbs) {
+                        foreach ($cbs as $k => $v) { $diag['auth_did_filters'][] = $pri . ':' . $k; }
+                    }
+                }
             }
-            if (stripos($key, 'AUTH') !== false || stripos($key, 'WAAS') !== false || stripos($key, 'REDIRECT') !== false) {
-                $auth_headers[$key] = substr($value, 0, 80);
-            }
-        }
-        
-        // Check if WP recognized a user from the headers
-        $current_user_id = get_current_user_id();
-        
-        // Check .htaccess
-        $htaccess_file = ABSPATH . '.htaccess';
-        $htaccess_has_fix = false;
-        if (file_exists($htaccess_file)) {
-            $htaccess_has_fix = strpos(file_get_contents($htaccess_file), 'WAAS Auth Fix') !== false;
         }
         
         return new WP_REST_Response(array(
-            'auth_headers' => $auth_headers,
-            'all_http_headers' => $all_http,
-            'php_auth_user' => isset($_SERVER['PHP_AUTH_USER']) ? $_SERVER['PHP_AUTH_USER'] : 'NOT SET',
-            'php_auth_pw_length' => isset($_SERVER['PHP_AUTH_PW']) ? strlen($_SERVER['PHP_AUTH_PW']) : 0,
-            'current_user_id' => $current_user_id,
-            'current_user_login' => $current_user_id ? get_userdata($current_user_id)->user_login : 'none',
-            'htaccess_has_waas_fix' => $htaccess_has_fix,
-            'app_passwords_available' => class_exists('WP_Application_Passwords'),
-            'wp_version' => get_bloginfo('version'),
+            'php_auth_user' => $php_user ?: 'NOT SET',
+            'php_auth_pw_length' => $php_pass ? strlen($php_pass) : 0,
+            'current_user_id' => get_current_user_id(),
+            'app_password_diagnostic' => $diag,
             'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown',
             'plugin_version' => WAAS_SETTINGS_VERSION,
         ), 200);
