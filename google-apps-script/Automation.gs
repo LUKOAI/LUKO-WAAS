@@ -1564,6 +1564,7 @@ function setupExistingSite(siteId) {
   // Step 3: Test auth
   try {
     logInfo('SETUP', 'Step 3/5: Testing authentication...', siteId);
+    site = getSiteById(siteId); // RELOAD site to get newly saved app password
     var testResult = testWordPressAuth(site); // from WordPressAuth.gs / Core.gs
     if (testResult && testResult.success) {
       logSuccess('SETUP', 'Auth works: user=' + (testResult.user || 'ok'), siteId);
