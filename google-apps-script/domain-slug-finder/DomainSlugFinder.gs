@@ -123,7 +123,11 @@ function onOpen() {
     .addItem('Zainstaluj trigger', 'dsfSetupTriggers')
     .addSeparator()
     .addItem('Test: ASIN B0FRG79LF9', 'dsfRunTest')
+    .addItem('Test: SP-API', 'dsfTestSpApi')
+    .addItem('Test: Claude API', 'dsfTestClaude')
+    .addSeparator()
     .addItem('Wyczysc kolejke', 'dsfClearQueue')
+    .addItem('Usun stare triggery onEdit', 'dsfCleanupOldOnEditTriggers')
     .addItem('Pokaz LOG', 'dsfShowLog')
     .addToUi();
 }
@@ -152,6 +156,10 @@ function dsfSetupTriggers() {
       removed++;
     }
   }
+
+  // Also clean up any remaining onEdit triggers from the old version
+  var onEditRemoved = dsfCleanupOldOnEditTriggers();
+  removed += onEditRemoved;
 
   // Ensure all sheets exist
   dsfEnsureSheets_();
@@ -901,7 +909,7 @@ function dsfCallClaudeAnalysis(spData, amazonSugg, googleSugg, marketplace) {
 
   var payload = {
     model: DSF_CLAUDE_MODEL,
-    max_tokens: 4000,
+    max_tokens: 8000,
     system: systemPrompt,
     messages: [{ role: 'user', content: userPrompt }]
   };
@@ -940,7 +948,7 @@ function dsfCallClaudeSlugs(analysisData, marketplace, rootDomain) {
 
   var payload = {
     model: DSF_CLAUDE_MODEL,
-    max_tokens: 3000,
+    max_tokens: 4000,
     system: systemPrompt,
     messages: [{ role: 'user', content: userPrompt }]
   };
@@ -1027,12 +1035,91 @@ function dsfCallClaudeApi_(apiKey, payload) {
 function dsfParseClaudeJson_(text) {
   if (!text) return null;
   var cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+  // Attempt 1: direct parse
   try {
     return JSON.parse(cleaned);
   } catch (e) {
-    dsfLog('ERROR', 'JSON parse error: ' + e.message + ' | Text: ' + cleaned.substring(0, 150));
+    // Attempt 2: repair truncated JSON — close open strings, arrays, objects
+    var repaired = dsfRepairTruncatedJson_(cleaned);
+    if (repaired) {
+      try {
+        var result = JSON.parse(repaired);
+        dsfLog('WARNING', 'Claude JSON was truncated but repaired successfully (output was cut off by max_tokens)');
+        return result;
+      } catch (e2) {
+        // repair failed too
+      }
+    }
+
+    dsfLog('ERROR', 'JSON parse error: ' + e.message + ' | Text length: ' + cleaned.length + ' | Start: ' + cleaned.substring(0, 150));
     return null;
   }
+}
+
+/**
+ * Attempt to repair truncated JSON by closing open brackets/braces/strings.
+ * This handles the common case where Claude's output is cut off by max_tokens.
+ */
+function dsfRepairTruncatedJson_(text) {
+  if (!text) return null;
+
+  var repaired = text;
+
+  // Remove trailing incomplete key-value pair or array element
+  // Look for last complete structure (ends with ], }, ", or a value)
+  repaired = repaired.replace(/,\s*"[^"]*"?\s*:?\s*(\[?\s*"?[^}\]]*)?$/, '');
+  repaired = repaired.replace(/,\s*"[^"]*$/, '');
+  repaired = repaired.replace(/,\s*$/, '');
+
+  // Count open/close brackets
+  var inString = false;
+  var escape = false;
+  var stack = [];
+
+  for (var i = 0; i < repaired.length; i++) {
+    var ch = repaired[i];
+
+    if (escape) {
+      escape = false;
+      continue;
+    }
+
+    if (ch === '\\' && inString) {
+      escape = true;
+      continue;
+    }
+
+    if (ch === '"' && !escape) {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) continue;
+
+    if (ch === '{' || ch === '[') {
+      stack.push(ch);
+    } else if (ch === '}') {
+      if (stack.length > 0 && stack[stack.length - 1] === '{') stack.pop();
+    } else if (ch === ']') {
+      if (stack.length > 0 && stack[stack.length - 1] === '[') stack.pop();
+    }
+  }
+
+  // If we're still inside a string, close it
+  if (inString) {
+    repaired += '"';
+  }
+
+  // Close remaining open brackets/braces in reverse order
+  while (stack.length > 0) {
+    var open = stack.pop();
+    // Remove any trailing comma before closing
+    repaired = repaired.replace(/,\s*$/, '');
+    repaired += (open === '{') ? '}' : ']';
+  }
+
+  return repaired;
 }
 
 // ==================== SLUG NORMALIZATION ====================
@@ -1466,6 +1553,18 @@ function dsfTestClaude() {
   }
 }
 
+// ==================== LEGACY TRIGGER STUB ====================
+
+/**
+ * Stub for old installable onEdit trigger — does nothing.
+ * Prevents "Script function not found: dsfOnEditInstallable" errors
+ * until user runs "Zainstaluj trigger" to clean up old triggers.
+ */
+function dsfOnEditInstallable(e) {
+  // Intentionally empty — old auto-trigger no longer used.
+  // Run "Domain Finder > Zainstaluj trigger" to remove this trigger.
+}
+
 // ==================== HELPERS ====================
 
 function dsfCleanupProcessQueueTriggers_() {
@@ -1475,4 +1574,23 @@ function dsfCleanupProcessQueueTriggers_() {
       ScriptApp.deleteTrigger(triggers[i]);
     }
   }
+}
+
+/**
+ * Remove all old onEdit triggers that reference dsfOnEditInstallable.
+ * Called from dsfSetupTriggers and can be run manually.
+ */
+function dsfCleanupOldOnEditTriggers() {
+  var triggers = ScriptApp.getProjectTriggers();
+  var removed = 0;
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'dsfOnEditInstallable') {
+      ScriptApp.deleteTrigger(triggers[i]);
+      removed++;
+    }
+  }
+  if (removed > 0) {
+    dsfLog('INFO', 'Usunieto ' + removed + ' starych triggerow onEdit (dsfOnEditInstallable)');
+  }
+  return removed;
 }
