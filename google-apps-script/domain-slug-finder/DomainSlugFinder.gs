@@ -128,7 +128,6 @@ function onOpen() {
     .addSeparator()
     .addItem('Wyczysc kolejke', 'dsfClearQueue')
     .addItem('Usun stare triggery onEdit', 'dsfCleanupOldOnEditTriggers')
-    .addItem('Migruj arkusze do v3 (nowe kolumny)', 'dsfMigrateSheets')
     .addItem('Pokaz LOG', 'dsfShowLog')
     .addToUi();
 }
@@ -1389,16 +1388,17 @@ function dsfUpdateSheetHeaders_(sheet, expectedHeaders) {
  * Old v2 sheets had a "pretty" row 2 with styled column names like:
  *   ANALYSIS: "INPUT\nRow", "ASIN /\nKeyword", "1. Potrzeby\n& Problemy" ...
  *   SLUGS: "INPUT\nRow", "Full Subdomain\n(gotowe do użycia)", "Slug" ...
- * These are no longer needed in v3 — row 1 IS the header.
+ * Real data rows always start with a NUMERIC INPUT_Row value.
  */
 function dsfRemoveOldSubHeaderRow_(sheet) {
   if (sheet.getLastRow() < 2) return; // No row 2
 
-  var row2Val = sheet.getRange(2, 1).getValue().toString().trim();
+  var a2 = sheet.getRange(2, 1).getValue();
+  var a2str = a2.toString().replace(/\s+/g, ' ').trim().toUpperCase();
 
-  // Old v2 sub-headers always had "INPUT\nRow" or "INPUT Row" in A2
-  // Real data rows have numeric INPUT_Row values (1, 2, 3...)
-  if (row2Val === 'INPUT\nRow' || row2Val === 'INPUT Row' || row2Val === 'INPUT\r\nRow') {
+  // Real data rows have a numeric INPUT_Row (1, 2, 3...).
+  // Old sub-headers have text containing "INPUT" that is NOT a number.
+  if (a2str.indexOf('INPUT') >= 0 && isNaN(Number(a2))) {
     sheet.deleteRow(2);
     Logger.log('[DSF] Deleted old v2 sub-header row 2 from sheet "' + sheet.getName() + '"');
   }
