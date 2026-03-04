@@ -128,6 +128,7 @@ function onOpen() {
     .addSeparator()
     .addItem('Wyczysc kolejke', 'dsfClearQueue')
     .addItem('Usun stare triggery onEdit', 'dsfCleanupOldOnEditTriggers')
+    .addItem('Napraw naglowki arkuszy', 'dsfMigrateSheets')
     .addItem('Pokaz LOG', 'dsfShowLog')
     .addToUi();
 }
@@ -1348,39 +1349,33 @@ function dsfEnsureSheets_() {
 
 /**
  * Update headers of an existing sheet to match the expected v3 layout.
- * Strategy: completely replaces header row 1 with the new headers.
- * Also detects and removes old v2 "pretty" sub-header row 2.
- * Existing data rows are preserved — new columns get empty values.
+ * CRITICAL: First unmerges any merged cells in row 1 (old v2 had merged headers).
+ * Then removes old sub-header row 2 if present, and writes fresh headers.
  */
 function dsfUpdateSheetHeaders_(sheet, expectedHeaders) {
-  var lastCol = sheet.getLastColumn();
-  var currentHeaders = lastCol > 0 ? sheet.getRange(1, 1, 1, lastCol).getValues()[0] : [];
+  var maxCol = Math.max(sheet.getLastColumn(), expectedHeaders.length);
+  if (maxCol < 1) maxCol = expectedHeaders.length;
 
-  // Check if headers already match
-  if (currentHeaders.length === expectedHeaders.length) {
-    var match = true;
-    for (var i = 0; i < expectedHeaders.length; i++) {
-      if (currentHeaders[i].toString().trim() !== expectedHeaders[i]) {
-        match = false;
-        break;
-      }
-    }
-    if (match) {
-      // Headers match, but still check for old row 2 sub-headers
-      dsfRemoveOldSubHeaderRow_(sheet);
-      return;
-    }
+  // CRITICAL: Break apart any merged cells in rows 1-2 first!
+  // Old v2 sheets had merged header rows (e.g. A1:P1 merged into one cell)
+  // which causes setValues() to only write to the single merged cell.
+  try {
+    sheet.getRange(1, 1, 2, maxCol).breakApart();
+  } catch (e) {
+    // breakApart throws if no merged cells exist — that's fine
+    Logger.log('[DSF] breakApart on "' + sheet.getName() + '": ' + e.message);
   }
 
-  // Write new header row
+  // Remove old v2 "pretty" sub-header row 2 if present (do this AFTER unmerge)
+  dsfRemoveOldSubHeaderRow_(sheet);
+
+  // Clear row 1 completely, then write new headers
+  sheet.getRange(1, 1, 1, maxCol).clear();
   sheet.getRange(1, 1, 1, expectedHeaders.length).setValues([expectedHeaders]);
   sheet.getRange(1, 1, 1, expectedHeaders.length).setFontWeight('bold');
   sheet.setFrozenRows(1);
 
-  // Remove old v2 "pretty" sub-header row 2 if present
-  dsfRemoveOldSubHeaderRow_(sheet);
-
-  Logger.log('[DSF] Updated headers for sheet "' + sheet.getName() + '": ' + expectedHeaders.length + ' columns (was ' + lastCol + ')');
+  Logger.log('[DSF] Updated headers for sheet "' + sheet.getName() + '": ' + expectedHeaders.length + ' columns');
 }
 
 /**
