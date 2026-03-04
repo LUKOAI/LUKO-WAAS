@@ -208,9 +208,7 @@ function sendLaunchEmail(siteId, report, driveUrl) {
     html = html.replace('<h1>', '<p><a href="' + driveUrl + '">PDF Report on Google Drive</a></p><h1>');
   }
 
-  MailApp.sendEmail({
-    to: emailTo,
-    subject: subject,
+  GmailApp.sendEmail(emailTo, subject, '', {
     htmlBody: html,
     name: 'WAAS Automation System'
   });

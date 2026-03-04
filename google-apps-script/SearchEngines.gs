@@ -108,9 +108,10 @@ function setupGSCForSite(site, verificationCode) {
  * Dodaje stronę do Bing Webmaster Tools
  */
 function registerSiteInBing(site) {
-  var apiKey = getAPIKey('bing_webmaster_key');
+  var apiKey;
+  try { apiKey = getAPIKey('bing_webmaster_key'); } catch(e) { apiKey = null; }
   if (!apiKey) {
-    logWarning('BING', 'No Bing API key configured', site.id);
+    logWarning('BING', 'No Bing API key configured — skipping', site.id);
     return { success: false, error: 'No Bing API key. Set bing_webmaster_key in Script Properties.' };
   }
 
@@ -147,7 +148,8 @@ function registerSiteInBing(site) {
  * Wysyła sitemap do Bing
  */
 function submitSitemapToBing(site) {
-  var apiKey = getAPIKey('bing_webmaster_key');
+  var apiKey;
+  try { apiKey = getAPIKey('bing_webmaster_key'); } catch(e) { apiKey = null; }
   if (!apiKey) return { success: false, error: 'No Bing API key' };
 
   var siteUrl = 'https://' + site.domain;

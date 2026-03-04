@@ -655,7 +655,7 @@ class WAAS_Settings_API {
         $dry_run = (bool) $request->get_param('dry_run');
 
         if (empty($targets) || !is_array($targets)) {
-            $targets = array('products', 'posts', 'waas_products', 'taxonomies');
+            $targets = array('products', 'posts', 'pages', 'waas_products', 'taxonomies');
         }
 
         $deleted = array();
@@ -687,6 +687,52 @@ class WAAS_Settings_API {
             $deleted['posts'] = count($post_ids);
             if (!$dry_run) {
                 foreach ($post_ids as $id) {
+                    wp_delete_post($id, true);
+                }
+            }
+        }
+
+        // --- pages: Remove template-specific pages, keep essential ones ---
+        if (in_array('pages', $targets)) {
+            // Pages to KEEP (WooCommerce + legal essentials)
+            $keep_slugs = array(
+                'shop', 'warenkorb', 'cart', 'kasse', 'checkout',
+                'mein-konto', 'my-account', 'impressum', 'datenschutz',
+                'datenschutzerklaerung', 'privacy-policy', 'agb',
+                'terms-and-conditions', 'widerruf', 'kontakt', 'contact',
+            );
+            // Also keep pages assigned as WooCommerce pages
+            $wc_page_ids = array();
+            foreach (array('shop', 'cart', 'checkout', 'myaccount', 'terms') as $wc_page) {
+                $id = get_option('woocommerce_' . $wc_page . '_page_id');
+                if ($id) $wc_page_ids[] = (int) $id;
+            }
+            // Get front page and blog page
+            $front_page_id = (int) get_option('page_on_front');
+            $blog_page_id = (int) get_option('page_for_posts');
+            if ($front_page_id) $wc_page_ids[] = $front_page_id;
+            if ($blog_page_id) $wc_page_ids[] = $blog_page_id;
+
+            $all_pages = get_posts(array(
+                'post_type' => 'page',
+                'posts_per_page' => -1,
+                'fields' => 'ids',
+                'post_status' => 'any',
+            ));
+
+            $pages_to_delete = array();
+            foreach ($all_pages as $page_id) {
+                // Keep WooCommerce-assigned pages
+                if (in_array($page_id, $wc_page_ids)) continue;
+                // Keep pages with essential slugs
+                $slug = get_post_field('post_name', $page_id);
+                if (in_array($slug, $keep_slugs)) continue;
+                $pages_to_delete[] = $page_id;
+            }
+
+            $deleted['pages'] = count($pages_to_delete);
+            if (!$dry_run) {
+                foreach ($pages_to_delete as $id) {
                     wp_delete_post($id, true);
                 }
             }
