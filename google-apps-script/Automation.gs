@@ -1727,8 +1727,61 @@ function installWaasSettingsPlugin(site) {
       // Plugin exists in list - check if active (deactivate link present nearby)
       var nearbyHtml = html.substring(Math.max(0, waasIdx - 500), Math.min(html.length, waasIdx + 2000));
       if (nearbyHtml.indexOf('action=deactivate') > -1) {
-        logInfo('SETUP', 'waas-settings already active!', site.id);
-        return { success: true, note: 'already_active' };
+        logInfo('SETUP', 'waas-settings found active in plugins list', site.id);
+        
+        // Check if it's the NEW version (has REST endpoints)
+        var verifyUrl = 'https://' + site.domain + '/wp-json/waas-settings/v1/header-debug';
+        var verifyResp = UrlFetchApp.fetch(verifyUrl, { muteHttpExceptions: true });
+        if (verifyResp.getResponseCode() === 200) {
+          logInfo('SETUP', 'waas-settings v2.1+ confirmed — already up to date', site.id);
+          return { success: true, note: 'already_active' };
+        }
+        
+        // Old version — need to update. Deactivate first, then re-upload.
+        logInfo('SETUP', 'Old plugin version detected (no REST endpoints). Updating...', site.id);
+        var deactivateMatch = nearbyHtml.match(/href="([^"]*action=deactivate[^"]*waas-settings[^"]*)"/);
+        if (deactivateMatch) {
+          var deactivateUrl = deactivateMatch[1].replace(/&amp;/g, '&');
+          if (deactivateUrl.indexOf('http') !== 0) deactivateUrl = site.wpUrl + '/wp-admin/' + deactivateUrl;
+          UrlFetchApp.fetch(deactivateUrl, {
+            method: 'get', headers: { 'Cookie': cookies, 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+            muteHttpExceptions: true, followRedirects: true
+          });
+          logInfo('SETUP', 'Old version deactivated', site.id);
+          
+          // Delete old plugin
+          // Re-fetch plugins page for delete nonce
+          var pluginsResp2 = UrlFetchApp.fetch(pluginsUrl, {
+            method: 'get', headers: { 'Cookie': cookies, 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+            muteHttpExceptions: true, followRedirects: true
+          });
+          var html2 = pluginsResp2.getContentText();
+          var deleteMatch = html2.match(/href="([^"]*action=delete-selected[^"]*waas-settings[^"]*)"/);
+          if (!deleteMatch) {
+            // Try checkbox-based delete
+            var nonceMatch = html2.match(/id="delete-selected"[^>]*value="([^"]*)"/);
+            // Just upload over it — WP will ask to replace
+            logInfo('SETUP', 'Uploading new version over old...', site.id);
+          }
+        }
+        
+        // Upload new version
+        var githubUrl = 'https://github.com/LUKOAI/LUKO-WAAS/raw/main/wordpress-plugin/waas-settings.zip';
+        var zipResp = UrlFetchApp.fetch(githubUrl, { muteHttpExceptions: true, followRedirects: true });
+        if (zipResp.getResponseCode() !== 200) {
+          return { success: false, error: 'Failed to download new plugin from GitHub' };
+        }
+        var pluginBlob = zipResp.getBlob().setName('waas-settings.zip');
+        logInfo('SETUP', 'Downloaded new version: ' + (pluginBlob.getBytes().length / 1024).toFixed(0) + ' KB', site.id);
+        
+        // Upload via WP admin
+        var installed = installPluginOnWordPress(site, pluginBlob, 'waas-settings');
+        if (!installed) {
+          return { success: false, error: 'Plugin upload/update failed' };
+        }
+        
+        // Activate new version
+        activatePluginOnWordPress(site, 'waas-settings/waas-settings.php');
       }
       
       // Plugin installed but inactive - find activation link
