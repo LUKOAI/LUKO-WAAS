@@ -59,6 +59,13 @@ function waas_fix_authorization_header() {
     }
 
     // ==========================================================================
+    // FIX: Force Application Passwords to be available
+    // Some hosting configs/plugins disable them (e.g. non-SSL detection behind proxy)
+    // ==========================================================================
+    add_filter('wp_is_application_passwords_available', '__return_true', 999);
+    add_filter('wp_is_application_passwords_available_for_user', '__return_true', 999);
+
+    // ==========================================================================
     // STRATEGY 2: Restore from REDIRECT_ variables (.htaccess rewrite)
     // ==========================================================================
     if (!isset($_SERVER['PHP_AUTH_USER']) && !isset($_SERVER['HTTP_AUTHORIZATION'])) {
