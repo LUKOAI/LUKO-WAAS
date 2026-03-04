@@ -65,6 +65,8 @@ function onOpen() {
     .addSubMenu(ui.createMenu('🤖 Automation')
       .addItem('🚀 Install Full Stack', 'showInstallFullStackDialog')
       .addItem('🌟 NEW SITE WIZARD (Full Pipeline)', 'newSiteWizardDialog')
+      .addItem('🔧 SETUP EXISTING SITE', 'setupExistingSiteDialog')
+      .addItem('🔧 SETUP ALL EXISTING SITES', 'setupAllExistingSitesDialog')
       .addItem('📤 Deploy Selected Content', 'showDeployContentDialog')
       .addSeparator()
       .addItem('⚙️ Process Auto Install Sites', 'processAutoInstallSites')

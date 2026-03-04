@@ -1393,16 +1393,9 @@ function launchNewSite(siteId, options) {
     }
   }
 
-  // STEP 10: Notion (optional)
-  if (!options.skipNotion && report) {
-    try {
-      logInfo('LAUNCH', 'Step 10/10: Exporting to Notion...', siteId);
-      var notionResult = exportToNotion(siteId, report); // z LaunchReport.gs
-      result.steps.push({ step: 10, name: 'Notion', success: notionResult.success });
-    } catch (e) {
-      result.steps.push({ step: 10, name: 'Notion', success: false, error: e.message });
-    }
-  }
+  // STEP 10: Notion — DISABLED (report saved to Drive is sufficient)
+  // To re-enable: set options.skipNotion = false
+  result.steps.push({ step: 10, name: 'Notion', success: true, skipped: true });
 
   // Summary
   result.endTime = new Date();
@@ -1501,4 +1494,190 @@ function testAuthForSite() {
   Logger.log('Result: ' + JSON.stringify(result2).substring(0, 500));
   
   Logger.log('\n=== END DIAGNOSTIC v2 ===');
+}
+
+// =============================================================================
+// SETUP EXISTING SITES
+// =============================================================================
+
+/**
+ * Setup an existing site — installs auth, registers in search engines.
+ * Prerequisites: waas-settings plugin must be installed on the site.
+ * 
+ * Steps:
+ * 1. Check if waas-settings plugin is reachable
+ * 2. Setup Application Password auth
+ * 3. Test auth
+ * 4. Register in Google Search Console
+ * 5. Register in Bing
+ * 6. Update site status in sheet
+ */
+function setupExistingSite(siteId) {
+  var site = getSiteById(siteId);
+  if (!site) throw new Error('Site not found: ' + siteId);
+  
+  logInfo('SETUP', 'Setting up existing site: ' + site.name + ' (' + site.domain + ')', siteId);
+  
+  var results = { steps: [], errors: [] };
+  
+  // Step 1: Check if waas-settings plugin is reachable
+  try {
+    logInfo('SETUP', 'Step 1/5: Checking waas-settings plugin...', siteId);
+    var checkUrl = 'https://' + site.domain + '/wp-json/waas-settings/v1/header-debug';
+    var resp = UrlFetchApp.fetch(checkUrl, { muteHttpExceptions: true });
+    if (resp.getResponseCode() === 200) {
+      logSuccess('SETUP', 'Plugin reachable', siteId);
+      results.steps.push({ step: 1, name: 'Plugin Check', success: true });
+    } else {
+      throw new Error('Plugin not reachable (HTTP ' + resp.getResponseCode() + '). Install waas-settings plugin first!');
+    }
+  } catch (e) {
+    logError('SETUP', 'Plugin check failed: ' + e.message, siteId);
+    results.steps.push({ step: 1, name: 'Plugin Check', success: false, error: e.message });
+    results.errors.push('Step 1: ' + e.message);
+    return results; // Can't continue without plugin
+  }
+  
+  // Step 2: Setup auth
+  try {
+    logInfo('SETUP', 'Step 2/5: Setting up authentication...', siteId);
+    var authResult = setupWordPressAuth(site); // from WordPressAuth.gs
+    if (authResult && authResult.success) {
+      logSuccess('SETUP', 'Auth configured', siteId);
+      results.steps.push({ step: 2, name: 'Auth Setup', success: true });
+    } else {
+      // Auth might already exist — check
+      var existingAuth = getAuthHeader(site);
+      if (existingAuth) {
+        logInfo('SETUP', 'Auth already exists, testing...', siteId);
+        results.steps.push({ step: 2, name: 'Auth Setup', success: true, note: 'existing' });
+      } else {
+        throw new Error('Auth setup failed: ' + JSON.stringify(authResult));
+      }
+    }
+  } catch (e) {
+    logError('SETUP', 'Auth setup failed: ' + e.message, siteId);
+    results.steps.push({ step: 2, name: 'Auth Setup', success: false, error: e.message });
+    results.errors.push('Step 2: ' + e.message);
+  }
+  
+  // Step 3: Test auth
+  try {
+    logInfo('SETUP', 'Step 3/5: Testing authentication...', siteId);
+    var testResult = testWordPressAuth(site); // from WordPressAuth.gs / Core.gs
+    if (testResult && testResult.success) {
+      logSuccess('SETUP', 'Auth works: user=' + (testResult.user || 'ok'), siteId);
+      results.steps.push({ step: 3, name: 'Auth Test', success: true });
+    } else {
+      throw new Error('Auth test failed: ' + JSON.stringify(testResult));
+    }
+  } catch (e) {
+    logError('SETUP', 'Auth test failed: ' + e.message, siteId);
+    results.steps.push({ step: 3, name: 'Auth Test', success: false, error: e.message });
+    results.errors.push('Step 3: ' + e.message);
+  }
+  
+  // Step 4-5: Search engines
+  try {
+    logInfo('SETUP', 'Step 4-5/5: Registering in search engines...', siteId);
+    var seResult = registerInAllSearchEngines(site);
+    var seOk = Object.values(seResult).filter(function(r) { return r && r.success; }).length;
+    logSuccess('SETUP', 'Search engines: ' + seOk + '/4', siteId);
+    results.steps.push({ step: 4, name: 'Search Engines', success: seOk > 0, data: seResult });
+  } catch (e) {
+    logWarning('SETUP', 'Search engines: ' + e.message, siteId);
+    results.steps.push({ step: 4, name: 'Search Engines', success: false, error: e.message });
+  }
+  
+  var successCount = results.steps.filter(function(s) { return s.success; }).length;
+  logSuccess('SETUP', 'SETUP COMPLETE: ' + successCount + '/' + results.steps.length + ' steps OK', siteId);
+  
+  return results;
+}
+
+/**
+ * Setup ALL existing sites in the sheet that have a domain but missing auth.
+ */
+function setupAllExistingSites() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Sites');
+  var data = sheet.getDataRange().getValues();
+  
+  var results = [];
+  var processed = 0;
+  var succeeded = 0;
+  
+  for (var i = 1; i < data.length; i++) {
+    var siteId = data[i][0];
+    var domain = data[i][2]; // Column C = domain
+    var status = data[i][3]; // Column D = status
+    
+    if (!siteId || !domain) continue;
+    
+    processed++;
+    logInfo('SETUP', 'Processing site ' + processed + ': ' + domain + ' (ID: ' + siteId + ')');
+    
+    try {
+      var result = setupExistingSite(siteId);
+      var ok = result.steps.filter(function(s) { return s.success; }).length;
+      if (ok >= 3) succeeded++; // At least plugin + auth + auth-test
+      results.push({ siteId: siteId, domain: domain, success: ok >= 3, steps: ok + '/' + result.steps.length });
+    } catch (e) {
+      logError('SETUP', 'Failed for ' + domain + ': ' + e.message);
+      results.push({ siteId: siteId, domain: domain, success: false, error: e.message });
+    }
+    
+    Utilities.sleep(2000); // Rate limiting between sites
+  }
+  
+  logSuccess('SETUP', 'BULK SETUP COMPLETE: ' + succeeded + '/' + processed + ' sites configured');
+  return results;
+}
+
+// --- Dialogs ---
+
+function setupExistingSiteDialog() {
+  var ui = SpreadsheetApp.getUi();
+  var result = ui.prompt(
+    '🔧 Setup Existing Site',
+    'Enter Site ID.\n\nPrerequisite: waas-settings plugin must be installed on the site.\n(Upload waas-settings-v2.1.zip through WP Admin → Plugins → Add New → Upload)',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (result.getSelectedButton() !== ui.Button.OK) return;
+  
+  var siteId = result.getResponseText().trim();
+  if (!siteId) { ui.alert('No Site ID provided'); return; }
+  
+  var setupResult = setupExistingSite(siteId);
+  var ok = setupResult.steps.filter(function(s) { return s.success; }).length;
+  var total = setupResult.steps.length;
+  
+  var msg = 'Setup: ' + ok + '/' + total + ' steps OK\n\n';
+  setupResult.steps.forEach(function(s) {
+    msg += (s.success ? '✅' : '❌') + ' ' + s.name + (s.error ? ': ' + s.error : '') + '\n';
+  });
+  
+  ui.alert('Setup Result', msg, ui.ButtonSet.OK);
+}
+
+function setupAllExistingSitesDialog() {
+  var ui = SpreadsheetApp.getUi();
+  var confirm = ui.alert(
+    '🔧 Setup ALL Existing Sites',
+    'This will setup auth and search engine registration for ALL sites in the sheet.\n\n' +
+    'Prerequisites:\n• waas-settings plugin must be installed on each site\n• Sites must be accessible\n\n' +
+    'Continue?',
+    ui.ButtonSet.YES_NO
+  );
+  if (confirm !== ui.Button.YES) return;
+  
+  var results = setupAllExistingSites();
+  
+  var ok = results.filter(function(r) { return r.success; }).length;
+  var msg = 'Bulk Setup: ' + ok + '/' + results.length + ' sites configured\n\n';
+  results.forEach(function(r) {
+    msg += (r.success ? '✅' : '❌') + ' ' + r.domain + ' (' + (r.steps || r.error) + ')\n';
+  });
+  
+  ui.alert('Bulk Setup Result', msg, ui.ButtonSet.OK);
 }
