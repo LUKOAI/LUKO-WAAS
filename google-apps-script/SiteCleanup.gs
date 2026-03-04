@@ -24,7 +24,8 @@
  * @private
  */
 function _cleanupApiPost(site, endpoint, body) {
-  return makeHttpRequest(site.wpUrl + '/wp-json/waas-settings/v1' + endpoint, {
+  var baseUrl = site.wpUrl.replace(/\/+$/, '');
+  return makeHttpRequest(baseUrl + '/wp-json/waas-settings/v1' + endpoint, {
     method: 'POST',
     headers: { 'Authorization': getAuthHeader(site), 'Content-Type': 'application/json' },
     payload: JSON.stringify(body)
@@ -36,7 +37,8 @@ function _cleanupApiPost(site, endpoint, body) {
  * @private
  */
 function _cleanupApiGet(site, endpoint) {
-  return makeHttpRequest(site.wpUrl + '/wp-json/waas-settings/v1' + endpoint, {
+  var baseUrl = site.wpUrl.replace(/\/+$/, '');
+  return makeHttpRequest(baseUrl + '/wp-json/waas-settings/v1' + endpoint, {
     method: 'GET',
     headers: { 'Authorization': getAuthHeader(site) }
   });
@@ -47,7 +49,8 @@ function _cleanupApiGet(site, endpoint) {
  * @private
  */
 function _cleanupApiPut(site, endpoint, body) {
-  return makeHttpRequest(site.wpUrl + '/wp-json/waas-settings/v1' + endpoint, {
+  var baseUrl = site.wpUrl.replace(/\/+$/, '');
+  return makeHttpRequest(baseUrl + '/wp-json/waas-settings/v1' + endpoint, {
     method: 'PUT',
     headers: { 'Authorization': getAuthHeader(site), 'Content-Type': 'application/json' },
     payload: JSON.stringify(body)

@@ -1262,7 +1262,24 @@ function launchNewSite(siteId, options) {
   try {
     logInfo('LAUNCH', 'Step 2/10: Setting up authentication...', siteId);
     site = getSiteById(siteId); // refresh after cleanup
-    if (!site.appPassword) {
+    
+    // Always verify auth works before proceeding
+    var authWorks = false;
+    if (site.appPassword) {
+      var baseUrl = site.wpUrl.replace(/\/+$/, '');
+      var testResult = makeHttpRequest(baseUrl + '/wp-json/waas-settings/v1/auth-test', {
+        method: 'GET',
+        headers: { 'Authorization': getAuthHeader(site) }
+      });
+      authWorks = testResult.success && testResult.data && testResult.data.success;
+      if (authWorks) {
+        logInfo('LAUNCH', 'Existing auth verified OK', siteId);
+      } else {
+        logWarning('LAUNCH', 'Existing auth failed (401) — recreating...', siteId);
+      }
+    }
+    
+    if (!authWorks) {
       setupWordPressAuth(site);
       site = getSiteById(siteId); // refresh
     }
@@ -1281,7 +1298,7 @@ function launchNewSite(siteId, options) {
   // STEP 3: Install plugins
   try {
     logInfo('LAUNCH', 'Step 3/10: Checking plugins...', siteId);
-    var pluginCheck = makeHttpRequest(site.wpUrl + '/wp-json/wp/v2/plugins', {
+    var pluginCheck = makeHttpRequest(site.wpUrl.replace(/\/+$/, '') + '/wp-json/wp/v2/plugins', {
       method: 'GET',
       headers: { 'Authorization': getAuthHeader(site) }
     });

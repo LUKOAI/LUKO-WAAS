@@ -287,7 +287,7 @@ function getWebhookUrl() {
 function triggerPriceSyncForSite(site) {
   logInfo('PRICE_SYNC', 'Triggering price sync for: ' + site.name + ' (' + site.domain + ')', site.id);
 
-  var result = makeHttpRequest(site.wpUrl + '/wp-json/waas-settings/v1/price-sync', {
+  var result = makeHttpRequest(site.wpUrl.replace(/\/+$/, '') + '/wp-json/waas-settings/v1/price-sync', {
     method: 'POST',
     headers: { 'Authorization': getAuthHeader(site), 'Content-Type': 'application/json' },
     payload: JSON.stringify({})

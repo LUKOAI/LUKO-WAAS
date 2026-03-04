@@ -573,7 +573,7 @@ function seoMenuHealthCheckAll() {
 // =============================================================================
 
 function _seoApiGet(site, endpoint, params) {
-  var url = site.wpUrl + '/wp-json/waas-settings/v1' + endpoint;
+  var url = site.wpUrl.replace(/\/+$/, '') + '/wp-json/waas-settings/v1' + endpoint;
   if (params) {
     var qs = Object.keys(params).map(function(k) { return k + '=' + encodeURIComponent(params[k]); }).join('&');
     url += '?' + qs;
@@ -582,7 +582,7 @@ function _seoApiGet(site, endpoint, params) {
 }
 
 function _seoApiPut(site, endpoint, body) {
-  return makeHttpRequest(site.wpUrl + '/wp-json/waas-settings/v1' + endpoint, {
+  return makeHttpRequest(site.wpUrl.replace(/\/+$/, '') + '/wp-json/waas-settings/v1' + endpoint, {
     method: 'PUT',
     headers: { 'Authorization': getAuthHeader(site), 'Content-Type': 'application/json' },
     payload: JSON.stringify(body)
@@ -590,7 +590,7 @@ function _seoApiPut(site, endpoint, body) {
 }
 
 function _seoApiPost(site, endpoint, body) {
-  return makeHttpRequest(site.wpUrl + '/wp-json/waas-settings/v1' + endpoint, {
+  return makeHttpRequest(site.wpUrl.replace(/\/+$/, '') + '/wp-json/waas-settings/v1' + endpoint, {
     method: 'POST',
     headers: { 'Authorization': getAuthHeader(site), 'Content-Type': 'application/json' },
     payload: JSON.stringify(body)
@@ -609,7 +609,7 @@ function _getAllWpItems(site, postType) {
   var endpoint = postType === 'product' ? 'wc/v3/products' : 'wp/v2/' + postType;
 
   while (true) {
-    var url = site.wpUrl + '/wp-json/' + endpoint + '?per_page=' + perPage + '&page=' + page + '&status=publish';
+    var url = site.wpUrl.replace(/\/+$/, '') + '/wp-json/' + endpoint + '?per_page=' + perPage + '&page=' + page + '&status=publish';
     var response = makeHttpRequest(url, { method: 'GET', headers: { 'Authorization': getAuthHeader(site) } });
     if (!response.success || !response.data || !Array.isArray(response.data) || response.data.length === 0) break;
     allItems = allItems.concat(response.data);
@@ -721,7 +721,7 @@ function _updateSeoField(site, fieldName, value) {
 
 function _checkPluginActive(site, pluginSlug) {
   try {
-    var r = makeHttpRequest(site.wpUrl + '/wp-json/wp/v2/plugins', { headers: { 'Authorization': getAuthHeader(site) } });
+    var r = makeHttpRequest(site.wpUrl.replace(/\/+$/, '') + '/wp-json/wp/v2/plugins', { headers: { 'Authorization': getAuthHeader(site) } });
     if (r.success && Array.isArray(r.data)) {
       return r.data.some(function(p) { return p.plugin && p.plugin.toLowerCase().indexOf(pluginSlug) >= 0 && p.status === 'active'; });
     }
@@ -758,7 +758,7 @@ function _checkRobots(site) {
 }
 
 function _checkRestApi(site) {
-  try { var r = makeHttpRequest(site.wpUrl + '/wp-json/'); return r.success; } catch (e) { return false; }
+  try { var r = makeHttpRequest(site.wpUrl.replace(/\/+$/, '') + '/wp-json/'); return r.success; } catch (e) { return false; }
 }
 
 function _checkWaasSettingsPlugin(site) {

@@ -32,7 +32,100 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('WAAS_SETTINGS_VERSION', '2.0.0');
+define('WAAS_SETTINGS_VERSION', '2.1.0');
+
+// =============================================================================
+// HOSTING AUTH FIX — runs BEFORE WordPress auth, fixes stripped Authorization header
+// =============================================================================
+add_action('plugins_loaded', 'waas_fix_authorization_header', 1);
+function waas_fix_authorization_header() {
+    // Many shared hosts (Hostinger, some Apache/LiteSpeed configs) strip the
+    // Authorization header. .htaccess rules convert it to REDIRECT_HTTP_AUTHORIZATION.
+    // This code restores it so WordPress Application Passwords work.
+    if (!isset($_SERVER['PHP_AUTH_USER']) && !isset($_SERVER['HTTP_AUTHORIZATION'])) {
+        if (isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
+            $_SERVER['HTTP_AUTHORIZATION'] = $_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
+        } elseif (isset($_SERVER['REDIRECT_REDIRECT_HTTP_AUTHORIZATION'])) {
+            $_SERVER['HTTP_AUTHORIZATION'] = $_SERVER['REDIRECT_REDIRECT_HTTP_AUTHORIZATION'];
+        }
+    }
+    // Parse Basic Auth from HTTP_AUTHORIZATION if PHP_AUTH_USER is missing
+    if (!isset($_SERVER['PHP_AUTH_USER']) && isset($_SERVER['HTTP_AUTHORIZATION'])) {
+        $auth = $_SERVER['HTTP_AUTHORIZATION'];
+        if (stripos($auth, 'Basic ') === 0) {
+            $decoded = base64_decode(substr($auth, 6));
+            if ($decoded && strpos($decoded, ':') !== false) {
+                list($_SERVER['PHP_AUTH_USER'], $_SERVER['PHP_AUTH_PW']) = explode(':', $decoded, 2);
+            }
+        }
+    }
+}
+
+// =============================================================================
+// ACTIVATION HOOK — fix .htaccess for Authorization header passthrough
+// =============================================================================
+register_activation_hook(__FILE__, 'waas_settings_activate');
+function waas_settings_activate() {
+    waas_fix_htaccess();
+    // Ensure Application Passwords are enabled
+    if (!defined('WP_APPLICATION_PASSWORDS')) {
+        // Try to add to wp-config.php
+        waas_ensure_app_passwords_enabled();
+    }
+}
+
+function waas_fix_htaccess() {
+    $htaccess_file = ABSPATH . '.htaccess';
+    $marker_start = '# BEGIN WAAS Auth Fix';
+    $marker_end = '# END WAAS Auth Fix';
+    $rules = <<<HTACCESS
+
+# BEGIN WAAS Auth Fix
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteCond %{HTTP:Authorization} ^(.*)
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%1]
+</IfModule>
+<IfModule mod_setenvif.c>
+SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=\$1
+</IfModule>
+# END WAAS Auth Fix
+HTACCESS;
+
+    if (!file_exists($htaccess_file)) {
+        @file_put_contents($htaccess_file, $rules . "\n");
+        return;
+    }
+
+    $content = file_get_contents($htaccess_file);
+    if (strpos($content, $marker_start) !== false) {
+        return; // Already fixed
+    }
+
+    // Insert before WordPress rules
+    $wp_marker = '# BEGIN WordPress';
+    if (strpos($content, $wp_marker) !== false) {
+        $content = str_replace($wp_marker, $rules . "\n\n" . $wp_marker, $content);
+    } else {
+        $content = $rules . "\n\n" . $content;
+    }
+    @file_put_contents($htaccess_file, $content);
+}
+
+function waas_ensure_app_passwords_enabled() {
+    $config_file = ABSPATH . 'wp-config.php';
+    if (!file_exists($config_file) || !is_writable($config_file)) return;
+    
+    $content = file_get_contents($config_file);
+    if (strpos($content, 'WP_APPLICATION_PASSWORDS') !== false) return;
+    
+    $content = str_replace(
+        "/* That's all, stop editing!",
+        "define( 'WP_APPLICATION_PASSWORDS', true );\n\n/* That's all, stop editing!",
+        $content
+    );
+    @file_put_contents($config_file, $content);
+}
 
 class WAAS_Settings_API {
 
@@ -51,6 +144,18 @@ class WAAS_Settings_API {
 
         // Add admin menu page so plugin is visible in WP admin
         add_action('admin_menu', array($this, 'add_admin_menu'));
+        
+        // Ensure .htaccess fix is present (self-healing)
+        if (is_admin() && !wp_doing_ajax()) {
+            add_action('admin_init', function() {
+                // Check once per day
+                $last_check = get_option('waas_htaccess_check', 0);
+                if (time() - $last_check > 86400) {
+                    waas_fix_htaccess();
+                    update_option('waas_htaccess_check', time());
+                }
+            });
+        }
     }
 
     /**
@@ -271,6 +376,31 @@ class WAAS_Settings_API {
         register_rest_route($ns, '/price-sync', array(
             'methods' => 'POST',
             'callback' => array($this, 'trigger_price_sync'),
+            'permission_callback' => array($this, 'check_admin_permission'),
+        ));
+
+        // =====================================================================
+        // AUTH SETUP ENDPOINT (v2.1 — auto-generates Application Password)
+        // =====================================================================
+        
+        // POST /auth-setup — Create Application Password + fix .htaccess
+        // Works with Cookie auth (wp-admin login) even when Basic Auth is broken
+        register_rest_route($ns, '/auth-setup', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'auth_setup'),
+            'permission_callback' => array($this, 'check_admin_permission'),
+            'args' => array(
+                'app_name' => array(
+                    'type' => 'string',
+                    'default' => 'WAAS',
+                ),
+            ),
+        ));
+
+        // GET /auth-test — Quick auth verification (returns user info if authenticated)
+        register_rest_route($ns, '/auth-test', array(
+            'methods' => 'GET',
+            'callback' => array($this, 'auth_test'),
             'permission_callback' => array($this, 'check_admin_permission'),
         ));
     }
@@ -806,6 +936,81 @@ class WAAS_Settings_API {
             'source_stats' => $result['source_stats'] ?? array(),
             'duration_seconds' => $result['duration_seconds'] ?? 0,
             'price_source_config' => get_option('waas_pm_price_source', 'auto'),
+        ), 200);
+    }
+
+    // =========================================================================
+    // AUTH SETUP CALLBACKS (v2.1)
+    // =========================================================================
+
+    /**
+     * POST /auth-setup — Create Application Password and fix hosting auth
+     * Called by GAS pipeline using cookie auth (wp-admin login session)
+     */
+    public function auth_setup($request) {
+        $app_name = sanitize_text_field($request->get_param('app_name'));
+        $result = array('success' => true, 'actions' => array());
+
+        // Step 1: Fix .htaccess
+        waas_fix_htaccess();
+        $result['actions'][] = 'htaccess_fixed';
+
+        // Step 2: Ensure Application Passwords are enabled
+        if (!class_exists('WP_Application_Passwords')) {
+            return new WP_Error('app_passwords_unavailable',
+                'Application Passwords not available in this WordPress version',
+                array('status' => 500));
+        }
+
+        // Step 3: Delete existing WAAS app password (if any)
+        $user = wp_get_current_user();
+        $existing = WP_Application_Passwords::get_user_application_passwords($user->ID);
+        foreach ($existing as $pass) {
+            if ($pass['name'] === $app_name) {
+                WP_Application_Passwords::delete_application_password($user->ID, $pass['uuid']);
+                $result['actions'][] = 'old_password_deleted';
+            }
+        }
+
+        // Step 4: Create new Application Password
+        $new_pass = WP_Application_Passwords::create_new_application_password(
+            $user->ID,
+            array('name' => $app_name)
+        );
+
+        if (is_wp_error($new_pass)) {
+            return new WP_Error('password_creation_failed',
+                $new_pass->get_error_message(),
+                array('status' => 500));
+        }
+
+        $result['app_password'] = $new_pass[0]; // Raw password (only shown once)
+        $result['user'] = $user->user_login;
+        $result['user_id'] = $user->ID;
+        $result['actions'][] = 'password_created';
+        $result['wp_version'] = get_bloginfo('version');
+        $result['site_url'] = get_site_url();
+
+        return new WP_REST_Response($result, 200);
+    }
+
+    /**
+     * GET /auth-test — Verify authentication works
+     */
+    public function auth_test($request) {
+        $user = wp_get_current_user();
+        return new WP_REST_Response(array(
+            'success' => true,
+            'user' => $user->user_login,
+            'user_id' => $user->ID,
+            'roles' => $user->roles,
+            'wp_version' => get_bloginfo('version'),
+            'site_title' => get_bloginfo('name'),
+            'site_url' => get_site_url(),
+            'plugin_version' => WAAS_SETTINGS_VERSION,
+            'htaccess_fixed' => file_exists(ABSPATH . '.htaccess') && 
+                strpos(file_get_contents(ABSPATH . '.htaccess'), 'WAAS Auth Fix') !== false,
+            'app_passwords_enabled' => class_exists('WP_Application_Passwords'),
         ), 200);
     }
 

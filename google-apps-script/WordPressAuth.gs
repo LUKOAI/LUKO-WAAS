@@ -137,23 +137,76 @@ function createApplicationPassword(site) {
       };
     }
 
-    // Step 2: Get user ID
-    const userId = getCurrentUserId(site, loginResult.cookies);
+    // Step 2: Get nonce for REST API calls via cookie auth
+    logInfo('AUTH', 'REST API nonce extracted successfully', site.id);
+    
+    if (!loginResult.nonce) {
+      logWarning('AUTH', 'No nonce found, trying to extract manually...', site.id);
+    }
 
+    // Step 3: Try WAAS Settings plugin auth-setup endpoint (cookie + nonce auth)
+    // This bypasses the Authorization header stripping issue on shared hosts
+    logInfo('AUTH', 'Creating Application Password via WAAS Settings plugin (cookie auth)...', site.id);
+    
+    var baseUrl = site.wpUrl.replace(/\/+$/, ''); // Remove trailing slash
+    var setupEndpoint = baseUrl + '/wp-json/waas-settings/v1/auth-setup';
+    
+    var headers = {
+      'Content-Type': 'application/json',
+      'Cookie': loginResult.cookies
+    };
+    if (loginResult.nonce) {
+      headers['X-WP-Nonce'] = loginResult.nonce;
+    }
+    
+    var setupResponse = UrlFetchApp.fetch(setupEndpoint, {
+      method: 'post',
+      headers: headers,
+      payload: JSON.stringify({ app_name: 'WAAS' }),
+      muteHttpExceptions: true,
+      followRedirects: true
+    });
+    
+    var setupCode = setupResponse.getResponseCode();
+    var setupText = setupResponse.getContentText();
+    
+    if (setupCode === 200 || setupCode === 201) {
+      var setupData = JSON.parse(setupText);
+      if (setupData.app_password) {
+        logSuccess('AUTH', 'Application Password created via WAAS Settings plugin!', site.id);
+        return {
+          success: true,
+          password: setupData.app_password,
+          name: 'WAAS',
+          htaccess_fixed: true
+        };
+      }
+    }
+    
+    logWarning('AUTH', 'WAAS Settings auth-setup returned: ' + setupCode + ' - ' + setupText.substring(0, 200), site.id);
+    
+    // Step 4: Fallback — try WP core Application Password endpoint
+    logInfo('AUTH', 'Trying WP core Application Password endpoint...', site.id);
+    
+    var userId = getCurrentUserId(site, loginResult.cookies);
+    
+    if (!userId) {
+      // Try to get user ID from wp-admin profile page
+      logWarning('AUTH', 'Could not get user ID from users endpoint, trying profile page...', site.id);
+      userId = getUserIdFromProfile(site, loginResult.cookies);
+    }
+    
     if (!userId) {
       return {
         success: false,
-        error: 'Could not get user ID'
+        error: 'Could not get user ID. Try updating waas-settings plugin to v2.1+'
       };
     }
 
-    // Step 3: Create Application Password via REST API
-    logInfo('AUTH', 'Creating Application Password via REST API...', site.id);
+    var appPasswordName = 'WAAS Automation ' + new Date().getTime();
+    var endpoint = baseUrl + '/wp-json/wp/v2/users/' + userId + '/application-passwords';
 
-    const appPasswordName = `WAAS Automation ${new Date().getTime()}`;
-    const endpoint = `${site.wpUrl}/wp-json/wp/v2/users/${userId}/application-passwords`;
-
-    const options = {
+    var options = {
       method: 'post',
       headers: {
         'Content-Type': 'application/json',
@@ -165,16 +218,18 @@ function createApplicationPassword(site) {
       muteHttpExceptions: true,
       followRedirects: true
     };
+    
+    if (loginResult.nonce) {
+      options.headers['X-WP-Nonce'] = loginResult.nonce;
+    }
 
-    const response = UrlFetchApp.fetch(endpoint, options);
-    const responseCode = response.getResponseCode();
-    const responseText = response.getContentText();
+    var response = UrlFetchApp.fetch(endpoint, options);
+    var responseCode = response.getResponseCode();
+    var responseText = response.getContentText();
 
     if (responseCode === 200 || responseCode === 201) {
-      const data = JSON.parse(responseText);
-
-      logSuccess('AUTH', 'Application Password created successfully!', site.id);
-
+      var data = JSON.parse(responseText);
+      logSuccess('AUTH', 'Application Password created via WP core API!', site.id);
       return {
         success: true,
         password: data.password,
@@ -182,19 +237,55 @@ function createApplicationPassword(site) {
         uuid: data.uuid
       };
     } else {
-      logError('AUTH', `Application Password creation failed: ${responseCode} - ${responseText}`, site.id);
+      logError('AUTH', 'Application Password creation failed: ' + responseCode + ' - ' + responseText, site.id);
       return {
         success: false,
-        error: `HTTP ${responseCode}: ${responseText}`
+        error: 'HTTP ' + responseCode + ': ' + responseText
       };
     }
 
   } catch (error) {
-    logError('AUTH', `Application Password creation error: ${error.message}`, site.id);
+    logError('AUTH', 'Application Password creation error: ' + error.message, site.id);
     return {
       success: false,
       error: error.message
     };
+  }
+}
+
+/**
+ * Get user ID from WordPress profile page (fallback)
+ * Parses the profile page HTML to find the user ID
+ */
+function getUserIdFromProfile(site, cookies) {
+  try {
+    var baseUrl = site.wpUrl.replace(/\/+$/, '');
+    var profileUrl = baseUrl + '/wp-admin/profile.php';
+    
+    var response = UrlFetchApp.fetch(profileUrl, {
+      method: 'get',
+      headers: { 'Cookie': cookies },
+      muteHttpExceptions: true,
+      followRedirects: true
+    });
+    
+    var html = response.getContentText();
+    
+    // Look for user_id in the page
+    var match = html.match(/user_id['"]\s*value=['"](\\d+)/);
+    if (match) return match[1];
+    
+    // Alternative: look for profile URL pattern
+    match = html.match(/users\/(\\d+)/);
+    if (match) return match[1];
+    
+    // Alternative: look in the form action
+    match = html.match(/user-edit\\.php\\?user_id=(\\d+)/);
+    if (match) return match[1];
+    
+    return null;
+  } catch (e) {
+    return null;
   }
 }
 
