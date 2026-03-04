@@ -1232,7 +1232,8 @@ var DSF_SHEET_ANALYSIS_HEADERS = [
   'Blogi', 'Blogi (PL)',
   'Top Sklepy', 'Top Sklepy (PL)',
   'Kontekst Kulturowy', 'Kontekst Kulturowy (PL)',
-  'Timestamp'
+  'Timestamp',
+  'Wybrana Domena'
 ];
 
 var DSF_SHEET_SLUGS_HEADERS = [
@@ -1244,13 +1245,15 @@ var DSF_SHEET_SLUGS_HEADERS = [
   'criteria_5', 'criteria_6', 'criteria_7',
   'Content Topics', 'Content Topics (PL)',
   'URL Slugs',
-  'de_domain_status', 'status', 'Timestamp'
+  'de_domain_status', 'status', 'Timestamp',
+  'Wybrana'
 ];
 
 var DSF_SHEET_ASINS_HEADERS = [
   'INPUT_Row', 'Target_Slug', 'ASIN', 'Title', 'Price (EUR)',
   'Category', 'BSR_rank', 'BSR_category', 'Image_URL',
-  'Product_URL', 'Timestamp'
+  'Product_URL', 'Timestamp',
+  'Wybrana Domena'
 ];
 
 var DSF_SHEET_LOG_HEADERS = [
@@ -1312,9 +1315,17 @@ function dsfEnsureSheets_() {
     slugsSheet.setColumnWidth(2, 250);
     slugsSheet.setColumnWidth(6, 300);
     slugsSheet.setColumnWidth(7, 300);
+    // "Wybrana" column — checkboxes
+    var wybranaCol = DSF_SHEET_SLUGS_HEADERS.indexOf('Wybrana') + 1;
+    slugsSheet.getRange(2, wybranaCol, 200, 1).insertCheckboxes();
   } else {
     dsfUpdateSheetHeaders_(slugsSheet, DSF_SHEET_SLUGS_HEADERS);
     dsfColorSlugsHeaders_(slugsSheet, DSF_SHEET_SLUGS_HEADERS);
+    // Ensure "Wybrana" column has checkboxes
+    var wybranaCol = DSF_SHEET_SLUGS_HEADERS.indexOf('Wybrana') + 1;
+    if (wybranaCol > 0) {
+      slugsSheet.getRange(2, wybranaCol, Math.max(slugsSheet.getLastRow() - 1, 200), 1).insertCheckboxes();
+    }
   }
 
   // --- ASINS ---
@@ -1399,7 +1410,9 @@ function dsfRemoveOldSubHeaderRow_(sheet) {
 function dsfColorAnalysisHeaders_(sheet, headers) {
   for (var h = 0; h < headers.length; h++) {
     var cell = sheet.getRange(1, h + 1);
-    if (headers[h].indexOf('(PL)') >= 0) {
+    if (headers[h] === 'Wybrana Domena') {
+      cell.setBackground('#0f9d58').setFontColor('#ffffff'); // green
+    } else if (headers[h].indexOf('(PL)') >= 0) {
       cell.setBackground('#fffde7').setFontColor('#1a237e');
     } else {
       cell.setBackground('#7b1fa2').setFontColor('#ffffff');
@@ -1413,7 +1426,9 @@ function dsfColorAnalysisHeaders_(sheet, headers) {
 function dsfColorSlugsHeaders_(sheet, headers) {
   for (var s = 0; s < headers.length; s++) {
     var cell = sheet.getRange(1, s + 1);
-    if (headers[s].indexOf('(PL)') >= 0) {
+    if (headers[s] === 'Wybrana') {
+      cell.setBackground('#0f9d58').setFontColor('#ffffff'); // green
+    } else if (headers[s].indexOf('(PL)') >= 0) {
       cell.setBackground('#fffde7').setFontColor('#1a237e');
     } else {
       cell.setBackground('#fbbc04').setFontColor('#000000');
@@ -1500,7 +1515,8 @@ function dsfSaveResultsToSheets(inputRow, inputValue, market, analysis, slugs, d
     JSON.stringify(analysis.top_shops_pl || []),
     JSON.stringify(analysis.cultural_context || []),
     JSON.stringify(analysis.cultural_context_pl || []),
-    now
+    now,
+    ''  // Wybrana Domena — uzupelnic recznie
   ]);
 
   // --- SLUGS ---
@@ -1534,7 +1550,8 @@ function dsfSaveResultsToSheets(inputRow, inputValue, market, analysis, slugs, d
       JSON.stringify(s.suggested_url_slugs || []),
       deStatus,
       'IDEA',
-      now
+      now,
+      false  // Wybrana — checkbox, domyslnie false
     ]);
   }
 
@@ -1556,7 +1573,8 @@ function dsfSaveResultsToSheets(inputRow, inputValue, market, analysis, slugs, d
       a.bsrCategory || '',
       a.imageUrl || '',
       'https://' + marketplace.domain + '/dp/' + (a.asin || ''),
-      now
+      now,
+      ''  // Wybrana Domena — uzupelnic recznie
     ]);
   }
 
