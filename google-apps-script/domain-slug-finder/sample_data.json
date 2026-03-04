@@ -1,0 +1,126 @@
+{
+  "_comment": "Sample SP API response for ASIN B0FRG79LF9 — WERHE Stichsaegeblaetter T119A HCS",
+  "_usage": "For local testing without SP API access. Feed this to dsfCallClaudeAnalysis() as spData parameter.",
+
+  "sp_api_response": {
+    "asin": "B0FRG79LF9",
+    "title": "WERHE 5x Stichsägeblätter T119A HCS für Holz, Laminat, Parkett – Feinschnitt mit sauberen Kanten – T-Schaft passend für Bosch, Makita, Metabo, Milwaukee, Parkside, Festool",
+    "brand": "WERHE",
+    "categoryName": "Stichsägeblätter",
+    "browseNodeName": "Stichsägeblätter",
+    "bsrRank": 4523,
+    "bsrCategory": "Stichsägeblätter",
+    "bulletPoints": [
+      "Saubere Kanten ohne Ausrisse – Das T119A Stichsägeblatt mit feiner 1,2-mm-Zahnteilung sorgt für präzise Schnitte in Holz, Laminat und Parkett – ideal für sichtbare Oberflächen",
+      "Ruhiger Lauf, wenig Nacharbeit – Dank optimierter Zahngeometrie vibriert das Blatt weniger und liefert glattere Schnittergebnisse als Standard-Stichsägeblätter",
+      "HCS-Stahl für Holzwerkstoffe – Hochwertiger High Carbon Steel (HCS) bietet die ideale Härte und Flexibilität für weiche bis mittelharte Materialien wie Spanplatten und Sperrholz",
+      "T-Schaft für schnellen Wechsel – Universeller T-Schaft (auch T-Shank genannt) passt in alle gängigen Stichsägen mit Schnellspannsystem: Bosch, Makita, Metabo, Milwaukee, Parkside, Festool u.v.m.",
+      "5er Pack im Schnittbereich 1,5–15 mm – Jedes Blatt ist 132 mm lang (Gesamtlänge) mit einem effektiven Schnittbereich für dünne bis mittlere Holzstärken"
+    ],
+    "price": "14.90",
+    "currency": "EUR",
+    "mainImage": "https://m.media-amazon.com/images/I/71example.jpg",
+    "productType": "SAW_BLADE"
+  },
+
+  "amazon_autocomplete_suggestions": [
+    "stichsägeblätter",
+    "stichsägeblätter holz",
+    "stichsägeblätter bosch",
+    "stichsägeblätter metall",
+    "stichsägeblätter set",
+    "stichsägeblätter t-schaft",
+    "stichsägeblätter makita",
+    "stichsägeblätter feinschnitt",
+    "stichsägeblätter laminat",
+    "stichsägeblätter kurve"
+  ],
+
+  "google_autocomplete_suggestions": [
+    "stichsägeblätter kaufen",
+    "stichsägeblätter test",
+    "stichsägeblätter für holz kaufen",
+    "stichsägeblätter set kaufen",
+    "stichsägeblätter bosch kaufen",
+    "beste stichsägeblätter kaufen",
+    "stichsägeblätter feinschnitt kaufen"
+  ],
+
+  "expected_analysis_output": {
+    "needs_and_problems": [
+      "Saubere, ausrissfreie Schnitte in Holz und Laminat",
+      "Passende Sägeblätter für verschiedene Stichsägen-Marken finden",
+      "Weniger Nacharbeit nach dem Sägen",
+      "Feinschnitt für sichtbare Oberflächen",
+      "Kurvenschnitte in dünnen Hölzern",
+      "Langlebige Sägeblätter die nicht schnell stumpf werden",
+      "Universelle Blätter die in mehrere Maschinen passen",
+      "Vibrationarmes Arbeiten für präzise Ergebnisse",
+      "Kostengünstige Ersatzblätter im Multipack",
+      "Richtige Zahnteilung für verschiedene Materialstärken"
+    ],
+    "buyer_personas": [
+      "Heimwerker der Laminat oder Parkett selbst verlegt",
+      "Hobby-Tischler der regelmäßig mit der Stichsäge arbeitet",
+      "Handwerker der auf Baustellen verschiedene Holzmaterialien schneidet",
+      "Modellbauer der feine, präzise Schnitte benötigt"
+    ],
+    "frequent_words": [
+      "stichsägeblatt", "holz", "feinschnitt", "t-schaft", "laminat",
+      "bosch", "makita", "metabo", "hcs", "schnitt", "sauber", "präzise",
+      "zahnteilung", "parkett", "spanplatte", "säge", "blatt", "kurve",
+      "set", "pack", "universal", "schnellspann", "werkzeug"
+    ]
+  },
+
+  "expected_slug_output": [
+    {
+      "slug": "stichsaegeblaetter",
+      "full_subdomain": "stichsaegeblaetter.lk24.shop",
+      "type": "CATEGORY_BASED",
+      "rationale_de": "Direkte Produktkategorie, wird exakt so auf Amazon.de gesucht. Maximale SEO-Relevanz für alle Stichsägeblatt-Suchenden.",
+      "rationale_pl": "Bezpośrednia nazwa kategorii produktowej, dokładnie tak wyszukiwana na Amazon.de. Maksymalna trafność SEO.",
+      "amazon_test_phrase": "Stichsägeblätter",
+      "score_criteria": [true, true, true, true, true, true, true],
+      "score_total": 7,
+      "content_topics": [
+        "Die besten Stichsägeblätter für Holz im Test",
+        "T-Schaft vs U-Schaft: Welches Stichsägeblatt passt?",
+        "Stichsägeblätter für Laminat: So vermeiden Sie Ausrisse",
+        "HCS vs HSS vs BIM: Materialien für Stichsägeblätter erklärt",
+        "Feinschnitt-Stichsägeblätter: Wann lohnt sich der Aufpreis?"
+      ],
+      "suggested_url_slugs": [
+        "beste-stichsaegeblaetter-holz",
+        "stichsaegeblaetter-test-vergleich",
+        "stichsaegeblaetter-laminat-feinschnitt",
+        "t-schaft-stichsaegeblaetter-universal",
+        "stichsaegeblaetter-set-kaufen"
+      ]
+    },
+    {
+      "slug": "holzpraezision",
+      "full_subdomain": "holzpraezision.lk24.shop",
+      "type": "NEED_BASED",
+      "rationale_de": "Beschreibt das Kernbedürfnis: präzises Arbeiten mit Holz. Breiter als nur Stichsägeblätter, erlaubt Content-Erweiterung.",
+      "rationale_pl": "Opisuje główną potrzebę: precyzyjna obróbka drewna. Szersza niż sama kategoria, pozwala na rozszerzenie treści.",
+      "amazon_test_phrase": "Holz präzise schneiden",
+      "score_criteria": [true, true, false, true, true, true, false],
+      "score_total": 5,
+      "content_topics": [
+        "Präzise Holzschnitte: Werkzeuge und Techniken",
+        "Saubere Kanten beim Sägen: So geht es richtig",
+        "Holz schneiden ohne Ausrisse: Die besten Methoden",
+        "Stichsäge vs Kreissäge: Wann welches Werkzeug?",
+        "Laminat schneiden ohne Schäden: Tipps vom Profi"
+      ],
+      "suggested_url_slugs": [
+        "holz-praezise-schneiden-tipps",
+        "saubere-kanten-saegen",
+        "laminat-schneiden-ohne-ausrisse",
+        "stichsaege-vs-kreissaege",
+        "holzbearbeitung-fuer-anfaenger"
+      ]
+    }
+  ]
+}
