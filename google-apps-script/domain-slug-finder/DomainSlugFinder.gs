@@ -128,6 +128,7 @@ function onOpen() {
     .addSeparator()
     .addItem('Wyczysc kolejke', 'dsfClearQueue')
     .addItem('Usun stare triggery onEdit', 'dsfCleanupOldOnEditTriggers')
+    .addItem('Migruj arkusze do v3 (nowe kolumny)', 'dsfMigrateSheets')
     .addItem('Pokaz LOG', 'dsfShowLog')
     .addToUi();
 }
@@ -1214,6 +1215,60 @@ function dsfLog(level, message, rowNum) {
 
 // ==================== SHEETS MANAGEMENT ====================
 
+// ==================== SHEET DEFINITIONS (v3) ====================
+
+var DSF_SHEET_INPUT_HEADERS = [
+  'Typ', 'Wartosc', 'Rynek', 'Root Domain', 'Status',
+  'Trigger', 'Timestamp zlecenia', 'Timestamp ukonczenia',
+  'Top Slug', 'Score', 'Error'
+];
+
+var DSF_SHEET_ANALYSIS_HEADERS = [
+  'INPUT_Row', 'ASIN/Keyword', 'Rynek',
+  'Potrzeby & Problemy', 'Potrzeby & Problemy (PL)',
+  'Buyer Personas', 'Buyer Personas (PL)',
+  'Czeste Slowa', 'Czeste Slowa (PL)',
+  'Keyword Kandydaci', 'Keyword Kandydaci (PL)',
+  'Sytuacje Uzycia', 'Sytuacje Uzycia (PL)',
+  'Triggery Szukania', 'Triggery Szukania (PL)',
+  'Pytania', 'Pytania (PL)',
+  'Tematy Poradnikowe', 'Tematy Poradnikowe (PL)',
+  'Czego Nie Robic', 'Czego Nie Robic (PL)',
+  'Influencerzy', 'Influencerzy (PL)',
+  'Blogi', 'Blogi (PL)',
+  'Top Sklepy', 'Top Sklepy (PL)',
+  'Kontekst Kulturowy', 'Kontekst Kulturowy (PL)',
+  'Timestamp'
+];
+
+var DSF_SHEET_SLUGS_HEADERS = [
+  'INPUT_Row', 'full_subdomain', 'slug', 'root_domain', 'type',
+  'Uzasadnienie', 'Uzasadnienie (PL)',
+  'Amazon Test Phrase', 'Amazon Test Phrase (PL)',
+  'score_total',
+  'criteria_1', 'criteria_2', 'criteria_3', 'criteria_4',
+  'criteria_5', 'criteria_6', 'criteria_7',
+  'Content Topics', 'Content Topics (PL)',
+  'URL Slugs',
+  'de_domain_status', 'status', 'Timestamp'
+];
+
+var DSF_SHEET_ASINS_HEADERS = [
+  'INPUT_Row', 'Target_Slug', 'ASIN', 'Title', 'Price (EUR)',
+  'Category', 'BSR_rank', 'BSR_category', 'Image_URL',
+  'Product_URL', 'Timestamp'
+];
+
+var DSF_SHEET_LOG_HEADERS = [
+  'Timestamp', 'Poziom', 'Wiersz INPUT', 'Wiadomosc'
+];
+
+// ==================== SHEET MANAGEMENT ====================
+
+/**
+ * Ensure all sheets exist AND have correct v3 headers.
+ * Creates missing sheets. For existing sheets, calls dsfUpdateSheetHeaders_ to add new columns.
+ */
 function dsfEnsureSheets_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -1221,15 +1276,11 @@ function dsfEnsureSheets_() {
   var inputSheet = ss.getSheetByName('INPUT');
   if (!inputSheet) {
     inputSheet = ss.insertSheet('INPUT');
-    inputSheet.getRange(1, 1, 1, 11).setValues([[
-      'Typ', 'Wartosc', 'Rynek', 'Root Domain', 'Status',
-      'Trigger', 'Timestamp zlecenia', 'Timestamp ukonczenia',
-      'Top Slug', 'Score', 'Error'
-    ]]);
+    inputSheet.getRange(1, 1, 1, DSF_SHEET_INPUT_HEADERS.length).setValues([DSF_SHEET_INPUT_HEADERS]);
     inputSheet.getRange('F2:F100').insertCheckboxes();
     inputSheet.getRange('C2:C100').setValue('DE');
     inputSheet.getRange('D2:D100').setValue('lk24.shop');
-    inputSheet.getRange(1, 1, 1, 11).setFontWeight('bold').setBackground('#4285f4').setFontColor('#ffffff');
+    dsfFormatHeaderRow_(inputSheet, DSF_SHEET_INPUT_HEADERS.length, '#4285f4', '#ffffff');
     inputSheet.setFrozenRows(1);
     inputSheet.setColumnWidth(1, 80);
     inputSheet.setColumnWidth(2, 200);
@@ -1237,7 +1288,7 @@ function dsfEnsureSheets_() {
     inputSheet.setColumnWidth(9, 200);
   }
 
-  // Data validation for Rynek column (C)
+  // Data validation for Rynek column (C) — always apply
   var rynekRange = inputSheet.getRange('C2:C1000');
   var rule = SpreadsheetApp.newDataValidation()
     .requireValueInList(['DE','FR','IT','ES','UK','NL','BE','PL','SE','IE'], true)
@@ -1245,84 +1296,39 @@ function dsfEnsureSheets_() {
     .build();
   rynekRange.setDataValidation(rule);
 
-  // --- ANALYSIS (13 fields x2 = 26 data columns + Row + Keyword + Market + Timestamp = 30) ---
+  // --- ANALYSIS ---
   var analysisSheet = ss.getSheetByName('ANALYSIS');
   if (!analysisSheet) {
     analysisSheet = ss.insertSheet('ANALYSIS');
-    var aHeaders = [
-      'INPUT_Row', 'ASIN/Keyword', 'Rynek',
-      'Potrzeby & Problemy', 'Potrzeby & Problemy (PL)',
-      'Buyer Personas', 'Buyer Personas (PL)',
-      'Czeste Slowa', 'Czeste Slowa (PL)',
-      'Keyword Kandydaci', 'Keyword Kandydaci (PL)',
-      'Sytuacje Uzycia', 'Sytuacje Uzycia (PL)',
-      'Triggery Szukania', 'Triggery Szukania (PL)',
-      'Pytania', 'Pytania (PL)',
-      'Tematy Poradnikowe', 'Tematy Poradnikowe (PL)',
-      'Czego Nie Robic', 'Czego Nie Robic (PL)',
-      'Influencerzy', 'Influencerzy (PL)',
-      'Blogi', 'Blogi (PL)',
-      'Top Sklepy', 'Top Sklepy (PL)',
-      'Kontekst Kulturowy', 'Kontekst Kulturowy (PL)',
-      'Timestamp'
-    ];
-    analysisSheet.getRange(1, 1, 1, aHeaders.length).setValues([aHeaders]);
-    analysisSheet.getRange(1, 1, 1, aHeaders.length).setFontWeight('bold').setFontColor('#ffffff');
+    analysisSheet.getRange(1, 1, 1, DSF_SHEET_ANALYSIS_HEADERS.length).setValues([DSF_SHEET_ANALYSIS_HEADERS]);
     analysisSheet.setFrozenRows(1);
-
-    // Color headers: original fields purple, PL fields light yellow
-    for (var h = 0; h < aHeaders.length; h++) {
-      var cell = analysisSheet.getRange(1, h + 1);
-      if (aHeaders[h].indexOf('(PL)') >= 0) {
-        cell.setBackground('#fffde7').setFontColor('#1a237e');
-      } else {
-        cell.setBackground('#7b1fa2');
-      }
-    }
+    dsfColorAnalysisHeaders_(analysisSheet, DSF_SHEET_ANALYSIS_HEADERS);
+  } else {
+    dsfUpdateSheetHeaders_(analysisSheet, DSF_SHEET_ANALYSIS_HEADERS);
+    dsfColorAnalysisHeaders_(analysisSheet, DSF_SHEET_ANALYSIS_HEADERS);
   }
 
   // --- SLUGS ---
   var slugsSheet = ss.getSheetByName('SLUGS');
   if (!slugsSheet) {
     slugsSheet = ss.insertSheet('SLUGS');
-    var sHeaders = [
-      'INPUT_Row', 'full_subdomain', 'slug', 'root_domain', 'type',
-      'Uzasadnienie', 'Uzasadnienie (PL)',
-      'Amazon Test Phrase', 'Amazon Test Phrase (PL)',
-      'score_total',
-      'criteria_1', 'criteria_2', 'criteria_3', 'criteria_4',
-      'criteria_5', 'criteria_6', 'criteria_7',
-      'Content Topics', 'Content Topics (PL)',
-      'URL Slugs',
-      'de_domain_status', 'status', 'Timestamp'
-    ];
-    slugsSheet.getRange(1, 1, 1, sHeaders.length).setValues([sHeaders]);
-    slugsSheet.getRange(1, 1, 1, sHeaders.length).setFontWeight('bold').setFontColor('#000000');
+    slugsSheet.getRange(1, 1, 1, DSF_SHEET_SLUGS_HEADERS.length).setValues([DSF_SHEET_SLUGS_HEADERS]);
     slugsSheet.setFrozenRows(1);
-
-    for (var s = 0; s < sHeaders.length; s++) {
-      var sCell = slugsSheet.getRange(1, s + 1);
-      if (sHeaders[s].indexOf('(PL)') >= 0) {
-        sCell.setBackground('#fffde7').setFontColor('#1a237e');
-      } else {
-        sCell.setBackground('#fbbc04');
-      }
-    }
+    dsfColorSlugsHeaders_(slugsSheet, DSF_SHEET_SLUGS_HEADERS);
     slugsSheet.setColumnWidth(2, 250);
     slugsSheet.setColumnWidth(6, 300);
     slugsSheet.setColumnWidth(7, 300);
+  } else {
+    dsfUpdateSheetHeaders_(slugsSheet, DSF_SHEET_SLUGS_HEADERS);
+    dsfColorSlugsHeaders_(slugsSheet, DSF_SHEET_SLUGS_HEADERS);
   }
 
   // --- ASINS ---
   var asinsSheet = ss.getSheetByName('ASINS');
   if (!asinsSheet) {
     asinsSheet = ss.insertSheet('ASINS');
-    asinsSheet.getRange(1, 1, 1, 11).setValues([[
-      'INPUT_Row', 'Target_Slug', 'ASIN', 'Title', 'Price (EUR)',
-      'Category', 'BSR_rank', 'BSR_category', 'Image_URL',
-      'Product_URL', 'Timestamp'
-    ]]);
-    asinsSheet.getRange(1, 1, 1, 11).setFontWeight('bold').setBackground('#ea4335').setFontColor('#ffffff');
+    asinsSheet.getRange(1, 1, 1, DSF_SHEET_ASINS_HEADERS.length).setValues([DSF_SHEET_ASINS_HEADERS]);
+    dsfFormatHeaderRow_(asinsSheet, DSF_SHEET_ASINS_HEADERS.length, '#ea4335', '#ffffff');
     asinsSheet.setFrozenRows(1);
     asinsSheet.setColumnWidth(4, 300);
   }
@@ -1331,14 +1337,126 @@ function dsfEnsureSheets_() {
   var logSheet = ss.getSheetByName('LOG');
   if (!logSheet) {
     logSheet = ss.insertSheet('LOG');
-    logSheet.getRange(1, 1, 1, 4).setValues([['Timestamp', 'Poziom', 'Wiersz INPUT', 'Wiadomosc']]);
-    logSheet.getRange(1, 1, 1, 4).setFontWeight('bold').setBackground('#424242').setFontColor('#ffffff');
+    logSheet.getRange(1, 1, 1, DSF_SHEET_LOG_HEADERS.length).setValues([DSF_SHEET_LOG_HEADERS]);
+    dsfFormatHeaderRow_(logSheet, DSF_SHEET_LOG_HEADERS.length, '#424242', '#ffffff');
     logSheet.setFrozenRows(1);
     logSheet.setColumnWidth(1, 160);
     logSheet.setColumnWidth(2, 80);
     logSheet.setColumnWidth(3, 100);
     logSheet.setColumnWidth(4, 600);
   }
+}
+
+/**
+ * Update headers of an existing sheet to match the expected v3 layout.
+ * Strategy: completely replaces header row 1 with the new headers.
+ * Existing data rows are preserved — new columns get empty values.
+ *
+ * NOTE: This does NOT remap data from old columns to new columns.
+ * Old data stays in whatever column index it was. If column order changed,
+ * old data rows will have mismatched columns (acceptable for a migration).
+ */
+function dsfUpdateSheetHeaders_(sheet, expectedHeaders) {
+  var lastCol = sheet.getLastColumn();
+  var currentHeaders = lastCol > 0 ? sheet.getRange(1, 1, 1, lastCol).getValues()[0] : [];
+
+  // Check if headers already match
+  if (currentHeaders.length === expectedHeaders.length) {
+    var match = true;
+    for (var i = 0; i < expectedHeaders.length; i++) {
+      if (currentHeaders[i].toString().trim() !== expectedHeaders[i]) {
+        match = false;
+        break;
+      }
+    }
+    if (match) return; // Already up to date
+  }
+
+  // Need more columns?
+  if (expectedHeaders.length > lastCol) {
+    // Expand columns — add empty cells to all existing data rows
+    var lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      var extraCols = expectedHeaders.length - lastCol;
+      // Just expanding the header is enough — appendRow/getRange will auto-expand
+    }
+  }
+
+  // Write new header row
+  sheet.getRange(1, 1, 1, expectedHeaders.length).setValues([expectedHeaders]);
+  sheet.getRange(1, 1, 1, expectedHeaders.length).setFontWeight('bold');
+  sheet.setFrozenRows(1);
+
+  Logger.log('[DSF] Updated headers for sheet "' + sheet.getName() + '": ' + expectedHeaders.length + ' columns (was ' + lastCol + ')');
+}
+
+/**
+ * Color ANALYSIS headers: purple for data fields, light yellow for PL translations
+ */
+function dsfColorAnalysisHeaders_(sheet, headers) {
+  for (var h = 0; h < headers.length; h++) {
+    var cell = sheet.getRange(1, h + 1);
+    if (headers[h].indexOf('(PL)') >= 0) {
+      cell.setBackground('#fffde7').setFontColor('#1a237e');
+    } else {
+      cell.setBackground('#7b1fa2').setFontColor('#ffffff');
+    }
+  }
+}
+
+/**
+ * Color SLUGS headers: yellow for data fields, light yellow for PL translations
+ */
+function dsfColorSlugsHeaders_(sheet, headers) {
+  for (var s = 0; s < headers.length; s++) {
+    var cell = sheet.getRange(1, s + 1);
+    if (headers[s].indexOf('(PL)') >= 0) {
+      cell.setBackground('#fffde7').setFontColor('#1a237e');
+    } else {
+      cell.setBackground('#fbbc04').setFontColor('#000000');
+    }
+  }
+}
+
+/**
+ * Simple header formatting helper
+ */
+function dsfFormatHeaderRow_(sheet, numCols, bgColor, fontColor) {
+  sheet.getRange(1, 1, 1, numCols).setFontWeight('bold').setBackground(bgColor).setFontColor(fontColor);
+}
+
+/**
+ * Menu action: Migrate all sheets to v3 format (new columns, colors, validation).
+ * Safe to run multiple times — idempotent.
+ */
+function dsfMigrateSheets() {
+  var ui = SpreadsheetApp.getUi();
+
+  dsfEnsureSheets_();
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // Report what happened
+  var report = 'Migracja arkuszy do v3 zakonczona!\n\n';
+
+  var sheets = ['INPUT', 'ANALYSIS', 'SLUGS', 'ASINS', 'LOG'];
+  for (var i = 0; i < sheets.length; i++) {
+    var sheet = ss.getSheetByName(sheets[i]);
+    if (sheet) {
+      report += sheets[i] + ': ' + sheet.getLastColumn() + ' kolumn\n';
+    } else {
+      report += sheets[i] + ': BRAK (blad)\n';
+    }
+  }
+
+  report += '\nANALYSIS: ' + DSF_SHEET_ANALYSIS_HEADERS.length + ' kolumn (13 pol + 13 PL + 3 meta)';
+  report += '\nSLUGS: ' + DSF_SHEET_SLUGS_HEADERS.length + ' kolumn (z kolumnami PL)';
+  report += '\n\nUWAGA: Stare dane w wierszach moga miec przesuniecte kolumny.\n';
+  report += 'Nowe analizy beda juz poprawnie zapisywane.';
+
+  dsfLog('INFO', 'Migracja arkuszy do v3 wykonana');
+
+  ui.alert('Migracja v3', report, ui.ButtonSet.OK);
 }
 
 function dsfSaveResultsToSheets(inputRow, inputValue, market, analysis, slugs, denicResults, asins, rootDomain) {
