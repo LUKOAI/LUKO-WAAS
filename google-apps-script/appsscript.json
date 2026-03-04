@@ -1,13 +1,7 @@
 {
   "timeZone": "Europe/Warsaw",
   "dependencies": {
-    "enabledAdvancedServices": [
-      {
-        "userSymbol": "SearchConsole",
-        "version": "v1",
-        "serviceId": "searchconsole"
-      }
-    ]
+    "enabledAdvancedServices": []
   },
   "exceptionLogging": "STACKDRIVER",
   "runtimeVersion": "V8",
