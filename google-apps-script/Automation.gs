@@ -1451,3 +1451,72 @@ function newSiteWizardDialog() {
   }
   ui.alert('Launch Complete', msg, ui.ButtonSet.OK);
 }
+
+// =============================================================================
+// AUTH DIAGNOSTIC TEST
+// =============================================================================
+
+/**
+ * Test authentication against a site
+ * Run this manually: WAAS → Automation → Test Auth
+ */
+function testAuthForSite() {
+  var siteId = 11; // waermebildmessung
+  var site = getSiteById(siteId);
+  if (!site) { Logger.log('Site not found'); return; }
+  
+  var baseUrl = site.wpUrl.replace(/\/+$/, '');
+  var authHeader = getAuthHeader(site);
+  
+  Logger.log('=== AUTH DIAGNOSTIC ===');
+  Logger.log('Site: ' + site.domain);
+  Logger.log('Auth header present: ' + (authHeader ? 'YES' : 'NO'));
+  Logger.log('Auth header starts with: ' + (authHeader ? authHeader.substring(0, 20) + '...' : 'N/A'));
+  Logger.log('App Password in sheet: ' + (site.appPassword ? 'YES (' + site.appPassword.length + ' chars)' : 'NO'));
+  Logger.log('Auth Type: ' + (site.authType || 'not set'));
+  
+  // Test 1: Standard makeHttpRequest (should add X-WAAS-Auth automatically)
+  Logger.log('\n--- Test 1: makeHttpRequest with auth ---');
+  var result1 = makeHttpRequest(baseUrl + '/wp-json/waas-settings/v1/auth-test', {
+    method: 'GET',
+    headers: { 'Authorization': authHeader }
+  });
+  Logger.log('Result: ' + JSON.stringify(result1).substring(0, 300));
+  
+  // Test 2: Direct UrlFetchApp with X-WAAS-Auth only (bypass Authorization)
+  Logger.log('\n--- Test 2: Direct with X-WAAS-Auth only ---');
+  try {
+    var resp2 = UrlFetchApp.fetch(baseUrl + '/wp-json/waas-settings/v1/auth-test', {
+      method: 'get',
+      headers: {
+        'X-WAAS-Auth': authHeader,
+        'Content-Type': 'application/json'
+      },
+      muteHttpExceptions: true
+    });
+    Logger.log('Status: ' + resp2.getResponseCode());
+    Logger.log('Body: ' + resp2.getContentText().substring(0, 300));
+  } catch(e) {
+    Logger.log('Error: ' + e.message);
+  }
+  
+  // Test 3: Header diagnostic endpoint (if uploaded)
+  Logger.log('\n--- Test 3: Header diagnostic ---');
+  try {
+    var resp3 = UrlFetchApp.fetch(baseUrl + '/waas-header-test.php', {
+      method: 'get',
+      headers: {
+        'Authorization': authHeader,
+        'X-WAAS-Auth': authHeader,
+        'Content-Type': 'application/json'
+      },
+      muteHttpExceptions: true
+    });
+    Logger.log('Status: ' + resp3.getResponseCode());
+    Logger.log('Body: ' + resp3.getContentText().substring(0, 500));
+  } catch(e) {
+    Logger.log('Error: ' + e.message);
+  }
+  
+  Logger.log('\n=== END DIAGNOSTIC ===');
+}
