@@ -1350,11 +1350,8 @@ function dsfEnsureSheets_() {
 /**
  * Update headers of an existing sheet to match the expected v3 layout.
  * Strategy: completely replaces header row 1 with the new headers.
+ * Also detects and removes old v2 "pretty" sub-header row 2.
  * Existing data rows are preserved — new columns get empty values.
- *
- * NOTE: This does NOT remap data from old columns to new columns.
- * Old data stays in whatever column index it was. If column order changed,
- * old data rows will have mismatched columns (acceptable for a migration).
  */
 function dsfUpdateSheetHeaders_(sheet, expectedHeaders) {
   var lastCol = sheet.getLastColumn();
@@ -1369,16 +1366,10 @@ function dsfUpdateSheetHeaders_(sheet, expectedHeaders) {
         break;
       }
     }
-    if (match) return; // Already up to date
-  }
-
-  // Need more columns?
-  if (expectedHeaders.length > lastCol) {
-    // Expand columns — add empty cells to all existing data rows
-    var lastRow = sheet.getLastRow();
-    if (lastRow > 1) {
-      var extraCols = expectedHeaders.length - lastCol;
-      // Just expanding the header is enough — appendRow/getRange will auto-expand
+    if (match) {
+      // Headers match, but still check for old row 2 sub-headers
+      dsfRemoveOldSubHeaderRow_(sheet);
+      return;
     }
   }
 
@@ -1387,7 +1378,30 @@ function dsfUpdateSheetHeaders_(sheet, expectedHeaders) {
   sheet.getRange(1, 1, 1, expectedHeaders.length).setFontWeight('bold');
   sheet.setFrozenRows(1);
 
+  // Remove old v2 "pretty" sub-header row 2 if present
+  dsfRemoveOldSubHeaderRow_(sheet);
+
   Logger.log('[DSF] Updated headers for sheet "' + sheet.getName() + '": ' + expectedHeaders.length + ' columns (was ' + lastCol + ')');
+}
+
+/**
+ * Detect and delete old v2 formatted sub-header row (row 2).
+ * Old v2 sheets had a "pretty" row 2 with styled column names like:
+ *   ANALYSIS: "INPUT\nRow", "ASIN /\nKeyword", "1. Potrzeby\n& Problemy" ...
+ *   SLUGS: "INPUT\nRow", "Full Subdomain\n(gotowe do użycia)", "Slug" ...
+ * These are no longer needed in v3 — row 1 IS the header.
+ */
+function dsfRemoveOldSubHeaderRow_(sheet) {
+  if (sheet.getLastRow() < 2) return; // No row 2
+
+  var row2Val = sheet.getRange(2, 1).getValue().toString().trim();
+
+  // Old v2 sub-headers always had "INPUT\nRow" or "INPUT Row" in A2
+  // Real data rows have numeric INPUT_Row values (1, 2, 3...)
+  if (row2Val === 'INPUT\nRow' || row2Val === 'INPUT Row' || row2Val === 'INPUT\r\nRow') {
+    sheet.deleteRow(2);
+    Logger.log('[DSF] Deleted old v2 sub-header row 2 from sheet "' + sheet.getName() + '"');
+  }
 }
 
 /**
@@ -1451,8 +1465,8 @@ function dsfMigrateSheets() {
 
   report += '\nANALYSIS: ' + DSF_SHEET_ANALYSIS_HEADERS.length + ' kolumn (13 pol + 13 PL + 3 meta)';
   report += '\nSLUGS: ' + DSF_SHEET_SLUGS_HEADERS.length + ' kolumn (z kolumnami PL)';
-  report += '\n\nUWAGA: Stare dane w wierszach moga miec przesuniecte kolumny.\n';
-  report += 'Nowe analizy beda juz poprawnie zapisywane.';
+  report += '\n\nStary wiersz 2 z v2 naglowkami zostal usuniety (jesli istnial).';
+  report += '\nNowe analizy beda juz poprawnie zapisywane.';
 
   dsfLog('INFO', 'Migracja arkuszy do v3 wykonana');
 
