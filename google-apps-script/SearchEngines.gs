@@ -33,6 +33,20 @@ function registerSiteInGSC(site) {
   var siteUrl = 'https://' + site.domain + '/';
   logInfo('GSC', 'Registering site: ' + siteUrl, site.id);
 
+  // First check if site already exists in GSC
+  var checkResp = UrlFetchApp.fetch(
+    'https://www.googleapis.com/webmasters/v3/sites/' + encodeURIComponent(siteUrl),
+    {
+      method: 'GET',
+      headers: { 'Authorization': 'Bearer ' + ScriptApp.getOAuthToken() },
+      muteHttpExceptions: true
+    }
+  );
+  if (checkResp.getResponseCode() === 200) {
+    logInfo('GSC', 'Site already registered in GSC — skipping', site.id);
+    return { success: true, note: 'already_exists' };
+  }
+
   var response = UrlFetchApp.fetch(
     'https://www.googleapis.com/webmasters/v3/sites/' + encodeURIComponent(siteUrl),
     {
@@ -58,8 +72,26 @@ function registerSiteInGSC(site) {
 function submitSitemapToGSC(site) {
   var siteUrl = 'https://' + site.domain + '/';
   var sitemapUrl = siteUrl + 'sitemap_index.xml';
+  
+  // Check if sitemap already exists
+  var listResp = UrlFetchApp.fetch(
+    'https://www.googleapis.com/webmasters/v3/sites/' + encodeURIComponent(siteUrl) + '/sitemaps',
+    {
+      method: 'GET',
+      headers: { 'Authorization': 'Bearer ' + ScriptApp.getOAuthToken() },
+      muteHttpExceptions: true
+    }
+  );
+  if (listResp.getResponseCode() === 200) {
+    var data = JSON.parse(listResp.getContentText());
+    if (data.sitemap && data.sitemap.length > 0) {
+      var existing = data.sitemap.map(function(s) { return s.path; });
+      logInfo('GSC', 'Sitemaps already exist: ' + existing.join(', ') + ' — skipping', site.id);
+      return { success: true, note: 'sitemaps_exist', existing: existing };
+    }
+  }
+  
   logInfo('GSC', 'Submitting sitemap: ' + sitemapUrl, site.id);
-
   var response = UrlFetchApp.fetch(
     'https://www.googleapis.com/webmasters/v3/sites/' + encodeURIComponent(siteUrl)
     + '/sitemaps/' + encodeURIComponent(sitemapUrl),

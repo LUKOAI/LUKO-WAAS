@@ -1526,10 +1526,19 @@ function setupExistingSite(siteId) {
     var checkUrl = 'https://' + site.domain + '/wp-json/waas-settings/v1/header-debug';
     var resp = UrlFetchApp.fetch(checkUrl, { muteHttpExceptions: true });
     if (resp.getResponseCode() === 200) {
-      logSuccess('SETUP', 'Plugin reachable', siteId);
+      logSuccess('SETUP', 'Plugin already installed', siteId);
       results.steps.push({ step: 1, name: 'Plugin Check', success: true });
     } else {
-      throw new Error('Plugin not reachable (HTTP ' + resp.getResponseCode() + '). Install waas-settings plugin first!');
+      // Plugin not found — auto-install via cookie auth
+      logInfo('SETUP', 'Plugin not found, auto-installing...', siteId);
+      var installResult = installWaasSettingsPlugin(site);
+      if (installResult && installResult.success) {
+        logSuccess('SETUP', 'waas-settings plugin installed!', siteId);
+        results.steps.push({ step: 1, name: 'Plugin Install', success: true });
+        Utilities.sleep(3000); // Wait for plugin to initialize
+      } else {
+        throw new Error('Auto-install failed: ' + (installResult ? installResult.error : 'unknown'));
+      }
     }
   } catch (e) {
     logError('SETUP', 'Plugin check failed: ' + e.message, siteId);
@@ -1641,7 +1650,7 @@ function setupExistingSiteDialog() {
   var ui = SpreadsheetApp.getUi();
   var result = ui.prompt(
     '🔧 Setup Existing Site',
-    'Enter Site ID.\n\nPrerequisite: waas-settings plugin must be installed on the site.\n(Upload waas-settings-v2.1.zip through WP Admin → Plugins → Add New → Upload)',
+    'Enter Site ID.\n\nPrerequisite: waas-settings plugin must be installed on the site.\n(Upload waas-settings.zip through WP Admin → Plugins → Add New → Upload)',
     ui.ButtonSet.OK_CANCEL
   );
   if (result.getSelectedButton() !== ui.Button.OK) return;
@@ -1681,4 +1690,39 @@ function setupAllExistingSitesDialog() {
   });
   
   ui.alert('Bulk Setup Result', msg, ui.ButtonSet.OK);
+}
+
+/**
+ * Install waas-settings plugin on a site via cookie auth (WP admin upload).
+ * No existing plugin or app password needed — uses admin credentials from sheet.
+ */
+function installWaasSettingsPlugin(site) {
+  try {
+    // Download plugin ZIP from GitHub
+    var githubUrl = 'https://github.com/LUKOAI/LUKO-WAAS/raw/main/wordpress-plugin/waas-settings.zip';
+    logInfo('SETUP', 'Downloading waas-settings from GitHub...', site.id);
+    
+    var zipResp = UrlFetchApp.fetch(githubUrl, { muteHttpExceptions: true, followRedirects: true });
+    if (zipResp.getResponseCode() !== 200) {
+      return { success: false, error: 'Failed to download ZIP: HTTP ' + zipResp.getResponseCode() };
+    }
+    var pluginBlob = zipResp.getBlob().setName('waas-settings.zip');
+    logInfo('SETUP', 'Downloaded: ' + (pluginBlob.getBytes().length / 1024).toFixed(0) + ' KB', site.id);
+    
+    // Install via WordPress admin (cookie auth)
+    var installed = installPluginOnWordPress(site, pluginBlob, 'waas-settings');
+    if (!installed) {
+      return { success: false, error: 'WordPress plugin upload failed' };
+    }
+    
+    // Activate
+    var activated = activatePluginOnWordPress(site, 'waas-settings/waas-settings.php');
+    if (!activated) {
+      logWarning('SETUP', 'Plugin installed but activation uncertain — may already be active', site.id);
+    }
+    
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
 }
