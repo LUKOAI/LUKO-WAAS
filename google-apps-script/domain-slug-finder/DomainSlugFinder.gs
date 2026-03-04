@@ -122,13 +122,7 @@ function onOpen() {
     .addItem('Konfiguruj API Keys', 'dsfSetConfig')
     .addItem('Zainstaluj trigger', 'dsfSetupTriggers')
     .addSeparator()
-    .addItem('Test: ASIN B0FRG79LF9', 'dsfRunTest')
-    .addItem('Test: SP-API', 'dsfTestSpApi')
-    .addItem('Test: Claude API', 'dsfTestClaude')
-    .addSeparator()
     .addItem('Wyczysc kolejke', 'dsfClearQueue')
-    .addItem('Usun stare triggery onEdit', 'dsfCleanupOldOnEditTriggers')
-    .addItem('Napraw naglowki arkuszy', 'dsfMigrateSheets')
     .addItem('Pokaz LOG', 'dsfShowLog')
     .addToUi();
 }
