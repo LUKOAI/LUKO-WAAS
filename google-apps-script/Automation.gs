@@ -1698,30 +1698,107 @@ function setupAllExistingSitesDialog() {
  */
 function installWaasSettingsPlugin(site) {
   try {
-    // Download plugin ZIP from GitHub
-    var githubUrl = 'https://github.com/LUKOAI/LUKO-WAAS/raw/main/wordpress-plugin/waas-settings.zip';
-    logInfo('SETUP', 'Downloading waas-settings from GitHub...', site.id);
-    
-    var zipResp = UrlFetchApp.fetch(githubUrl, { muteHttpExceptions: true, followRedirects: true });
-    if (zipResp.getResponseCode() !== 200) {
-      return { success: false, error: 'Failed to download ZIP: HTTP ' + zipResp.getResponseCode() };
+    // Step 1: Login via cookies
+    logInfo('SETUP', 'Logging in to WordPress admin...', site.id);
+    var loginResult = wordpressLogin(site);
+    if (!loginResult.success) {
+      return { success: false, error: 'Login failed: ' + loginResult.error };
     }
-    var pluginBlob = zipResp.getBlob().setName('waas-settings.zip');
-    logInfo('SETUP', 'Downloaded: ' + (pluginBlob.getBytes().length / 1024).toFixed(0) + ' KB', site.id);
+    var cookies = loginResult.cookies;
     
-    // Install via WordPress admin (cookie auth)
-    var installed = installPluginOnWordPress(site, pluginBlob, 'waas-settings');
-    if (!installed) {
-      return { success: false, error: 'WordPress plugin upload failed' };
+    // Step 2: Check if plugin is already in plugins list
+    logInfo('SETUP', 'Checking plugins page...', site.id);
+    var pluginsUrl = site.wpUrl + '/wp-admin/plugins.php';
+    var pluginsResp = UrlFetchApp.fetch(pluginsUrl, {
+      method: 'get',
+      headers: { 'Cookie': cookies, 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+      muteHttpExceptions: true, followRedirects: true
+    });
+    var html = pluginsResp.getContentText();
+    
+    var isActive = html.indexOf('waas-settings') > -1 && html.indexOf('action=deactivate') > -1 && 
+                   html.indexOf('waas-settings') < html.indexOf('action=deactivate', html.indexOf('waas-settings'));
+    
+    // More reliable check: look for deactivate link near waas-settings
+    var waasIdx = html.indexOf('data-slug="waas-settings"');
+    if (waasIdx === -1) waasIdx = html.indexOf('waas-settings/waas-settings.php');
+    
+    if (waasIdx > -1) {
+      // Plugin exists in list - check if active (deactivate link present nearby)
+      var nearbyHtml = html.substring(Math.max(0, waasIdx - 500), Math.min(html.length, waasIdx + 2000));
+      if (nearbyHtml.indexOf('action=deactivate') > -1) {
+        logInfo('SETUP', 'waas-settings already active!', site.id);
+        return { success: true, note: 'already_active' };
+      }
+      
+      // Plugin installed but inactive - find activation link
+      logInfo('SETUP', 'Plugin installed but inactive, activating...', site.id);
+      var activateMatch = nearbyHtml.match(/href="([^"]*action=activate[^"]*waas-settings[^"]*)"/);
+      if (!activateMatch) {
+        activateMatch = nearbyHtml.match(/href="([^"]*waas-settings[^"]*action=activate[^"]*)"/);
+      }
+      
+      if (activateMatch) {
+        var activateUrl = activateMatch[1].replace(/&amp;/g, '&');
+        if (activateUrl.indexOf('http') !== 0) {
+          activateUrl = site.wpUrl + '/wp-admin/' + activateUrl;
+        }
+        logInfo('SETUP', 'Activating via: ' + activateUrl.substring(0, 100), site.id);
+        var actResp = UrlFetchApp.fetch(activateUrl, {
+          method: 'get',
+          headers: { 'Cookie': cookies, 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+          muteHttpExceptions: true, followRedirects: true
+        });
+        if (actResp.getResponseCode() === 200) {
+          logSuccess('SETUP', 'Plugin activated!', site.id);
+        }
+      } else {
+        logWarning('SETUP', 'Could not find activation link, trying direct activate URL...', site.id);
+        // Try direct activation URL format
+        var directUrl = site.wpUrl + '/wp-admin/plugins.php?action=activate&plugin=waas-settings%2Fwaas-settings.php&_wpnonce=';
+        // Get nonce from page
+        var nonceMatch = html.match(/action=activate&amp;plugin=waas-settings[^"]*_wpnonce=([a-f0-9]+)/);
+        if (nonceMatch) {
+          directUrl = site.wpUrl + '/wp-admin/plugins.php?action=activate&plugin=waas-settings%2Fwaas-settings.php&_wpnonce=' + nonceMatch[1];
+          UrlFetchApp.fetch(directUrl, {
+            method: 'get',
+            headers: { 'Cookie': cookies, 'User-Agent': 'Mozilla/5.0' },
+            muteHttpExceptions: true, followRedirects: true
+          });
+        }
+      }
+    } else {
+      // Plugin not installed — upload it
+      logInfo('SETUP', 'Plugin not found, uploading...', site.id);
+      var githubUrl = 'https://github.com/LUKOAI/LUKO-WAAS/raw/main/wordpress-plugin/waas-settings.zip';
+      var zipResp = UrlFetchApp.fetch(githubUrl, { muteHttpExceptions: true, followRedirects: true });
+      if (zipResp.getResponseCode() !== 200) {
+        return { success: false, error: 'Failed to download ZIP from GitHub' };
+      }
+      var pluginBlob = zipResp.getBlob().setName('waas-settings.zip');
+      logInfo('SETUP', 'Downloaded: ' + (pluginBlob.getBytes().length / 1024).toFixed(0) + ' KB', site.id);
+      
+      var installed = installPluginOnWordPress(site, pluginBlob, 'waas-settings');
+      if (!installed) {
+        return { success: false, error: 'Plugin upload failed' };
+      }
+      
+      // After upload, WP usually auto-activates or shows activate link
+      // Try activation
+      activatePluginOnWordPress(site, 'waas-settings/waas-settings.php');
     }
     
-    // Activate
-    var activated = activatePluginOnWordPress(site, 'waas-settings/waas-settings.php');
-    if (!activated) {
-      logWarning('SETUP', 'Plugin installed but activation uncertain — may already be active', site.id);
+    // Step 3: Verify plugin is active by hitting its endpoint
+    Utilities.sleep(2000);
+    var verifyUrl = 'https://' + site.domain + '/wp-json/waas-settings/v1/header-debug';
+    var verifyResp = UrlFetchApp.fetch(verifyUrl, { muteHttpExceptions: true });
+    if (verifyResp.getResponseCode() === 200) {
+      logSuccess('SETUP', 'waas-settings plugin verified active!', site.id);
+      return { success: true };
+    } else {
+      logWarning('SETUP', 'Plugin endpoint returned ' + verifyResp.getResponseCode() + ' — may need manual activation', site.id);
+      return { success: false, error: 'Plugin installed but endpoint not responding (HTTP ' + verifyResp.getResponseCode() + ')' };
     }
-    
-    return { success: true };
   } catch (e) {
     return { success: false, error: e.message };
   }
