@@ -1,140 +1,168 @@
 /**
- * LUKO Domain Slug Finder
- * Automatyczne znajdowanie optymalnych nazw poddomeny dla niszowych stron afiliacyjnych Amazon.de
+ * LUKO Domain Slug Finder v3.0
+ * Automatyczne znajdowanie optymalnych nazw poddomeny dla niszowych stron afiliacyjnych Amazon EU.
  *
  * Stack: Google Sheets + Apps Script + SP API + Claude API + Autocomplete + DENIC
  * Architektura: 100% Google, zero n8n
  *
- * @version 2.0
+ * Flow: Zaznacz checkboxy w INPUT → Menu → Uruchom zaznaczone wiersze → kolejka z auto-wznowieniem
+ * Wspierane rynki: DE, FR, IT, ES, UK, NL, BE, PL, SE, IE
+ * Wszystkie analizy + tłumaczenia PL w jednym callu Claude.
+ *
+ * @version 3.0
  * @author NetAnaliza / LUKO (Lukasz Koronczok)
  */
 
 // ==================== CONSTANTS ====================
 
-const DSF_MARKETPLACE_ID = 'A1PA6795UKMFR9';
-const DSF_SP_ENDPOINT = 'https://sellingpartnerapi-eu.amazon.com';
-const DSF_CLAUDE_MODEL = 'claude-sonnet-4-20250514';
-const DSF_CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
-const DSF_ANTHROPIC_VERSION = '2023-06-01';
+var DSF_SP_ENDPOINT = 'https://sellingpartnerapi-eu.amazon.com';
+var DSF_CLAUDE_MODEL = 'claude-sonnet-4-20250514';
+var DSF_CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
+var DSF_ANTHROPIC_VERSION = '2023-06-01';
 
-// ==================== CLAUDE PROMPTS ====================
+// ==================== MARKETPLACE MAP ====================
 
-const DSF_SYSTEM_PROMPT_ANALYSIS = `Du bist ein Experte für Amazon-Affiliate-Marketing und deutschen SEO-Markt.
-Du analysierst Produktdaten aus Amazon.de und generierst eine Nischenanalyse
-für den Aufbau einer Affiliate-Website.
-Antworte NUR mit validem JSON. Kein Präambel, keine Markdown-Blöcke.`;
+var DSF_MARKETPLACES = {
+  'DE': { id: 'A1PA6795UKMFR9',  domain: 'amazon.de',      autocomplete: 'completion.amazon.de',      lang: 'de', langName: 'Deutsch',    glParam: 'de', hlParam: 'de' },
+  'FR': { id: 'A13V1IB3VIYZZH',  domain: 'amazon.fr',      autocomplete: 'completion.amazon.fr',      lang: 'fr', langName: 'Français',   glParam: 'fr', hlParam: 'fr' },
+  'IT': { id: 'APJ6JRA9NG5V4',   domain: 'amazon.it',      autocomplete: 'completion.amazon.it',      lang: 'it', langName: 'Italiano',   glParam: 'it', hlParam: 'it' },
+  'ES': { id: 'A1RKKUPIHCS9HS',  domain: 'amazon.es',      autocomplete: 'completion.amazon.es',      lang: 'es', langName: 'Español',    glParam: 'es', hlParam: 'es' },
+  'UK': { id: 'A1F83G8C2ARO7P',  domain: 'amazon.co.uk',   autocomplete: 'completion.amazon.co.uk',   lang: 'en', langName: 'English',    glParam: 'gb', hlParam: 'en' },
+  'NL': { id: 'A1805IZSGTT6HS',  domain: 'amazon.nl',      autocomplete: 'completion.amazon.nl',      lang: 'nl', langName: 'Nederlands', glParam: 'nl', hlParam: 'nl' },
+  'BE': { id: 'AMEN7PMS3EDWL',   domain: 'amazon.com.be',  autocomplete: 'completion.amazon.com.be',  lang: 'fr', langName: 'Français',   glParam: 'be', hlParam: 'fr' },
+  'PL': { id: 'A1C3SOZRARQ6R3',  domain: 'amazon.pl',      autocomplete: 'completion.amazon.pl',      lang: 'pl', langName: 'Polski',     glParam: 'pl', hlParam: 'pl' },
+  'SE': { id: 'A2NODRKZP88ZB9',  domain: 'amazon.se',      autocomplete: 'completion.amazon.se',      lang: 'sv', langName: 'Svenska',    glParam: 'se', hlParam: 'sv' },
+  'IE': { id: 'A28R8C7NBKEWEA',  domain: 'amazon.ie',      autocomplete: 'completion.amazon.ie',      lang: 'en', langName: 'English',    glParam: 'ie', hlParam: 'en' }
+};
 
-const DSF_USER_PROMPT_ANALYSIS = `Analysiere dieses Amazon.de Produkt und generiere folgendes JSON:
+// ==================== CLAUDE PROMPTS (templates — {PLACEHOLDERS} replaced at runtime) ====================
 
-PRODUKTDATEN:
-{SP_DATA}
+var DSF_SYSTEM_PROMPT_ANALYSIS = 'Du bist ein Experte fuer Amazon-Affiliate-Marketing und SEO fuer den Markt {MARKET_DOMAIN}. '
+  + 'Du generierst eine Nischenanalyse AUSSCHLIESSLICH in der Sprache {LANG_NAME} (Sprache des Marktes). '
+  + 'ZUSAETZLICH generierst du zu jedem Feld ein Zwillingsfeld mit dem Suffix _pl, das die Uebersetzung ins Polnische enthaelt. '
+  + 'Jedes Array-Element wird einzeln uebersetzt — gleiche Anzahl Elemente wie im Original. '
+  + 'Antworte NUR mit validem JSON. Kein Kommentar, kein Markdown.';
 
-AUTOCOMPLETE-VORSCHLÄGE AMAZON.DE:
-{AMAZON_SUGGESTIONS}
+var DSF_USER_PROMPT_ANALYSIS = 'Analysiere diese Produktdaten von {MARKET_DOMAIN} und generiere folgendes JSON.\n\n'
+  + 'PRODUKTDATEN:\n{SP_DATA}\n\n'
+  + 'AUTOCOMPLETE-VORSCHLAEGE {MARKET_DOMAIN}:\n{AMAZON_SUGGESTIONS}\n\n'
+  + 'AUTOCOMPLETE-VORSCHLAEGE GOOGLE ({LANG_CODE}):\n{GOOGLE_SUGGESTIONS}\n\n'
+  + 'Generiere folgende JSON-Struktur. Alle Inhalte in Sprache: {LANG_NAME}.\n'
+  + 'Zusaetzlich jedes Feld mit Suffix _pl = Uebersetzung auf Polnisch (gleiche Anzahl Elemente).\n\n'
+  + '{\n'
+  + '  "needs_and_problems": ["8-12 Beduerfnisse/Probleme in {LANG_NAME}"],\n'
+  + '  "needs_and_problems_pl": ["8-12 Beduerfnisse/Probleme auf Polnisch"],\n'
+  + '  "buyer_personas": ["3-5 Kaeuferprofile in {LANG_NAME}"],\n'
+  + '  "buyer_personas_pl": ["3-5 Kaeuferprofile auf Polnisch"],\n'
+  + '  "frequent_words": ["15-25 haeufige Woerter in {LANG_NAME}"],\n'
+  + '  "frequent_words_pl": ["15-25 haeufige Woerter auf Polnisch"],\n'
+  + '  "keyword_candidates": ["10-20 Schluesselwoerter in {LANG_NAME}"],\n'
+  + '  "keyword_candidates_pl": ["10-20 Schluesselwoerter auf Polnisch"],\n'
+  + '  "usage_situations": ["6-10 Situationen in {LANG_NAME}"],\n'
+  + '  "usage_situations_pl": ["6-10 Situationen auf Polnisch"],\n'
+  + '  "search_triggers": ["6-10 Suchtrigger in {LANG_NAME}"],\n'
+  + '  "search_triggers_pl": ["6-10 Suchtrigger auf Polnisch"],\n'
+  + '  "search_questions": ["8-15 Fragen in {LANG_NAME}"],\n'
+  + '  "search_questions_pl": ["8-15 Fragen auf Polnisch"],\n'
+  + '  "tips_topics": ["8-12 Ratgeberthemen in {LANG_NAME}"],\n'
+  + '  "tips_topics_pl": ["8-12 Ratgeberthemen auf Polnisch"],\n'
+  + '  "dont_do_topics": ["5-8 Dont-do-Themen in {LANG_NAME}"],\n'
+  + '  "dont_do_topics_pl": ["5-8 Dont-do-Themen auf Polnisch"],\n'
+  + '  "influencers": ["3-5 YouTube/Podcasts in {LANG_NAME} — nur wenn sicher bekannt, sonst null"],\n'
+  + '  "influencers_pl": ["auf Polnisch"],\n'
+  + '  "blogs_articles": ["3-5 Blogs/Portale in {LANG_NAME} — nur wenn sicher bekannt, sonst null"],\n'
+  + '  "blogs_articles_pl": ["auf Polnisch"],\n'
+  + '  "top_shops": ["5-10 Online-Shops in {LANG_NAME}"],\n'
+  + '  "top_shops_pl": ["auf Polnisch"],\n'
+  + '  "cultural_context": ["3-5 kulturelle Kontexte in {LANG_NAME}"],\n'
+  + '  "cultural_context_pl": ["auf Polnisch"]\n'
+  + '}';
 
-AUTOCOMPLETE-VORSCHLÄGE GOOGLE.DE:
-{GOOGLE_SUGGESTIONS}
+var DSF_SYSTEM_PROMPT_SLUGS = 'Du bist ein Experte fuer Domain-Naming und SEO fuer den Markt {MARKET_DOMAIN}. '
+  + 'Slugs generierst du in der Sprache {LANG_NAME} — das ist die Marktsprache, nicht Englisch. '
+  + 'Fuer FR Slugs auf Franzoesisch, IT auf Italienisch, ES auf Spanisch, usw. '
+  + 'AUSNAHME: UK und IE → auf Englisch. '
+  + 'Normalisierung: e→e, e→e, e→e, c→c, n→n, ae→ae, oe→oe, ue→ue, ss→ss, o→o, a→a, a→a, e→e, s→s, usw. '
+  + 'Zu jedem Textfeld fuegst du ein Zwillingsfeld _pl mit Uebersetzung auf Polnisch hinzu. '
+  + 'Antworte NUR mit validem JSON-Array. Kein Kommentar.';
 
-Generiere folgende JSON-Struktur (alle Inhalte auf DEUTSCH):
-{
-  "needs_and_problems": ["8-12 Bedürfnisse/Probleme/Wünsche die durch diesen Produkttyp gelöst werden"],
-  "buyer_personas": ["3-5 Käuferprofile mit kurzer Beschreibung"],
-  "frequent_words": ["15-25 häufige Wörter aus Produktnamen und Beschreibungen"],
-  "keyword_candidates": ["10-20 Schlüsselwörter/Phrasen die Bedarf und Produkt beschreiben"],
-  "usage_situations": ["6-10 Situationen in denen das Produkt verwendet wird"],
-  "search_triggers": ["6-10 Situationen in denen jemand beginnt online nach Lösungen zu suchen"],
-  "search_questions": ["8-15 Fragen auf Deutsch die jemand bei der Suche nach Lösungen eingibt"],
-  "tips_topics": ["8-12 Ratgeber-Themen auf Deutsch (was man tun sollte)"],
-  "dont_do_topics": ["5-8 Themen auf Deutsch (was man NICHT tun sollte)"],
-  "influencers_de": ["3-5 deutsche YouTube-Kanäle/Podcasts zu diesem Thema - nur wenn sicher bekannt, sonst null"],
-  "blogs_articles_de": ["3-5 deutsche Blogs/Portale zu diesem Thema - nur wenn sicher bekannt, sonst null"],
-  "top_shops_de": ["5-10 deutsche Online-Shops die diesen Produkttyp verkaufen"],
-  "cultural_context": ["3-5 kulturelle Kontexte in Deutschland wo dieses Produkt/Problem im Alltag vorkommt"]
-}`;
-
-const DSF_USER_PROMPT_SLUGS = `Du bist ein Experte für Domain-Naming und deutschen SEO-Markt.
-
-NISCHENANALYSE:
-{ANALYSIS_DATA}
-
-Schlage 5-8 Subdomain-Slug-Kandidaten für eine Amazon-Affiliate-Website vor.
-
-KRITERIEN (alle müssen bewertet werden):
-1. Entspricht dem Hauptbedürfnis/Problem/Lösungsname des Kunden
-2. Klar für Fachleute in dieser Nische
-3. Idealerweise = Teil oder Ganzes des Produktnamens
-4. AUF DEUTSCH (kein Englisch)
-5. Max 2-3 Wörter (zusammengeschrieben oder mit Bindestrich)
-6. OHNE Sonderzeichen (ä→ae, ö→oe, ü→ue, ß→ss - automatisch konvertiert)
-7. Auf amazon.de eingegeben liefert relevante Produktergebnisse
-
-WICHTIG: Gib für jeden Kandidaten:
-- slug: fertiger normalisierter Slug (kleinbuchstaben, kein lk24.shop, nur a-z0-9-)
-- full_subdomain: slug + '.lk24.shop'
-- type: 'CATEGORY_BASED' oder 'NEED_BASED'
-- rationale_de: max 2 Sätze Begründung auf Deutsch
-- rationale_pl: max 2 Sätze Begründung auf Polnisch (für den Eigentümer)
-- amazon_test_phrase: Phrase zum Testen auf amazon.de
-- score_criteria: Array mit 7 true/false Werten für Kriterien 1-7
-- score_total: Summe der true-Werte (0-7)
-- content_topics: 5 Artikel-/Ratgeber-Themen auf Deutsch
-- suggested_url_slugs: 5 Beispiel-URL-Slugs für Unterseiten
-
-Sortiere von besten zu schlechtesten (score_total absteigend).
-Antworte NUR mit validem JSON-Array. Kein Präambel.`;
+var DSF_USER_PROMPT_SLUGS = 'NISCHENANALYSE:\n{ANALYSIS_DATA}\n\n'
+  + 'Schlage 5-8 Subdomain-Slug-Kandidaten fuer eine Amazon-Affiliate-Website auf {MARKET_DOMAIN} vor.\n\n'
+  + 'KRITERIEN (alle muessen bewertet werden):\n'
+  + '1. Entspricht dem Hauptbeduerfnis/Problem/Loesungsname des Kunden\n'
+  + '2. Klar fuer Fachleute in dieser Nische\n'
+  + '3. Idealerweise = Teil oder Ganzes des Produktnamens\n'
+  + '4. IN DER SPRACHE DES MARKTES: {LANG_NAME} (kein Englisch, ausser UK/IE)\n'
+  + '5. Max 2-3 Woerter (zusammengeschrieben oder mit Bindestrich)\n'
+  + '6. OHNE Sonderzeichen (automatisch konvertiert)\n'
+  + '7. Auf {MARKET_DOMAIN} eingegeben liefert relevante Produktergebnisse\n\n'
+  + 'Fuer jeden Kandidaten:\n'
+  + '- slug: fertiger normalisierter Slug (kleinbuchstaben, nur a-z0-9-)\n'
+  + '- full_subdomain: slug + ".{ROOT_DOMAIN}"\n'
+  + '- type: "CATEGORY_BASED" oder "NEED_BASED"\n'
+  + '- rationale: max 2 Saetze Begruendung in {LANG_NAME}\n'
+  + '- rationale_pl: max 2 Saetze Begruendung auf Polnisch\n'
+  + '- amazon_test_phrase: Phrase zum Testen auf {MARKET_DOMAIN} in {LANG_NAME}\n'
+  + '- amazon_test_phrase_pl: Uebersetzung der Phrase auf Polnisch\n'
+  + '- score_criteria: Array mit 7 true/false Werten fuer Kriterien 1-7\n'
+  + '- score_total: Summe der true-Werte (0-7)\n'
+  + '- content_topics: 5 Artikel-Themen in {LANG_NAME}\n'
+  + '- content_topics_pl: 5 Artikel-Themen auf Polnisch\n'
+  + '- suggested_url_slugs: 5 Beispiel-URL-Slugs fuer Unterseiten (keine Sonderzeichen)\n\n'
+  + 'Sortiere von besten zu schlechtesten (score_total absteigend).\n'
+  + 'Antworte NUR mit validem JSON-Array. Kein Praeambel.';
 
 // ==================== MENU ====================
 
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('Domain Finder')
+    .addItem('Uruchom zaznaczone wiersze', 'dsfRunSelected')
+    .addItem('Wznow kolejke (jesli przerwa)', 'dsfProcessQueue')
+    .addSeparator()
     .addItem('Konfiguruj API Keys', 'dsfSetConfig')
     .addItem('Zainstaluj trigger', 'dsfSetupTriggers')
     .addSeparator()
-    .addItem('Uruchom recznie (aktywny wiersz)', 'dsfRunManual')
-    .addItem('Test z ASIN B0FRG79LF9', 'dsfRunTest')
-    .addSeparator()
-    .addItem('Test polaczenia SP-API', 'dsfTestSpApi')
-    .addItem('Test polaczenia Claude API', 'dsfTestClaude')
+    .addItem('Test: ASIN B0FRG79LF9', 'dsfRunTest')
+    .addItem('Wyczysc kolejke', 'dsfClearQueue')
+    .addItem('Pokaz LOG', 'dsfShowLog')
     .addToUi();
+}
+
+// ==================== DATE HELPER ====================
+
+function dsfFormatDateDE(date) {
+  var d = date || new Date();
+  var pad = function(n) { return n < 10 ? '0' + n : n; };
+  return pad(d.getDate()) + '.' + pad(d.getMonth() + 1) + '.' + d.getFullYear()
+    + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
 }
 
 // ==================== SETUP & CONFIG ====================
 
-/**
- * Setup installable onEdit trigger for INPUT sheet
- */
 function dsfSetupTriggers() {
   var ui = SpreadsheetApp.getUi();
 
-  // Remove existing DSF triggers
+  // Remove old DSF triggers (onEdit — no longer needed for auto-start)
   var triggers = ScriptApp.getProjectTriggers();
   var removed = 0;
   for (var i = 0; i < triggers.length; i++) {
-    if (triggers[i].getHandlerFunction() === 'dsfOnEditInstallable') {
+    var fn = triggers[i].getHandlerFunction();
+    if (fn === 'dsfOnEditInstallable' || fn === 'dsfProcessQueue') {
       ScriptApp.deleteTrigger(triggers[i]);
       removed++;
     }
   }
 
-  // Install new trigger
-  ScriptApp.newTrigger('dsfOnEditInstallable')
-    .forSpreadsheet(SpreadsheetApp.getActive())
-    .onEdit()
-    .create();
-
   // Ensure all sheets exist
   dsfEnsureSheets_();
 
-  ui.alert('Trigger zainstalowany',
+  ui.alert('Setup wykonany',
     (removed > 0 ? 'Usunieto ' + removed + ' starych triggerow.\n' : '') +
-    'Nowy installable onEdit trigger zainstalowany.\n\n' +
-    'Zaznacz checkbox w kolumnie F w zakladce INPUT aby uruchomic pipeline.',
+    'Zakladki utworzone: INPUT, ANALYSIS, SLUGS, ASINS, LOG.\n\n' +
+    'Uzycie:\n1. Wpisz dane w INPUT\n2. Zaznacz checkbox(y) w kolumnie F\n3. Menu > Uruchom zaznaczone wiersze',
     ui.ButtonSet.OK);
 }
 
-/**
- * Prompt user for all API keys and save to Script Properties
- */
 function dsfSetConfig() {
   var ui = SpreadsheetApp.getUi();
   var props = PropertiesService.getScriptProperties();
@@ -169,23 +197,15 @@ function dsfSetConfig() {
   }
 
   if (updated > 0) {
-    ui.alert('Konfiguracja', 'Zaktualizowano ' + updated + ' kluczy API.\n\nMozesz teraz uruchomic test z menu.', ui.ButtonSet.OK);
-  } else {
-    ui.alert('Konfiguracja', 'Nie zaktualizowano zadnych kluczy.', ui.ButtonSet.OK);
+    ui.alert('Konfiguracja', 'Zaktualizowano ' + updated + ' kluczy API.', ui.ButtonSet.OK);
   }
 }
 
 // ==================== TOKEN MANAGEMENT ====================
 
-/**
- * Get SP-API access token with caching (5-min buffer)
- * Reuses existing spGetAccessToken from SPApiAuth-WAAS.gs if available,
- * otherwise uses standalone implementation.
- */
 function dsfGetSpApiToken() {
   var props = PropertiesService.getScriptProperties();
 
-  // Check cache first
   var cachedToken = props.getProperty('SP_ACCESS_TOKEN');
   var cachedExpiry = props.getProperty('SP_TOKEN_EXPIRY');
 
@@ -204,8 +224,7 @@ function dsfGetSpApiToken() {
     throw new Error('SP-API credentials not configured. Run: Domain Finder > Konfiguruj API Keys');
   }
 
-  var url = 'https://api.amazon.com/auth/o2/token';
-  var response = UrlFetchApp.fetch(url, {
+  var response = UrlFetchApp.fetch('https://api.amazon.com/auth/o2/token', {
     method: 'post',
     contentType: 'application/x-www-form-urlencoded',
     payload: {
@@ -235,186 +254,272 @@ function dsfGetSpApiToken() {
   props.setProperty('SP_ACCESS_TOKEN', tokens.access_token);
   props.setProperty('SP_TOKEN_EXPIRY', (Date.now() + (tokens.expires_in * 1000)).toString());
 
-  Logger.log('[DSF] SP-API token refreshed');
   return tokens.access_token;
 }
 
-// ==================== TRIGGER ====================
+// ==================== QUEUE SYSTEM ====================
 
 /**
- * Installable onEdit trigger — fires when checkbox in column F (INPUT sheet) is checked
+ * Menu action: collect checked rows from INPUT and start processing queue
  */
-function dsfOnEditInstallable(e) {
-  try {
-    var sheet = e.source.getActiveSheet();
-    if (sheet.getName() !== 'INPUT') return;
+function dsfRunSelected() {
+  var ui = SpreadsheetApp.getUi();
+  var props = PropertiesService.getScriptProperties();
 
-    var range = e.range;
-    var col = range.getColumn();
-    var row = range.getRow();
-
-    // Column F = 6, must be TRUE, must be row >= 2
-    if (col !== 6 || row < 2) return;
-    if (range.getValue() !== true) return;
-
-    // Read row data
-    var rowData = sheet.getRange(row, 1, 1, 4).getValues()[0];
-    var type = (rowData[0] || '').toString().trim().toUpperCase();
-    var value = (rowData[1] || '').toString().trim();
-    var market = (rowData[2] || 'DE').toString().trim().toUpperCase();
-    var rootDomain = (rowData[3] || 'lk24.shop').toString().trim();
-
-    if (!type || !value) {
-      sheet.getRange(row, 5).setValue('ERROR: Brak typu lub wartosci');
-      return;
-    }
-
-    if (type !== 'ASIN' && type !== 'KEYWORD') {
-      sheet.getRange(row, 5).setValue('ERROR: Typ musi byc ASIN lub KEYWORD');
-      return;
-    }
-
-    // Save job to ScriptProperties
-    var job = {
-      row: row,
-      type: type,
-      value: value,
-      market: market,
-      rootDomain: rootDomain
-    };
-
-    var props = PropertiesService.getScriptProperties();
-    props.setProperty('DSF_PENDING_JOB', JSON.stringify(job));
-
-    // Update status
-    sheet.getRange(row, 5).setValue('PROCESSING');
-    sheet.getRange(row, 7).setValue(new Date());
-    SpreadsheetApp.flush();
-
-    // Schedule async job
-    ScriptApp.newTrigger('dsfRunJob').timeBased().after(500).create();
-
-  } catch (err) {
-    Logger.log('[DSF] onEdit error: ' + err.message);
+  // Check if queue already exists
+  var existingQueue = props.getProperty('DSF_QUEUE');
+  if (existingQueue) {
+    try {
+      var q = JSON.parse(existingQueue);
+      if (q.length > 0) {
+        ui.alert('Kolejka aktywna',
+          'Kolejka juz dziala lub jest wstrzymana (' + q.length + ' wierszy).\n\n' +
+          'Uzyj "Wznow kolejke" lub "Wyczysc kolejke".',
+          ui.ButtonSet.OK);
+        return;
+      }
+    } catch (e) { /* ignore parse errors, proceed */ }
   }
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var inputSheet = ss.getSheetByName('INPUT');
+  if (!inputSheet) {
+    ui.alert('Brak zakladki INPUT. Uruchom najpierw: Zainstaluj trigger.');
+    return;
+  }
+
+  var lastRow = inputSheet.getLastRow();
+  if (lastRow < 2) {
+    ui.alert('Brak danych w zakladce INPUT.');
+    return;
+  }
+
+  // Read columns A-F for all data rows
+  var data = inputSheet.getRange(2, 1, lastRow - 1, 6).getValues();
+  var queue = [];
+
+  for (var i = 0; i < data.length; i++) {
+    var rowNum = i + 2;
+    var checkbox = data[i][5]; // Column F
+    var status = (data[i][4] || '').toString().trim().toUpperCase(); // Column E
+
+    if (checkbox === true && status !== 'DONE') {
+      queue.push(rowNum);
+    }
+  }
+
+  if (queue.length === 0) {
+    ui.alert('Brak zaznaczonych wierszy',
+      'Zaznacz checkbox(y) w kolumnie F przy wierszach do przetworzenia.\n' +
+      'Wiersze ze statusem DONE sa pomijane.',
+      ui.ButtonSet.OK);
+    return;
+  }
+
+  // Save queue
+  props.setProperty('DSF_QUEUE', JSON.stringify(queue));
+
+  dsfLog('INFO', 'Rozpoczeto przetwarzanie kolejki: ' + queue.length + ' wierszy [' + queue.join(', ') + ']');
+
+  ss.toast('Przetwarzam ' + queue.length + ' wierszy...', 'Domain Finder', 30);
+
+  // Process immediately
+  dsfProcessQueue();
+}
+
+/**
+ * Process queue — runs items one by one, respects 6-min Apps Script limit
+ */
+function dsfProcessQueue() {
+  var props = PropertiesService.getScriptProperties();
+
+  var queueJson = props.getProperty('DSF_QUEUE');
+  if (!queueJson) {
+    dsfLog('INFO', 'Kolejka pusta — brak wierszy do przetworzenia.');
+    return;
+  }
+
+  var queue;
+  try {
+    queue = JSON.parse(queueJson);
+  } catch (e) {
+    props.deleteProperty('DSF_QUEUE');
+    dsfLog('ERROR', 'Nieprawidlowe dane kolejki: ' + e.message);
+    return;
+  }
+
+  if (queue.length === 0) {
+    props.deleteProperty('DSF_QUEUE');
+    dsfLog('INFO', 'Wszystkie wiersze przetworzone.');
+    dsfCleanupProcessQueueTriggers_();
+    return;
+  }
+
+  dsfLog('INFO', 'Wznowienie przetwarzania — pozostalo wierszy: ' + queue.length);
+
+  var START_TIME = Date.now();
+  var MAX_RUNTIME = 5 * 60 * 1000; // 5 min (1 min buffer)
+
+  while (queue.length > 0) {
+    if ((Date.now() - START_TIME) > MAX_RUNTIME) {
+      // Save remaining queue and schedule continuation
+      props.setProperty('DSF_QUEUE', JSON.stringify(queue));
+      dsfCleanupProcessQueueTriggers_();
+      ScriptApp.newTrigger('dsfProcessQueue').timeBased().after(30000).create();
+      dsfLog('WARNING', 'Przerwa — zbliza sie limit 6 min. Wznowienie za 30 sekund. Pozostalo wierszy: ' + queue.length);
+      return;
+    }
+
+    var rowNum = queue.shift();
+    props.setProperty('DSF_QUEUE', JSON.stringify(queue));
+
+    try {
+      dsfRunJobForRow(rowNum);
+    } catch (err) {
+      dsfLog('ERROR', 'Wiersz ' + rowNum + ': ' + err.message, rowNum);
+      dsfUpdateInputStatus(rowNum, 'ERROR', '', 0, err.message);
+    }
+  }
+
+  // All done
+  props.deleteProperty('DSF_QUEUE');
+  dsfLog('INFO', 'Wszystkie wiersze przetworzone.');
+  dsfCleanupProcessQueueTriggers_();
+
+  try {
+    SpreadsheetApp.getActiveSpreadsheet().toast('Kolejka zakonczona!', 'Domain Finder', 10);
+  } catch (e) { /* toast may fail in trigger context */ }
+}
+
+/**
+ * Clear queue and cancel scheduled triggers
+ */
+function dsfClearQueue() {
+  var props = PropertiesService.getScriptProperties();
+  props.deleteProperty('DSF_QUEUE');
+  dsfCleanupProcessQueueTriggers_();
+  dsfLog('INFO', 'Kolejka wyczyszczona recznie.');
+  SpreadsheetApp.getUi().alert('Kolejka wyczyszczona. Wiersze nie zostaly przetworzone.');
+}
+
+/**
+ * Show LOG sheet
+ */
+function dsfShowLog() {
+  var ss = SpreadsheetApp.getActive();
+  var logSheet = ss.getSheetByName('LOG');
+  if (!logSheet) {
+    dsfEnsureSheets_();
+    logSheet = ss.getSheetByName('LOG');
+  }
+  if (logSheet) logSheet.activate();
 }
 
 // ==================== MAIN PIPELINE ====================
 
 /**
- * Main pipeline — runs asynchronously via time-based trigger
+ * Process a single row from INPUT sheet
  */
-function dsfRunJob() {
-  var props = PropertiesService.getScriptProperties();
-
-  // Read and clear pending job (prevents double execution)
-  var jobJson = props.getProperty('DSF_PENDING_JOB');
-  props.deleteProperty('DSF_PENDING_JOB');
-
-  // Clean up this one-time trigger
-  dsfCleanupTrigger_('dsfRunJob');
-
-  if (!jobJson) {
-    Logger.log('[DSF] No pending job found');
-    return;
-  }
-
-  var job;
-  try {
-    job = JSON.parse(jobJson);
-  } catch (e) {
-    Logger.log('[DSF] Invalid job JSON: ' + e.message);
-    return;
-  }
-
+function dsfRunJobForRow(rowNum) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var inputSheet = ss.getSheetByName('INPUT');
+  if (!inputSheet) throw new Error('Brak zakladki INPUT');
 
-  try {
-    // 1. Get SP-API token
-    var accessToken = dsfGetSpApiToken();
+  // Read row data
+  var rowData = inputSheet.getRange(rowNum, 1, 1, 4).getValues()[0];
+  var type = (rowData[0] || '').toString().trim().toUpperCase();
+  var value = (rowData[1] || '').toString().trim();
+  var market = (rowData[2] || 'DE').toString().trim().toUpperCase();
+  var rootDomain = (rowData[3] || 'lk24.shop').toString().trim();
 
-    // 2. Fetch product data from SP API
-    var spData, searchPhrase;
-
-    if (job.type === 'ASIN') {
-      spData = dsfCallSpApiGetItem(job.value, accessToken);
-      searchPhrase = dsfExtractMainPhrase(spData);
-      Logger.log('[DSF] ASIN mode, search phrase: ' + searchPhrase);
-    } else {
-      // KEYWORD mode
-      spData = dsfCallSpApiSearch(job.value, accessToken);
-      searchPhrase = job.value;
-      Logger.log('[DSF] KEYWORD mode, search phrase: ' + searchPhrase);
-    }
-
-    Utilities.sleep(500);
-
-    // 3. Amazon DE Autocomplete
-    var amazonSuggestions = dsfGetAmazonAutocomplete(searchPhrase);
-    Logger.log('[DSF] Amazon suggestions: ' + amazonSuggestions.length);
-
-    // 4. Google DE Autocomplete
-    var googleSuggestions = dsfGetGoogleAutocomplete(searchPhrase);
-    Logger.log('[DSF] Google suggestions: ' + googleSuggestions.length);
-
-    Utilities.sleep(300);
-
-    // 5. Claude Call 1 — Niche Analysis
-    var analysisData = dsfCallClaudeAnalysis(spData, amazonSuggestions, googleSuggestions);
-    Logger.log('[DSF] Analysis complete, keys: ' + Object.keys(analysisData).length);
-
-    Utilities.sleep(500);
-
-    // 6. Claude Call 2 — Slug Generation
-    var slugsData = dsfCallClaudeSlugs(analysisData);
-    Logger.log('[DSF] Slugs generated: ' + slugsData.length);
-
-    Utilities.sleep(300);
-
-    // 7. DENIC Check for top 3 slugs
-    var denicResults = {};
-    if (slugsData.length > 0) {
-      var topSlugs = slugsData.slice(0, 3).map(function(s) { return s.slug; });
-      denicResults = dsfCheckDenicForTopSlugs(topSlugs);
-      Logger.log('[DSF] DENIC results: ' + JSON.stringify(denicResults));
-    }
-
-    Utilities.sleep(300);
-
-    // 8. Search additional ASINs for the website using top slug's test phrase
-    var additionalAsins = [];
-    if (slugsData.length > 0 && slugsData[0].amazon_test_phrase) {
-      var topPhrase = slugsData[0].amazon_test_phrase;
-      additionalAsins = dsfCallSpApiSearchForAsins(topPhrase, accessToken);
-      Logger.log('[DSF] Additional ASINs found: ' + additionalAsins.length);
-    }
-
-    // 9. Save all results to sheets
-    dsfSaveResultsToSheets(job.row, job.value, analysisData, slugsData, denicResults, additionalAsins, job.rootDomain);
-
-    // 10. Update INPUT status to DONE
-    var topSlug = slugsData.length > 0 ? slugsData[0].slug : '';
-    var topScore = slugsData.length > 0 ? slugsData[0].score_total : 0;
-    dsfUpdateInputStatus(job.row, 'DONE', topSlug, topScore);
-
-    ss.toast('Pipeline zakonczony! Top slug: ' + topSlug + ' (score: ' + topScore + '/7)', 'Domain Finder', 15);
-
-  } catch (err) {
-    Logger.log('[DSF] Pipeline error: ' + err.message + '\n' + err.stack);
-    dsfUpdateInputStatus(job.row, 'ERROR', '', 0, err.message);
-    ss.toast('Blad: ' + err.message, 'Domain Finder - ERROR', 15);
+  if (!type || !value) {
+    throw new Error('Brak typu lub wartosci w wierszu ' + rowNum);
   }
+
+  if (type !== 'ASIN' && type !== 'KEYWORD') {
+    throw new Error('Typ musi byc ASIN lub KEYWORD (wiersz ' + rowNum + ')');
+  }
+
+  // Validate marketplace
+  var marketplace = DSF_MARKETPLACES[market];
+  if (!marketplace) {
+    var available = Object.keys(DSF_MARKETPLACES).join(', ');
+    throw new Error('Nieznany rynek: "' + market + '". Dostepne: ' + available);
+  }
+
+  // Set status to PROCESSING
+  inputSheet.getRange(rowNum, 5).setValue('PROCESSING');
+  inputSheet.getRange(rowNum, 7).setValue(dsfFormatDateDE());
+  SpreadsheetApp.flush();
+
+  dsfLog('INFO', 'Start przetwarzania: typ=' + type + ', wartosc=' + value + ', rynek=' + market, rowNum);
+
+  // 1. Get SP-API token
+  var accessToken = dsfGetSpApiToken();
+
+  // 2. Fetch product data
+  var spData, searchPhrase;
+
+  if (type === 'ASIN') {
+    spData = dsfCallSpApiGetItem(value, accessToken, marketplace);
+    searchPhrase = dsfExtractMainPhrase(spData);
+  } else {
+    spData = dsfCallSpApiSearch(value, accessToken, marketplace);
+    searchPhrase = value;
+  }
+
+  Utilities.sleep(500);
+
+  // 3. Amazon Autocomplete
+  var amazonSuggestions = dsfGetAmazonAutocomplete(searchPhrase, marketplace);
+
+  // 4. Google Autocomplete
+  var googleSuggestions = dsfGetGoogleAutocomplete(searchPhrase, marketplace);
+
+  Utilities.sleep(300);
+
+  // 5. Claude Call 1 — Analysis
+  var analysisData = dsfCallClaudeAnalysis(spData, amazonSuggestions, googleSuggestions, marketplace);
+
+  Utilities.sleep(500);
+
+  // 6. Claude Call 2 — Slugs
+  var slugsData = dsfCallClaudeSlugs(analysisData, marketplace, rootDomain);
+
+  Utilities.sleep(300);
+
+  // 7. DENIC Check for top 3 slugs
+  var denicResults = {};
+  if (slugsData.length > 0) {
+    var topSlugs = slugsData.slice(0, 3).map(function(s) { return s.slug; });
+    denicResults = dsfCheckDenicForTopSlugs(topSlugs);
+  }
+
+  Utilities.sleep(300);
+
+  // 8. Additional ASINs for the website
+  var additionalAsins = [];
+  if (slugsData.length > 0 && slugsData[0].amazon_test_phrase) {
+    additionalAsins = dsfCallSpApiSearchForAsins(slugsData[0].amazon_test_phrase, accessToken, marketplace);
+  }
+
+  // 9. Save to sheets
+  dsfSaveResultsToSheets(rowNum, value, market, analysisData, slugsData, denicResults, additionalAsins, rootDomain);
+
+  // 10. Update INPUT status
+  var topSlug = slugsData.length > 0 ? slugsData[0].slug : '';
+  var topScore = slugsData.length > 0 ? slugsData[0].score_total : 0;
+  dsfUpdateInputStatus(rowNum, 'DONE', topSlug, topScore);
+
+  dsfLog('INFO', 'Zakonczono: top slug = ' + topSlug + ', score = ' + topScore + '/7', rowNum);
 }
 
 // ==================== SP API CALLS ====================
 
-/**
- * Fetch single product by ASIN from SP API Catalog Items
- */
-function dsfCallSpApiGetItem(asin, token) {
-  var url = DSF_SP_ENDPOINT + '/catalog/2022-04-01/items/' + asin +
-    '?marketplaceIds=' + DSF_MARKETPLACE_ID +
-    '&includedData=attributes,classifications,identifiers,images,productTypes,salesRanks,summaries';
+function dsfCallSpApiGetItem(asin, token, marketplace) {
+  var url = DSF_SP_ENDPOINT + '/catalog/2022-04-01/items/' + asin
+    + '?marketplaceIds=' + marketplace.id
+    + '&includedData=attributes,classifications,identifiers,images,productTypes,salesRanks,summaries';
 
   var response = UrlFetchApp.fetch(url, {
     method: 'get',
@@ -426,11 +531,11 @@ function dsfCallSpApiGetItem(asin, token) {
   var body = response.getContentText();
 
   if (code === 404 || code === 400) {
-    throw new Error('ASIN not found on amazon.de: ' + asin);
+    throw new Error('ASIN not found on ' + marketplace.domain + ': ' + asin);
   }
 
   if (code === 429) {
-    Logger.log('[DSF] SP-API rate limited, retrying in 2s...');
+    dsfLog('WARNING', 'SP-API rate limited, retrying in 2s...');
     Utilities.sleep(2000);
     response = UrlFetchApp.fetch(url, {
       method: 'get',
@@ -442,12 +547,11 @@ function dsfCallSpApiGetItem(asin, token) {
   }
 
   if (code !== 200) {
+    dsfLog('ERROR', 'SP-API HTTP ' + code + ': ' + body.substring(0, 200));
     throw new Error('SP-API Error ' + code + ': ' + body.substring(0, 300));
   }
 
   var data = JSON.parse(body);
-
-  // Extract key fields
   var summaries = data.summaries || [];
   var summary = summaries[0] || {};
   var attributes = data.attributes || {};
@@ -455,36 +559,30 @@ function dsfCallSpApiGetItem(asin, token) {
   var classifications = data.classifications || [];
   var images = data.images || [];
 
-  // Title
   var title = summary.itemName || '';
-
-  // Brand
   var brand = summary.brand || '';
   if (!brand && attributes.brand && attributes.brand[0]) {
     brand = attributes.brand[0].value || '';
   }
 
-  // Category / Browse Node
   var categoryName = '';
   var browseNodeName = '';
   if (summary.browseClassification) {
     categoryName = summary.browseClassification.displayName || '';
-    browseNodeName = summary.browseClassification.displayName || '';
+    browseNodeName = categoryName;
   }
   if (!categoryName && classifications.length > 0) {
-    var classGroup = classifications[0];
-    var nodes = classGroup.classifications || [];
+    var nodes = (classifications[0].classifications || []);
     if (nodes.length > 0) {
       categoryName = nodes[0].displayName || '';
-      browseNodeName = nodes[0].displayName || '';
+      browseNodeName = categoryName;
     }
   }
 
-  // BSR
   var bsrRank = '';
   var bsrCategory = '';
   for (var i = 0; i < salesRanks.length; i++) {
-    if (salesRanks[i].marketplaceId === DSF_MARKETPLACE_ID) {
+    if (salesRanks[i].marketplaceId === marketplace.id) {
       var classRanks = salesRanks[i].classificationRanks || [];
       if (classRanks.length > 0) {
         bsrRank = classRanks[0].rank || '';
@@ -501,7 +599,6 @@ function dsfCallSpApiGetItem(asin, token) {
     }
   }
 
-  // Bullet points
   var bulletPoints = [];
   if (attributes.bullet_point) {
     for (var b = 0; b < attributes.bullet_point.length; b++) {
@@ -510,7 +607,6 @@ function dsfCallSpApiGetItem(asin, token) {
     }
   }
 
-  // Price
   var price = '';
   var currency = 'EUR';
   if (attributes.list_price && attributes.list_price[0]) {
@@ -525,15 +621,17 @@ function dsfCallSpApiGetItem(asin, token) {
     currency = priceData.currency || 'EUR';
   }
 
-  // Primary image
   var mainImage = '';
   if (images.length > 0 && images[0].images) {
     var imgList = images[0].images;
-    var mainImgObj = imgList.find(function(img) { return img.variant === 'MAIN'; }) || imgList[0];
+    var mainImgObj = null;
+    for (var m = 0; m < imgList.length; m++) {
+      if (imgList[m].variant === 'MAIN') { mainImgObj = imgList[m]; break; }
+    }
+    if (!mainImgObj) mainImgObj = imgList[0];
     mainImage = mainImgObj ? mainImgObj.link || '' : '';
   }
 
-  // Product type
   var productType = '';
   if (data.productTypes && data.productTypes[0]) {
     productType = data.productTypes[0].productType || '';
@@ -552,20 +650,16 @@ function dsfCallSpApiGetItem(asin, token) {
     currency: currency,
     mainImage: mainImage,
     productType: productType,
-    rawAttributes: attributes,
-    rawSummary: summary
+    marketplace: marketplace.domain
   };
 }
 
-/**
- * Search products by keyword via SP API (returns summary data for analysis)
- */
-function dsfCallSpApiSearch(keywords, token) {
-  var url = DSF_SP_ENDPOINT + '/catalog/2022-04-01/items' +
-    '?keywords=' + encodeURIComponent(keywords) +
-    '&marketplaceIds=' + DSF_MARKETPLACE_ID +
-    '&pageSize=20' +
-    '&includedData=attributes,classifications,identifiers,images,salesRanks,summaries';
+function dsfCallSpApiSearch(keywords, token, marketplace) {
+  var url = DSF_SP_ENDPOINT + '/catalog/2022-04-01/items'
+    + '?keywords=' + encodeURIComponent(keywords)
+    + '&marketplaceIds=' + marketplace.id
+    + '&pageSize=20'
+    + '&includedData=attributes,classifications,identifiers,images,salesRanks,summaries';
 
   var response = UrlFetchApp.fetch(url, {
     method: 'get',
@@ -588,6 +682,7 @@ function dsfCallSpApiSearch(keywords, token) {
   }
 
   if (code !== 200) {
+    dsfLog('ERROR', 'SP-API Search HTTP ' + code + ': ' + body.substring(0, 200));
     throw new Error('SP-API Search Error ' + code + ': ' + body.substring(0, 300));
   }
 
@@ -595,10 +690,9 @@ function dsfCallSpApiSearch(keywords, token) {
   var items = data.items || [];
 
   if (items.length === 0) {
-    throw new Error('No products found for keyword: ' + keywords);
+    throw new Error('No products found for keyword: ' + keywords + ' on ' + marketplace.domain);
   }
 
-  // Aggregate data from top results
   var titles = [];
   var categories = [];
   var bulletPoints = [];
@@ -620,7 +714,6 @@ function dsfCallSpApiSearch(keywords, token) {
     }
   }
 
-  // Build aggregated product data object
   var topItem = items[0];
   var topSummary = (topItem.summaries || [])[0] || {};
 
@@ -641,19 +734,17 @@ function dsfCallSpApiSearch(keywords, token) {
     topTitles: titles.slice(0, 5),
     topBrands: brands.slice(0, 5),
     topCategories: categories.slice(0, 5),
-    totalResults: items.length
+    totalResults: items.length,
+    marketplace: marketplace.domain
   };
 }
 
-/**
- * Search ASINs for the website (simpler call, returns ASIN details for ASINS tab)
- */
-function dsfCallSpApiSearchForAsins(keywords, token) {
-  var url = DSF_SP_ENDPOINT + '/catalog/2022-04-01/items' +
-    '?keywords=' + encodeURIComponent(keywords) +
-    '&marketplaceIds=' + DSF_MARKETPLACE_ID +
-    '&pageSize=20' +
-    '&includedData=attributes,classifications,images,salesRanks,summaries';
+function dsfCallSpApiSearchForAsins(keywords, token, marketplace) {
+  var url = DSF_SP_ENDPOINT + '/catalog/2022-04-01/items'
+    + '?keywords=' + encodeURIComponent(keywords)
+    + '&marketplaceIds=' + marketplace.id
+    + '&pageSize=20'
+    + '&includedData=attributes,classifications,images,salesRanks,summaries';
 
   var response = UrlFetchApp.fetch(url, {
     method: 'get',
@@ -661,11 +752,7 @@ function dsfCallSpApiSearchForAsins(keywords, token) {
     muteHttpExceptions: true
   });
 
-  var code = response.getResponseCode();
-  if (code !== 200) {
-    Logger.log('[DSF] ASIN search failed: HTTP ' + code);
-    return [];
-  }
+  if (response.getResponseCode() !== 200) return [];
 
   var data = JSON.parse(response.getContentText());
   var items = data.items || [];
@@ -674,14 +761,13 @@ function dsfCallSpApiSearchForAsins(keywords, token) {
   for (var i = 0; i < items.length; i++) {
     var item = items[i];
     var summary = (item.summaries || [])[0] || {};
-    var salesRanks = item.salesRanks || [];
     var attrs = item.attributes || {};
+    var salesRanks = item.salesRanks || [];
 
-    // BSR
     var bsrRank = '';
     var bsrCategory = '';
     for (var r = 0; r < salesRanks.length; r++) {
-      if (salesRanks[r].marketplaceId === DSF_MARKETPLACE_ID) {
+      if (salesRanks[r].marketplaceId === marketplace.id) {
         var classRanks = salesRanks[r].classificationRanks || [];
         if (classRanks.length > 0) {
           bsrRank = classRanks[0].rank || '';
@@ -691,7 +777,6 @@ function dsfCallSpApiSearchForAsins(keywords, token) {
       }
     }
 
-    // Price
     var price = '';
     if (attrs.list_price && attrs.list_price[0]) {
       var pd = attrs.list_price[0];
@@ -703,15 +788,16 @@ function dsfCallSpApiSearchForAsins(keywords, token) {
       }
     }
 
-    // Image
     var imgUrl = '';
     var imageGroups = item.images || [];
     if (imageGroups.length > 0 && imageGroups[0].images) {
-      var mainImg = imageGroups[0].images.find(function(img) { return img.variant === 'MAIN'; });
-      imgUrl = mainImg ? mainImg.link || '' : (imageGroups[0].images[0] ? imageGroups[0].images[0].link || '' : '');
+      var imgs = imageGroups[0].images;
+      for (var m = 0; m < imgs.length; m++) {
+        if (imgs[m].variant === 'MAIN') { imgUrl = imgs[m].link || ''; break; }
+      }
+      if (!imgUrl && imgs[0]) imgUrl = imgs[0].link || '';
     }
 
-    // Category
     var category = '';
     if (summary.browseClassification) {
       category = summary.browseClassification.displayName || '';
@@ -731,20 +817,11 @@ function dsfCallSpApiSearchForAsins(keywords, token) {
   return results;
 }
 
-/**
- * Extract main search phrase from SP API data
- * Priority: CategoryName > BrowseNodeDisplayName > first 2-3 words of Title
- */
 function dsfExtractMainPhrase(spData) {
-  if (spData.categoryName) {
-    return spData.categoryName;
-  }
-  if (spData.browseNodeName) {
-    return spData.browseNodeName;
-  }
+  if (spData.categoryName) return spData.categoryName;
+  if (spData.browseNodeName) return spData.browseNodeName;
   if (spData.title) {
     var words = spData.title.split(/\s+/);
-    // Skip brand name if it's the first word
     var startIdx = 0;
     if (spData.brand && words[0] && words[0].toLowerCase() === spData.brand.toLowerCase()) {
       startIdx = 1;
@@ -756,99 +833,68 @@ function dsfExtractMainPhrase(spData) {
 
 // ==================== AUTOCOMPLETE ====================
 
-/**
- * Get Amazon DE autocomplete suggestions
- */
-function dsfGetAmazonAutocomplete(phrase) {
+function dsfGetAmazonAutocomplete(phrase, marketplace) {
   if (!phrase) return [];
-
   try {
-    var url = 'https://completion.amazon.de/api/2017/suggestions' +
-      '?limit=10' +
-      '&prefix=' + encodeURIComponent(phrase) +
-      '&mid=' + DSF_MARKETPLACE_ID +
-      '&alias=aps';
+    var url = 'https://' + marketplace.autocomplete + '/api/2017/suggestions'
+      + '?limit=10&prefix=' + encodeURIComponent(phrase)
+      + '&mid=' + marketplace.id + '&alias=aps';
 
-    var response = UrlFetchApp.fetch(url, {
-      method: 'get',
-      muteHttpExceptions: true
-    });
-
-    var code = response.getResponseCode();
-    if (code !== 200) {
-      Logger.log('[DSF] Amazon autocomplete failed: HTTP ' + code);
-      return [];
-    }
+    var response = UrlFetchApp.fetch(url, { method: 'get', muteHttpExceptions: true });
+    if (response.getResponseCode() !== 200) return [];
 
     var data = JSON.parse(response.getContentText());
-    var suggestions = data.suggestions || [];
-    return suggestions.map(function(s) { return s.value || ''; }).filter(function(s) { return s; });
-
+    return (data.suggestions || []).map(function(s) { return s.value || ''; }).filter(function(s) { return s; });
   } catch (e) {
-    Logger.log('[DSF] Amazon autocomplete error: ' + e.message);
+    dsfLog('WARNING', 'Amazon autocomplete error: ' + e.message);
     return [];
   }
 }
 
-/**
- * Get Google DE autocomplete suggestions
- */
-function dsfGetGoogleAutocomplete(phrase) {
+function dsfGetGoogleAutocomplete(phrase, marketplace) {
   if (!phrase) return [];
-
   try {
-    var url = 'https://suggestqueries.google.com/complete/search' +
-      '?output=toolbar' +
-      '&q=' + encodeURIComponent(phrase + ' kaufen') +
-      '&hl=de&gl=de';
+    var url = 'https://suggestqueries.google.com/complete/search'
+      + '?output=toolbar'
+      + '&q=' + encodeURIComponent(phrase + ' kaufen')
+      + '&hl=' + marketplace.hlParam + '&gl=' + marketplace.glParam;
 
-    var response = UrlFetchApp.fetch(url, {
-      method: 'get',
-      muteHttpExceptions: true
-    });
+    var response = UrlFetchApp.fetch(url, { method: 'get', muteHttpExceptions: true });
+    if (response.getResponseCode() !== 200) return [];
 
-    var code = response.getResponseCode();
-    if (code !== 200) {
-      Logger.log('[DSF] Google autocomplete failed: HTTP ' + code);
-      return [];
-    }
-
-    var xmlText = response.getContentText();
-    var doc = XmlService.parse(xmlText);
+    var doc = XmlService.parse(response.getContentText());
     var root = doc.getRootElement();
     var completions = root.getChildren('CompleteSuggestion');
     var results = [];
-
     for (var i = 0; i < completions.length; i++) {
       var suggestion = completions[i].getChild('suggestion');
       if (suggestion) {
-        var data = suggestion.getAttribute('data');
-        if (data) results.push(data.getValue());
+        var attr = suggestion.getAttribute('data');
+        if (attr) results.push(attr.getValue());
       }
     }
-
     return results;
-
   } catch (e) {
-    Logger.log('[DSF] Google autocomplete error: ' + e.message);
+    dsfLog('WARNING', 'Google autocomplete error: ' + e.message);
     return [];
   }
 }
 
 // ==================== CLAUDE API ====================
 
-/**
- * Claude Call 1: Niche Analysis
- */
-function dsfCallClaudeAnalysis(spData, amazonSugg, googleSugg) {
+function dsfCallClaudeAnalysis(spData, amazonSugg, googleSugg, marketplace) {
   var props = PropertiesService.getScriptProperties();
   var apiKey = props.getProperty('CLAUDE_API_KEY');
-  if (!apiKey) {
-    throw new Error('CLAUDE_API_KEY not configured. Run: Domain Finder > Konfiguruj API Keys');
-  }
+  if (!apiKey) throw new Error('CLAUDE_API_KEY not configured');
 
-  // Build user prompt
+  var systemPrompt = DSF_SYSTEM_PROMPT_ANALYSIS
+    .replace(/\{MARKET_DOMAIN\}/g, marketplace.domain)
+    .replace(/\{LANG_NAME\}/g, marketplace.langName);
+
   var userPrompt = DSF_USER_PROMPT_ANALYSIS
+    .replace(/\{MARKET_DOMAIN\}/g, marketplace.domain)
+    .replace(/\{LANG_NAME\}/g, marketplace.langName)
+    .replace(/\{LANG_CODE\}/g, marketplace.lang)
     .replace('{SP_DATA}', JSON.stringify(spData, null, 2))
     .replace('{AMAZON_SUGGESTIONS}', JSON.stringify(amazonSugg))
     .replace('{GOOGLE_SUGGESTIONS}', JSON.stringify(googleSugg));
@@ -856,21 +902,20 @@ function dsfCallClaudeAnalysis(spData, amazonSugg, googleSugg) {
   var payload = {
     model: DSF_CLAUDE_MODEL,
     max_tokens: 4000,
-    system: DSF_SYSTEM_PROMPT_ANALYSIS,
+    system: systemPrompt,
     messages: [{ role: 'user', content: userPrompt }]
   };
 
   var result = dsfCallClaudeApi_(apiKey, payload);
-
-  // Parse JSON response
   var parsed = dsfParseClaudeJson_(result);
+
   if (!parsed) {
-    // Retry once
-    Logger.log('[DSF] Claude analysis JSON parse failed, retrying...');
+    dsfLog('WARNING', 'Claude analysis JSON parse failed, retrying...');
     Utilities.sleep(1000);
     result = dsfCallClaudeApi_(apiKey, payload);
     parsed = dsfParseClaudeJson_(result);
     if (!parsed) {
+      dsfLog('ERROR', 'Claude analysis: invalid JSON after retry');
       throw new Error('Claude analysis returned invalid JSON after retry');
     }
   }
@@ -878,22 +923,25 @@ function dsfCallClaudeAnalysis(spData, amazonSugg, googleSugg) {
   return parsed;
 }
 
-/**
- * Claude Call 2: Slug Generation
- */
-function dsfCallClaudeSlugs(analysisData) {
+function dsfCallClaudeSlugs(analysisData, marketplace, rootDomain) {
   var props = PropertiesService.getScriptProperties();
   var apiKey = props.getProperty('CLAUDE_API_KEY');
-  if (!apiKey) {
-    throw new Error('CLAUDE_API_KEY not configured');
-  }
+  if (!apiKey) throw new Error('CLAUDE_API_KEY not configured');
+
+  var systemPrompt = DSF_SYSTEM_PROMPT_SLUGS
+    .replace(/\{MARKET_DOMAIN\}/g, marketplace.domain)
+    .replace(/\{LANG_NAME\}/g, marketplace.langName);
 
   var userPrompt = DSF_USER_PROMPT_SLUGS
+    .replace(/\{MARKET_DOMAIN\}/g, marketplace.domain)
+    .replace(/\{LANG_NAME\}/g, marketplace.langName)
+    .replace('{ROOT_DOMAIN}', rootDomain)
     .replace('{ANALYSIS_DATA}', JSON.stringify(analysisData, null, 2));
 
   var payload = {
     model: DSF_CLAUDE_MODEL,
     max_tokens: 3000,
+    system: systemPrompt,
     messages: [{ role: 'user', content: userPrompt }]
   };
 
@@ -901,25 +949,23 @@ function dsfCallClaudeSlugs(analysisData) {
   var parsed = dsfParseClaudeJson_(result);
 
   if (!parsed) {
-    Logger.log('[DSF] Claude slugs JSON parse failed, retrying...');
+    dsfLog('WARNING', 'Claude slugs JSON parse failed, retrying...');
     Utilities.sleep(1000);
     result = dsfCallClaudeApi_(apiKey, payload);
     parsed = dsfParseClaudeJson_(result);
     if (!parsed) {
+      dsfLog('ERROR', 'Claude slugs: invalid JSON after retry');
       throw new Error('Claude slugs returned invalid JSON after retry');
     }
   }
 
-  // Ensure it's an array
   var slugsArray = Array.isArray(parsed) ? parsed : [parsed];
 
-  // Normalize slugs and sort
   for (var i = 0; i < slugsArray.length; i++) {
     if (slugsArray[i].slug) {
       slugsArray[i].slug = dsfNormalizeSlug(slugsArray[i].slug);
     }
     if (typeof slugsArray[i].score_total !== 'number') {
-      // Count true values in score_criteria
       var criteria = slugsArray[i].score_criteria || [];
       var total = 0;
       for (var c = 0; c < criteria.length; c++) {
@@ -929,15 +975,10 @@ function dsfCallClaudeSlugs(analysisData) {
     }
   }
 
-  // Sort by score_total descending
   slugsArray.sort(function(a, b) { return (b.score_total || 0) - (a.score_total || 0); });
-
   return slugsArray;
 }
 
-/**
- * Internal: Call Claude API
- */
 function dsfCallClaudeApi_(apiKey, payload) {
   var response = UrlFetchApp.fetch(DSF_CLAUDE_API_URL, {
     method: 'post',
@@ -957,10 +998,21 @@ function dsfCallClaudeApi_(apiKey, payload) {
     var errMsg = 'Claude API Error ' + code;
     try {
       var err = JSON.parse(body);
-      errMsg = err.error?.message || err.message || errMsg;
+      errMsg = err.error && err.error.message ? err.error.message : (err.message || errMsg);
     } catch (e) {
       errMsg = body.substring(0, 300);
     }
+
+    // Detect billing/credit errors
+    var lower = errMsg.toLowerCase();
+    if (lower.indexOf('credit') >= 0 || lower.indexOf('balance') >= 0 ||
+        lower.indexOf('billing') >= 0 || lower.indexOf('quota') >= 0) {
+      var billingMsg = 'BRAK SRODKOW W API CLAUDE — doladuj konto na console.anthropic.com';
+      dsfLog('ERROR', billingMsg);
+      throw new Error(billingMsg);
+    }
+
+    dsfLog('ERROR', 'Claude API HTTP ' + code + ': ' + errMsg);
     throw new Error(errMsg);
   }
 
@@ -972,105 +1024,113 @@ function dsfCallClaudeApi_(apiKey, payload) {
   return data.content[0].text;
 }
 
-/**
- * Internal: Parse JSON from Claude response (handles markdown code blocks)
- */
 function dsfParseClaudeJson_(text) {
   if (!text) return null;
-
-  // Strip markdown code blocks if present
   var cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-
   try {
     return JSON.parse(cleaned);
   } catch (e) {
-    Logger.log('[DSF] JSON parse error: ' + e.message + '\nText: ' + cleaned.substring(0, 200));
+    dsfLog('ERROR', 'JSON parse error: ' + e.message + ' | Text: ' + cleaned.substring(0, 150));
     return null;
   }
 }
 
 // ==================== SLUG NORMALIZATION ====================
 
-/**
- * Normalize slug: ä→ae, ö→oe, ü→ue, ß→ss, lowercase, only a-z0-9-, max 40 chars
- */
 function dsfNormalizeSlug(text) {
   if (!text) return '';
-
-  var slug = text.toLowerCase();
-
-  // German umlaut conversions
-  slug = slug.replace(/ä/g, 'ae');
-  slug = slug.replace(/ö/g, 'oe');
-  slug = slug.replace(/ü/g, 'ue');
-  slug = slug.replace(/ß/g, 'ss');
-
-  // Replace spaces and underscores with hyphens
-  slug = slug.replace(/[\s_]+/g, '-');
-
-  // Remove anything that's not a-z, 0-9, or hyphen
-  slug = slug.replace(/[^a-z0-9-]/g, '');
-
-  // Collapse multiple hyphens
-  slug = slug.replace(/-+/g, '-');
-
-  // Trim hyphens from start/end
-  slug = slug.replace(/^-+|-+$/g, '');
-
-  // Max 40 chars
-  if (slug.length > 40) {
-    slug = slug.substring(0, 40).replace(/-+$/, '');
-  }
-
-  return slug;
+  return text.toLowerCase()
+    // Niemiecki
+    .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+    // Francuski
+    .replace(/[éèêë]/g, 'e').replace(/[àâ]/g, 'a').replace(/[ùû]/g, 'u')
+    .replace(/[îï]/g, 'i').replace(/[ôö]/g, 'o').replace(/ç/g, 'c').replace(/œ/g, 'oe').replace(/æ/g, 'ae')
+    // Wloski / Hiszpanski
+    .replace(/[áà]/g, 'a').replace(/[íì]/g, 'i').replace(/[óò]/g, 'o').replace(/ú/g, 'u').replace(/ñ/g, 'n')
+    // Skandynawski (SE)
+    .replace(/ø/g, 'o').replace(/å/g, 'a')
+    // Polski
+    .replace(/ą/g, 'a').replace(/ę/g, 'e').replace(/ś/g, 's').replace(/ć/g, 'c')
+    .replace(/ź/g, 'z').replace(/ż/g, 'z').replace(/ń/g, 'n').replace(/ł/g, 'l')
+    // Ogolne
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/[\s_]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .substring(0, 40);
 }
 
 // ==================== DENIC CHECK ====================
 
-/**
- * Check DENIC RDAP for domain availability (informational only)
- */
 function dsfCheckDenicForTopSlugs(slugs) {
   var results = {};
-
   for (var i = 0; i < slugs.length; i++) {
     var slug = slugs[i];
     try {
-      var url = 'https://rdap.denic.de/domain/' + slug + '.de';
-      var response = UrlFetchApp.fetch(url, {
+      var response = UrlFetchApp.fetch('https://rdap.denic.de/domain/' + slug + '.de', {
         method: 'head',
         muteHttpExceptions: true,
         followRedirects: true
       });
-
       var code = response.getResponseCode();
-      if (code === 404) {
-        results[slug] = 'FREE';
-      } else if (code === 200) {
-        results[slug] = 'TAKEN';
-      } else {
-        results[slug] = 'UNKNOWN';
-      }
-
+      results[slug] = code === 404 ? 'FREE' : (code === 200 ? 'TAKEN' : 'UNKNOWN');
       Utilities.sleep(300);
     } catch (e) {
-      Logger.log('[DSF] DENIC check failed for ' + slug + ': ' + e.message);
       results[slug] = 'UNKNOWN';
     }
   }
-
   return results;
+}
+
+// ==================== LOGGING ====================
+
+/**
+ * Write log entry to LOG sheet (newest on top — insert at row 2)
+ */
+function dsfLog(level, message, rowNum) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var logSheet = ss.getSheetByName('LOG');
+    if (!logSheet) {
+      dsfEnsureSheets_();
+      logSheet = ss.getSheetByName('LOG');
+      if (!logSheet) return;
+    }
+
+    var row = [
+      dsfFormatDateDE(),
+      level || 'INFO',
+      rowNum || '-',
+      message || ''
+    ];
+
+    // Insert at row 2 (below header) — newest on top
+    logSheet.insertRowBefore(2);
+    logSheet.getRange(2, 1, 1, 4).setValues([row]);
+
+    // Color formatting
+    var rowRange = logSheet.getRange(2, 1, 1, 4);
+    if (level === 'ERROR') {
+      rowRange.setFontColor('#cc0000').setBackground('#fff9c4');
+    } else if (level === 'WARNING') {
+      rowRange.setFontColor('#e65100').setBackground('#ffffff');
+    } else {
+      rowRange.setFontColor('#2e7d32').setBackground('#ffffff');
+    }
+
+    Logger.log('[DSF/' + level + '] ' + (rowNum ? 'Row ' + rowNum + ': ' : '') + message);
+  } catch (e) {
+    Logger.log('[DSF/LOG_ERROR] ' + e.message + ' | Original: [' + level + '] ' + message);
+  }
 }
 
 // ==================== SHEETS MANAGEMENT ====================
 
-/**
- * Ensure all required sheets exist with proper headers
- */
 function dsfEnsureSheets_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  // INPUT sheet
+  // --- INPUT ---
   var inputSheet = ss.getSheetByName('INPUT');
   if (!inputSheet) {
     inputSheet = ss.insertSheet('INPUT');
@@ -1079,12 +1139,9 @@ function dsfEnsureSheets_() {
       'Trigger', 'Timestamp zlecenia', 'Timestamp ukonczenia',
       'Top Slug', 'Score', 'Error'
     ]]);
-    // Set column F as checkboxes for data rows
     inputSheet.getRange('F2:F100').insertCheckboxes();
-    // Set defaults
     inputSheet.getRange('C2:C100').setValue('DE');
     inputSheet.getRange('D2:D100').setValue('lk24.shop');
-    // Format header
     inputSheet.getRange(1, 1, 1, 11).setFontWeight('bold').setBackground('#4285f4').setFontColor('#ffffff');
     inputSheet.setFrozenRows(1);
     inputSheet.setColumnWidth(1, 80);
@@ -1093,41 +1150,83 @@ function dsfEnsureSheets_() {
     inputSheet.setColumnWidth(9, 200);
   }
 
-  // ANALYSIS sheet
+  // Data validation for Rynek column (C)
+  var rynekRange = inputSheet.getRange('C2:C1000');
+  var rule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['DE','FR','IT','ES','UK','NL','BE','PL','SE','IE'], true)
+    .setAllowInvalid(false)
+    .build();
+  rynekRange.setDataValidation(rule);
+
+  // --- ANALYSIS (13 fields x2 = 26 data columns + Row + Keyword + Market + Timestamp = 30) ---
   var analysisSheet = ss.getSheetByName('ANALYSIS');
   if (!analysisSheet) {
     analysisSheet = ss.insertSheet('ANALYSIS');
-    analysisSheet.getRange(1, 1, 1, 16).setValues([[
-      'INPUT_Row', 'ASIN/Keyword', 'needs_and_problems', 'buyer_personas',
-      'frequent_words', 'keyword_candidates', 'usage_situations',
-      'search_triggers', 'search_questions', 'tips_topics', 'dont_do_topics',
-      'influencers_de', 'blogs_articles_de', 'top_shops_de', 'cultural_context',
+    var aHeaders = [
+      'INPUT_Row', 'ASIN/Keyword', 'Rynek',
+      'Potrzeby & Problemy', 'Potrzeby & Problemy (PL)',
+      'Buyer Personas', 'Buyer Personas (PL)',
+      'Czeste Slowa', 'Czeste Slowa (PL)',
+      'Keyword Kandydaci', 'Keyword Kandydaci (PL)',
+      'Sytuacje Uzycia', 'Sytuacje Uzycia (PL)',
+      'Triggery Szukania', 'Triggery Szukania (PL)',
+      'Pytania', 'Pytania (PL)',
+      'Tematy Poradnikowe', 'Tematy Poradnikowe (PL)',
+      'Czego Nie Robic', 'Czego Nie Robic (PL)',
+      'Influencerzy', 'Influencerzy (PL)',
+      'Blogi', 'Blogi (PL)',
+      'Top Sklepy', 'Top Sklepy (PL)',
+      'Kontekst Kulturowy', 'Kontekst Kulturowy (PL)',
       'Timestamp'
-    ]]);
-    analysisSheet.getRange(1, 1, 1, 16).setFontWeight('bold').setBackground('#34a853').setFontColor('#ffffff');
+    ];
+    analysisSheet.getRange(1, 1, 1, aHeaders.length).setValues([aHeaders]);
+    analysisSheet.getRange(1, 1, 1, aHeaders.length).setFontWeight('bold').setFontColor('#ffffff');
     analysisSheet.setFrozenRows(1);
+
+    // Color headers: original fields purple, PL fields light yellow
+    for (var h = 0; h < aHeaders.length; h++) {
+      var cell = analysisSheet.getRange(1, h + 1);
+      if (aHeaders[h].indexOf('(PL)') >= 0) {
+        cell.setBackground('#fffde7').setFontColor('#1a237e');
+      } else {
+        cell.setBackground('#7b1fa2');
+      }
+    }
   }
 
-  // SLUGS sheet
+  // --- SLUGS ---
   var slugsSheet = ss.getSheetByName('SLUGS');
   if (!slugsSheet) {
     slugsSheet = ss.insertSheet('SLUGS');
-    slugsSheet.getRange(1, 1, 1, 21).setValues([[
+    var sHeaders = [
       'INPUT_Row', 'full_subdomain', 'slug', 'root_domain', 'type',
-      'rationale_de', 'rationale_pl', 'amazon_test_phrase', 'score_total',
+      'Uzasadnienie', 'Uzasadnienie (PL)',
+      'Amazon Test Phrase', 'Amazon Test Phrase (PL)',
+      'score_total',
       'criteria_1', 'criteria_2', 'criteria_3', 'criteria_4',
       'criteria_5', 'criteria_6', 'criteria_7',
-      'content_topics', 'suggested_url_slugs', 'de_domain_status',
-      'status', 'Timestamp'
-    ]]);
-    slugsSheet.getRange(1, 1, 1, 21).setFontWeight('bold').setBackground('#fbbc04').setFontColor('#000000');
+      'Content Topics', 'Content Topics (PL)',
+      'URL Slugs',
+      'de_domain_status', 'status', 'Timestamp'
+    ];
+    slugsSheet.getRange(1, 1, 1, sHeaders.length).setValues([sHeaders]);
+    slugsSheet.getRange(1, 1, 1, sHeaders.length).setFontWeight('bold').setFontColor('#000000');
     slugsSheet.setFrozenRows(1);
+
+    for (var s = 0; s < sHeaders.length; s++) {
+      var sCell = slugsSheet.getRange(1, s + 1);
+      if (sHeaders[s].indexOf('(PL)') >= 0) {
+        sCell.setBackground('#fffde7').setFontColor('#1a237e');
+      } else {
+        sCell.setBackground('#fbbc04');
+      }
+    }
     slugsSheet.setColumnWidth(2, 250);
     slugsSheet.setColumnWidth(6, 300);
     slugsSheet.setColumnWidth(7, 300);
   }
 
-  // ASINS sheet
+  // --- ASINS ---
   var asinsSheet = ss.getSheetByName('ASINS');
   if (!asinsSheet) {
     asinsSheet = ss.insertSheet('ASINS');
@@ -1140,40 +1239,63 @@ function dsfEnsureSheets_() {
     asinsSheet.setFrozenRows(1);
     asinsSheet.setColumnWidth(4, 300);
   }
+
+  // --- LOG ---
+  var logSheet = ss.getSheetByName('LOG');
+  if (!logSheet) {
+    logSheet = ss.insertSheet('LOG');
+    logSheet.getRange(1, 1, 1, 4).setValues([['Timestamp', 'Poziom', 'Wiersz INPUT', 'Wiadomosc']]);
+    logSheet.getRange(1, 1, 1, 4).setFontWeight('bold').setBackground('#424242').setFontColor('#ffffff');
+    logSheet.setFrozenRows(1);
+    logSheet.setColumnWidth(1, 160);
+    logSheet.setColumnWidth(2, 80);
+    logSheet.setColumnWidth(3, 100);
+    logSheet.setColumnWidth(4, 600);
+  }
 }
 
-/**
- * Save all results to respective sheets
- */
-function dsfSaveResultsToSheets(inputRow, inputValue, analysis, slugs, denicResults, asins, rootDomain) {
+function dsfSaveResultsToSheets(inputRow, inputValue, market, analysis, slugs, denicResults, asins, rootDomain) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var now = new Date();
+  var now = dsfFormatDateDE();
 
-  // Ensure sheets exist
   dsfEnsureSheets_();
 
-  // --- ANALYSIS sheet ---
+  // --- ANALYSIS ---
   var analysisSheet = ss.getSheetByName('ANALYSIS');
   analysisSheet.appendRow([
     inputRow,
     inputValue,
+    market,
     JSON.stringify(analysis.needs_and_problems || []),
+    JSON.stringify(analysis.needs_and_problems_pl || []),
     JSON.stringify(analysis.buyer_personas || []),
+    JSON.stringify(analysis.buyer_personas_pl || []),
     JSON.stringify(analysis.frequent_words || []),
+    JSON.stringify(analysis.frequent_words_pl || []),
     JSON.stringify(analysis.keyword_candidates || []),
+    JSON.stringify(analysis.keyword_candidates_pl || []),
     JSON.stringify(analysis.usage_situations || []),
+    JSON.stringify(analysis.usage_situations_pl || []),
     JSON.stringify(analysis.search_triggers || []),
+    JSON.stringify(analysis.search_triggers_pl || []),
     JSON.stringify(analysis.search_questions || []),
+    JSON.stringify(analysis.search_questions_pl || []),
     JSON.stringify(analysis.tips_topics || []),
+    JSON.stringify(analysis.tips_topics_pl || []),
     JSON.stringify(analysis.dont_do_topics || []),
-    JSON.stringify(analysis.influencers_de || []),
-    JSON.stringify(analysis.blogs_articles_de || []),
-    JSON.stringify(analysis.top_shops_de || []),
+    JSON.stringify(analysis.dont_do_topics_pl || []),
+    JSON.stringify(analysis.influencers || []),
+    JSON.stringify(analysis.influencers_pl || []),
+    JSON.stringify(analysis.blogs_articles || []),
+    JSON.stringify(analysis.blogs_articles_pl || []),
+    JSON.stringify(analysis.top_shops || []),
+    JSON.stringify(analysis.top_shops_pl || []),
     JSON.stringify(analysis.cultural_context || []),
+    JSON.stringify(analysis.cultural_context_pl || []),
     now
   ]);
 
-  // --- SLUGS sheet ---
+  // --- SLUGS ---
   var slugsSheet = ss.getSheetByName('SLUGS');
   for (var i = 0; i < slugs.length; i++) {
     var s = slugs[i];
@@ -1187,9 +1309,10 @@ function dsfSaveResultsToSheets(inputRow, inputValue, analysis, slugs, denicResu
       s.slug || '',
       rootDomain,
       s.type || '',
-      s.rationale_de || '',
+      s.rationale || '',
       s.rationale_pl || '',
       s.amazon_test_phrase || '',
+      s.amazon_test_phrase_pl || '',
       s.score_total || 0,
       criteria[0] === true ? 'TRUE' : 'FALSE',
       criteria[1] === true ? 'TRUE' : 'FALSE',
@@ -1199,6 +1322,7 @@ function dsfSaveResultsToSheets(inputRow, inputValue, analysis, slugs, denicResu
       criteria[5] === true ? 'TRUE' : 'FALSE',
       criteria[6] === true ? 'TRUE' : 'FALSE',
       JSON.stringify(s.content_topics || []),
+      JSON.stringify(s.content_topics_pl || []),
       JSON.stringify(s.suggested_url_slugs || []),
       deStatus,
       'IDEA',
@@ -1206,9 +1330,10 @@ function dsfSaveResultsToSheets(inputRow, inputValue, analysis, slugs, denicResu
     ]);
   }
 
-  // --- ASINS sheet ---
+  // --- ASINS ---
   var asinsSheet = ss.getSheetByName('ASINS');
   var targetSlug = slugs.length > 0 ? slugs[0].slug : '';
+  var marketplace = DSF_MARKETPLACES[market] || DSF_MARKETPLACES['DE'];
 
   for (var j = 0; j < asins.length; j++) {
     var a = asins[j];
@@ -1222,7 +1347,7 @@ function dsfSaveResultsToSheets(inputRow, inputValue, analysis, slugs, denicResu
       a.bsrRank || '',
       a.bsrCategory || '',
       a.imageUrl || '',
-      'https://www.amazon.de/dp/' + (a.asin || ''),
+      'https://' + marketplace.domain + '/dp/' + (a.asin || ''),
       now
     ]);
   }
@@ -1230,49 +1355,32 @@ function dsfSaveResultsToSheets(inputRow, inputValue, analysis, slugs, denicResu
   SpreadsheetApp.flush();
 }
 
-/**
- * Update INPUT sheet status for a given row
- */
 function dsfUpdateInputStatus(row, status, topSlug, topScore, errorMsg) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName('INPUT');
   if (!sheet) return;
 
-  // Column E = Status
   sheet.getRange(row, 5).setValue(status);
-  // Column H = Timestamp ukonczenia
-  sheet.getRange(row, 8).setValue(new Date());
+  sheet.getRange(row, 8).setValue(dsfFormatDateDE());
 
-  if (topSlug) {
-    // Column I = Top slug
-    sheet.getRange(row, 9).setValue(topSlug);
-  }
-  if (topScore !== undefined && topScore !== null) {
-    // Column J = Score
-    sheet.getRange(row, 10).setValue(topScore);
-  }
-  if (errorMsg) {
-    // Column K = Error message
-    sheet.getRange(row, 11).setValue(errorMsg);
-  }
+  if (topSlug) sheet.getRange(row, 9).setValue(topSlug);
+  if (topScore !== undefined && topScore !== null) sheet.getRange(row, 10).setValue(topScore);
+  if (errorMsg) sheet.getRange(row, 11).setValue(errorMsg);
 
-  // Uncheck the trigger checkbox (Column F)
+  // Uncheck trigger
   sheet.getRange(row, 6).setValue(false);
 
   SpreadsheetApp.flush();
 }
 
-// ==================== MANUAL & TEST FUNCTIONS ====================
+// ==================== TEST & MANUAL ====================
 
-/**
- * Run pipeline manually for the active row in INPUT sheet
- */
 function dsfRunManual() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getActiveSheet();
 
   if (sheet.getName() !== 'INPUT') {
-    SpreadsheetApp.getUi().alert('Przejdz do zakladki INPUT i wybierz wiersz do przetworzenia.');
+    SpreadsheetApp.getUi().alert('Przejdz do zakladki INPUT i wybierz wiersz.');
     return;
   }
 
@@ -1282,89 +1390,46 @@ function dsfRunManual() {
     return;
   }
 
-  var rowData = sheet.getRange(row, 1, 1, 4).getValues()[0];
-  var type = (rowData[0] || '').toString().trim().toUpperCase();
-  var value = (rowData[1] || '').toString().trim();
-  var market = (rowData[2] || 'DE').toString().trim().toUpperCase();
-  var rootDomain = (rowData[3] || 'lk24.shop').toString().trim();
+  dsfLog('INFO', 'Reczne uruchomienie dla wiersza ' + row, row);
+  ss.toast('Przetwarzam wiersz ' + row + '...', 'Domain Finder', 60);
 
-  if (!type || !value) {
-    SpreadsheetApp.getUi().alert('Wiersz ' + row + ' nie ma wypelnionych kolumn Typ i Wartosc.');
-    return;
+  try {
+    dsfRunJobForRow(row);
+    ss.toast('Wiersz ' + row + ' zakonczony!', 'Domain Finder', 10);
+  } catch (e) {
+    ss.toast('Blad: ' + e.message, 'Domain Finder - ERROR', 15);
   }
-
-  // Set up job and run directly
-  var props = PropertiesService.getScriptProperties();
-  var job = {
-    row: row,
-    type: type,
-    value: value,
-    market: market,
-    rootDomain: rootDomain
-  };
-
-  props.setProperty('DSF_PENDING_JOB', JSON.stringify(job));
-  sheet.getRange(row, 5).setValue('PROCESSING');
-  sheet.getRange(row, 7).setValue(new Date());
-  SpreadsheetApp.flush();
-
-  ss.toast('Pipeline uruchomiony dla wiersza ' + row + '...', 'Domain Finder', 30);
-
-  // Run directly (not via trigger, since it's manual)
-  dsfRunJob();
 }
 
-/**
- * Quick test with ASIN B0FRG79LF9 (WERHE Stichsaegeblaetter)
- */
 function dsfRunTest() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-
-  // Ensure sheets exist
   dsfEnsureSheets_();
 
   var inputSheet = ss.getSheetByName('INPUT');
   var lastRow = inputSheet.getLastRow();
   var testRow = lastRow + 1;
 
-  // Insert test row
   inputSheet.getRange(testRow, 1, 1, 4).setValues([['ASIN', 'B0FRG79LF9', 'DE', 'lk24.shop']]);
   inputSheet.getRange(testRow, 6).insertCheckboxes();
   inputSheet.getRange(testRow, 6).setValue(false);
 
-  // Set up job and run
-  var props = PropertiesService.getScriptProperties();
-  var job = {
-    row: testRow,
-    type: 'ASIN',
-    value: 'B0FRG79LF9',
-    market: 'DE',
-    rootDomain: 'lk24.shop'
-  };
-
-  props.setProperty('DSF_PENDING_JOB', JSON.stringify(job));
-  inputSheet.getRange(testRow, 5).setValue('PROCESSING');
-  inputSheet.getRange(testRow, 7).setValue(new Date());
-  SpreadsheetApp.flush();
-
-  ss.toast('Test uruchomiony z ASIN B0FRG79LF9...', 'Domain Finder', 60);
-
-  dsfRunJob();
-}
-
-// ==================== TEST CONNECTION FUNCTIONS ====================
-
-/**
- * Test SP-API connection
- */
-function dsfTestSpApi() {
-  var ui = SpreadsheetApp.getUi();
+  dsfLog('INFO', 'Test uruchomiony: ASIN B0FRG79LF9, rynek DE', testRow);
+  ss.toast('Test: ASIN B0FRG79LF9 (wiersz ' + testRow + ')...', 'Domain Finder', 60);
 
   try {
-    var token = dsfGetSpApiToken();
+    dsfRunJobForRow(testRow);
+    ss.toast('Test zakonczony!', 'Domain Finder', 10);
+  } catch (e) {
+    ss.toast('Blad: ' + e.message, 'Domain Finder - ERROR', 15);
+  }
+}
 
-    var url = DSF_SP_ENDPOINT + '/catalog/2022-04-01/items' +
-      '?keywords=test&marketplaceIds=' + DSF_MARKETPLACE_ID + '&pageSize=1&includedData=summaries';
+function dsfTestSpApi() {
+  var ui = SpreadsheetApp.getUi();
+  try {
+    var token = dsfGetSpApiToken();
+    var url = DSF_SP_ENDPOINT + '/catalog/2022-04-01/items'
+      + '?keywords=test&marketplaceIds=' + DSF_MARKETPLACES['DE'].id + '&pageSize=1&includedData=summaries';
 
     var response = UrlFetchApp.fetch(url, {
       method: 'get',
@@ -1372,57 +1437,41 @@ function dsfTestSpApi() {
       muteHttpExceptions: true
     });
 
-    var code = response.getResponseCode();
-
-    if (code === 200) {
-      ui.alert('SP-API Test', 'Polaczenie dziala!\n\nHTTP 200 OK\nMarketplace: DE (' + DSF_MARKETPLACE_ID + ')', ui.ButtonSet.OK);
+    if (response.getResponseCode() === 200) {
+      ui.alert('SP-API Test', 'Polaczenie dziala!\nHTTP 200 OK', ui.ButtonSet.OK);
     } else {
-      ui.alert('SP-API Test', 'Blad: HTTP ' + code + '\n\n' + response.getContentText().substring(0, 300), ui.ButtonSet.OK);
+      ui.alert('SP-API Test', 'Blad: HTTP ' + response.getResponseCode(), ui.ButtonSet.OK);
     }
   } catch (e) {
     ui.alert('SP-API Test', 'Blad: ' + e.message, ui.ButtonSet.OK);
   }
 }
 
-/**
- * Test Claude API connection
- */
 function dsfTestClaude() {
   var ui = SpreadsheetApp.getUi();
-
   try {
-    var props = PropertiesService.getScriptProperties();
-    var apiKey = props.getProperty('CLAUDE_API_KEY');
-
+    var apiKey = PropertiesService.getScriptProperties().getProperty('CLAUDE_API_KEY');
     if (!apiKey) {
-      ui.alert('Claude Test', 'CLAUDE_API_KEY nie jest skonfigurowany.\nUruchom: Domain Finder > Konfiguruj API Keys', ui.ButtonSet.OK);
+      ui.alert('Claude Test', 'CLAUDE_API_KEY nie jest skonfigurowany.', ui.ButtonSet.OK);
       return;
     }
-
-    var payload = {
+    var result = dsfCallClaudeApi_(apiKey, {
       model: DSF_CLAUDE_MODEL,
       max_tokens: 50,
-      messages: [{ role: 'user', content: 'Antworte mit: "OK"' }]
-    };
-
-    var result = dsfCallClaudeApi_(apiKey, payload);
-
-    ui.alert('Claude Test', 'Polaczenie dziala!\n\nModel: ' + DSF_CLAUDE_MODEL + '\nOdpowiedz: ' + result.substring(0, 100), ui.ButtonSet.OK);
+      messages: [{ role: 'user', content: 'Reply with: OK' }]
+    });
+    ui.alert('Claude Test', 'Polaczenie dziala!\nModel: ' + DSF_CLAUDE_MODEL + '\nOdpowiedz: ' + result.substring(0, 100), ui.ButtonSet.OK);
   } catch (e) {
     ui.alert('Claude Test', 'Blad: ' + e.message, ui.ButtonSet.OK);
   }
 }
 
-// ==================== HELPER FUNCTIONS ====================
+// ==================== HELPERS ====================
 
-/**
- * Clean up one-time triggers by handler function name
- */
-function dsfCleanupTrigger_(handlerName) {
+function dsfCleanupProcessQueueTriggers_() {
   var triggers = ScriptApp.getProjectTriggers();
   for (var i = 0; i < triggers.length; i++) {
-    if (triggers[i].getHandlerFunction() === handlerName &&
-        triggers[i].getTriggerSource() === ScriptApp.TriggerSource.CLOCK) {
+    if (triggers[i].getHandlerFunction() === 'dsfProcessQueue') {
       ScriptApp.deleteTrigger(triggers[i]);
     }
   }
