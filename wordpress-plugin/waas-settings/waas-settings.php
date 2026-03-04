@@ -422,6 +422,15 @@ class WAAS_Settings_API {
             'callback' => array($this, 'auth_test'),
             'permission_callback' => array($this, 'check_admin_permission'),
         ));
+
+        // GET /header-debug — PUBLIC diagnostic endpoint (no auth required)
+        // Shows what headers WordPress REST API receives from the client
+        // DELETE THIS ENDPOINT after debugging is complete!
+        register_rest_route($ns, '/header-debug', array(
+            'methods' => array('GET', 'POST', 'PUT'),
+            'callback' => array($this, 'header_debug'),
+            'permission_callback' => '__return_true',
+        ));
     }
 
     // =========================================================================
@@ -1030,6 +1039,48 @@ class WAAS_Settings_API {
             'htaccess_fixed' => file_exists(ABSPATH . '.htaccess') && 
                 strpos(file_get_contents(ABSPATH . '.htaccess'), 'WAAS Auth Fix') !== false,
             'app_passwords_enabled' => class_exists('WP_Application_Passwords'),
+        ), 200);
+    }
+
+    /**
+     * GET /header-debug — PUBLIC diagnostic (no auth needed)
+     * Shows exactly what headers reach WordPress REST API
+     */
+    public function header_debug($request) {
+        $auth_headers = array();
+        $all_http = array();
+        
+        foreach ($_SERVER as $key => $value) {
+            if (strpos($key, 'HTTP_') === 0) {
+                $all_http[$key] = substr($value, 0, 80);
+            }
+            if (stripos($key, 'AUTH') !== false || stripos($key, 'WAAS') !== false || stripos($key, 'REDIRECT') !== false) {
+                $auth_headers[$key] = substr($value, 0, 80);
+            }
+        }
+        
+        // Check if WP recognized a user from the headers
+        $current_user_id = get_current_user_id();
+        
+        // Check .htaccess
+        $htaccess_file = ABSPATH . '.htaccess';
+        $htaccess_has_fix = false;
+        if (file_exists($htaccess_file)) {
+            $htaccess_has_fix = strpos(file_get_contents($htaccess_file), 'WAAS Auth Fix') !== false;
+        }
+        
+        return new WP_REST_Response(array(
+            'auth_headers' => $auth_headers,
+            'all_http_headers' => $all_http,
+            'php_auth_user' => isset($_SERVER['PHP_AUTH_USER']) ? $_SERVER['PHP_AUTH_USER'] : 'NOT SET',
+            'php_auth_pw_length' => isset($_SERVER['PHP_AUTH_PW']) ? strlen($_SERVER['PHP_AUTH_PW']) : 0,
+            'current_user_id' => $current_user_id,
+            'current_user_login' => $current_user_id ? get_userdata($current_user_id)->user_login : 'none',
+            'htaccess_has_waas_fix' => $htaccess_has_fix,
+            'app_passwords_available' => class_exists('WP_Application_Passwords'),
+            'wp_version' => get_bloginfo('version'),
+            'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown',
+            'plugin_version' => WAAS_SETTINGS_VERSION,
         ), 200);
     }
 

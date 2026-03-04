@@ -1468,55 +1468,37 @@ function testAuthForSite() {
   var baseUrl = site.wpUrl.replace(/\/+$/, '');
   var authHeader = getAuthHeader(site);
   
-  Logger.log('=== AUTH DIAGNOSTIC ===');
+  Logger.log('=== AUTH DIAGNOSTIC v2 ===');
   Logger.log('Site: ' + site.domain);
   Logger.log('Auth header present: ' + (authHeader ? 'YES' : 'NO'));
-  Logger.log('Auth header starts with: ' + (authHeader ? authHeader.substring(0, 20) + '...' : 'N/A'));
-  Logger.log('App Password in sheet: ' + (site.appPassword ? 'YES (' + site.appPassword.length + ' chars)' : 'NO'));
+  Logger.log('Auth header length: ' + (authHeader ? authHeader.length : 0));
+  Logger.log('App Password in sheet: ' + (site.appPassword ? 'YES (' + site.appPassword.length + ' chars): ' + site.appPassword.substring(0, 4) + '...' : 'NO'));
   Logger.log('Auth Type: ' + (site.authType || 'not set'));
   
-  // Test 1: Standard makeHttpRequest (should add X-WAAS-Auth automatically)
-  Logger.log('\n--- Test 1: makeHttpRequest with auth ---');
-  var result1 = makeHttpRequest(baseUrl + '/wp-json/waas-settings/v1/auth-test', {
-    method: 'GET',
-    headers: { 'Authorization': authHeader }
-  });
-  Logger.log('Result: ' + JSON.stringify(result1).substring(0, 300));
-  
-  // Test 2: Direct UrlFetchApp with X-WAAS-Auth only (bypass Authorization)
-  Logger.log('\n--- Test 2: Direct with X-WAAS-Auth only ---');
+  // Test 1: PUBLIC header-debug endpoint (no auth needed) — shows what WP REST API sees
+  Logger.log('\n--- Test 1: Header debug (PUBLIC, no auth needed) ---');
   try {
-    var resp2 = UrlFetchApp.fetch(baseUrl + '/wp-json/waas-settings/v1/auth-test', {
-      method: 'get',
-      headers: {
-        'X-WAAS-Auth': authHeader,
-        'Content-Type': 'application/json'
-      },
-      muteHttpExceptions: true
-    });
-    Logger.log('Status: ' + resp2.getResponseCode());
-    Logger.log('Body: ' + resp2.getContentText().substring(0, 300));
-  } catch(e) {
-    Logger.log('Error: ' + e.message);
-  }
-  
-  // Test 3: Header diagnostic endpoint (if uploaded)
-  Logger.log('\n--- Test 3: Header diagnostic ---');
-  try {
-    var resp3 = UrlFetchApp.fetch(baseUrl + '/waas-header-test.php', {
+    var resp1 = UrlFetchApp.fetch(baseUrl + '/wp-json/waas-settings/v1/header-debug', {
       method: 'get',
       headers: {
         'Authorization': authHeader,
-        'X-WAAS-Auth': authHeader,
-        'Content-Type': 'application/json'
+        'X-WAAS-Auth': authHeader
       },
       muteHttpExceptions: true
     });
-    Logger.log('Status: ' + resp3.getResponseCode());
-    Logger.log('Body: ' + resp3.getContentText().substring(0, 500));
+    Logger.log('Status: ' + resp1.getResponseCode());
+    Logger.log('Full body: ' + resp1.getContentText());
   } catch(e) {
     Logger.log('Error: ' + e.message);
   }
   
-  Logger.log('\n=== END DIAGNOSTIC ===');
+  // Test 2: auth-test endpoint (needs auth) — verifies WP recognizes user
+  Logger.log('\n--- Test 2: auth-test (requires auth) ---');
+  var result2 = makeHttpRequest(baseUrl + '/wp-json/waas-settings/v1/auth-test', {
+    method: 'GET',
+    headers: { 'Authorization': authHeader }
+  });
+  Logger.log('Result: ' + JSON.stringify(result2).substring(0, 500));
+  
+  Logger.log('\n=== END DIAGNOSTIC v2 ===');
 }
