@@ -12,7 +12,7 @@ function getSiteById(siteId) {
   const data = sheet.getDataRange().getValues();
 
   for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === siteId) {
+    if (String(data[i][0]) === String(siteId)) {
       return {
         id: data[i][0],
         name: data[i][1],
