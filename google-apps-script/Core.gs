@@ -347,6 +347,13 @@ function makeHttpRequest(url, options = {}) {
     headers: { ...defaultOptions.headers, ...(options.headers || {}) }
   };
 
+  // Hostinger/LiteSpeed strips the Authorization header.
+  // Duplicate it as X-WAAS-Auth which passes through untouched.
+  // The WAAS Settings plugin reads X-WAAS-Auth and restores PHP_AUTH_USER/PW.
+  if (finalOptions.headers['Authorization'] && !finalOptions.headers['X-WAAS-Auth']) {
+    finalOptions.headers['X-WAAS-Auth'] = finalOptions.headers['Authorization'];
+  }
+
   try {
     logInfo('HTTP', `Request: ${finalOptions.method} ${url}`);
 

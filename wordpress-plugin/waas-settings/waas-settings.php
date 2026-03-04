@@ -3,7 +3,7 @@
  * Plugin Name: WAAS Settings
  * Plugin URI: https://github.com/LUKOAI/LUKO-WAAS
  * Description: WAAS System Settings REST API — site configuration, cleanup, branding, search engine verification
- * Version: 2.0.0
+ * Version: 2.1.0
  * Author: LUKO AI
  * Author URI: https://github.com/LUKOAI
  * License: GPL v2 or later
@@ -39,9 +39,28 @@ define('WAAS_SETTINGS_VERSION', '2.1.0');
 // =============================================================================
 add_action('plugins_loaded', 'waas_fix_authorization_header', 1);
 function waas_fix_authorization_header() {
-    // Many shared hosts (Hostinger, some Apache/LiteSpeed configs) strip the
-    // Authorization header. .htaccess rules convert it to REDIRECT_HTTP_AUTHORIZATION.
-    // This code restores it so WordPress Application Passwords work.
+    // ==========================================================================
+    // STRATEGY 1: Custom header X-WAAS-Auth (bypasses LiteSpeed/Hostinger stripping)
+    // GAS sends: X-WAAS-Auth: Basic base64(user:pass)
+    // LiteSpeed strips Authorization header but NOT custom X- headers
+    // ==========================================================================
+    if (!isset($_SERVER['PHP_AUTH_USER'])) {
+        $custom_auth = isset($_SERVER['HTTP_X_WAAS_AUTH']) ? $_SERVER['HTTP_X_WAAS_AUTH'] : null;
+        if ($custom_auth && stripos($custom_auth, 'Basic ') === 0) {
+            $decoded = base64_decode(substr($custom_auth, 6));
+            if ($decoded && strpos($decoded, ':') !== false) {
+                list($user, $pass) = explode(':', $decoded, 2);
+                $_SERVER['PHP_AUTH_USER'] = $user;
+                $_SERVER['PHP_AUTH_PW'] = $pass;
+                // Also set HTTP_AUTHORIZATION so WordPress Application Passwords work
+                $_SERVER['HTTP_AUTHORIZATION'] = $custom_auth;
+            }
+        }
+    }
+
+    // ==========================================================================
+    // STRATEGY 2: Restore from REDIRECT_ variables (.htaccess rewrite)
+    // ==========================================================================
     if (!isset($_SERVER['PHP_AUTH_USER']) && !isset($_SERVER['HTTP_AUTHORIZATION'])) {
         if (isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
             $_SERVER['HTTP_AUTHORIZATION'] = $_SERVER['REDIRECT_HTTP_AUTHORIZATION'];
