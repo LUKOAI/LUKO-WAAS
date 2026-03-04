@@ -1,7 +1,13 @@
 {
   "timeZone": "Europe/Warsaw",
   "dependencies": {
-    "enabledAdvancedServices": []
+    "enabledAdvancedServices": [
+      {
+        "userSymbol": "SearchConsole",
+        "version": "v1",
+        "serviceId": "searchconsole"
+      }
+    ]
   },
   "exceptionLogging": "STACKDRIVER",
   "runtimeVersion": "V8",
@@ -14,7 +20,8 @@
     "https://www.googleapis.com/auth/drive.readonly",
     "https://www.googleapis.com/auth/webmasters",
     "https://www.googleapis.com/auth/drive",
-    "https://mail.google.com/"
+    "https://mail.google.com/",
+    "https://www.googleapis.com/auth/script.send_mail"
   ],
   "webapp": {
     "executeAs": "USER_DEPLOYING",

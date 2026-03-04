@@ -194,13 +194,43 @@ function setupBingForSite(site, verificationCode) {
  */
 function registerInAllSearchEngines(site) {
   logInfo('SEARCH_ENGINES', 'Registering in all search engines: ' + site.domain, site.id);
-  var results = {
-    gsc: registerSiteInGSC(site),
-    gscSitemap: submitSitemapToGSC(site),
-    bing: registerSiteInBing(site),
-    bingSitemap: submitSitemapToBing(site)
-  };
-  logSuccess('SEARCH_ENGINES', 'All registrations done: ' + JSON.stringify(results), site.id);
+  var results = {};
+  
+  // GSC — may fail if API not enabled in GCP project
+  try {
+    results.gsc = registerSiteInGSC(site);
+  } catch (e) {
+    logWarning('GSC', 'Registration error (non-fatal): ' + e.message, site.id);
+    results.gsc = { success: false, error: e.message };
+  }
+  
+  try {
+    results.gscSitemap = submitSitemapToGSC(site);
+  } catch (e) {
+    logWarning('GSC', 'Sitemap error (non-fatal): ' + e.message, site.id);
+    results.gscSitemap = { success: false, error: e.message };
+  }
+  
+  // Bing — may fail if no API key configured
+  try {
+    results.bing = registerSiteInBing(site);
+  } catch (e) {
+    logWarning('BING', 'Registration skipped: ' + e.message, site.id);
+    results.bing = { success: false, error: e.message };
+  }
+  
+  try {
+    results.bingSitemap = submitSitemapToBing(site);
+  } catch (e) {
+    logWarning('BING', 'Sitemap skipped: ' + e.message, site.id);
+    results.bingSitemap = { success: false, error: e.message };
+  }
+  
+  // Count successes
+  var total = Object.keys(results).length;
+  var ok = Object.values(results).filter(function(r) { return r && r.success; }).length;
+  logSuccess('SEARCH_ENGINES', ok + '/' + total + ' registrations succeeded', site.id);
+  
   return results;
 }
 
