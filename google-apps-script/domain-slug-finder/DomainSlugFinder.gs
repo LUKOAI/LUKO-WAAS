@@ -1364,6 +1364,13 @@ function dsfEnsureSheets_() {
     inputSheet.setColumnWidth(2, 200);
     inputSheet.setColumnWidth(5, 120);
     inputSheet.setColumnWidth(9, 200);
+  } else {
+    // Update existing INPUT headers to add new columns (SellerNameAmazon, SitePatron)
+    var currentCols = inputSheet.getLastColumn();
+    if (currentCols < DSF_SHEET_INPUT_HEADERS.length) {
+      inputSheet.getRange(1, 1, 1, DSF_SHEET_INPUT_HEADERS.length).setValues([DSF_SHEET_INPUT_HEADERS]);
+      inputSheet.getRange(1, 1, 1, DSF_SHEET_INPUT_HEADERS.length).setFontWeight('bold');
+    }
   }
 
   // Data validation for Typ column (A) — always apply
@@ -1770,10 +1777,13 @@ function dsfSaveResultsToSheets(inputRow, inputValue, market, analysis, slugs, d
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var now = dsfFormatDateDE();
 
-  dsfEnsureSheets_();
+  // NOTE: do NOT call dsfEnsureSheets_() here — it is too heavy for every save
+  // (rebuilds SETUP, recolors headers, inserts checkboxes). Sheets are created
+  // during initial setup via menu or first run.
 
   // --- ANALYSIS ---
   var analysisSheet = ss.getSheetByName('ANALYSIS');
+  if (!analysisSheet) { analysisSheet = ss.insertSheet('ANALYSIS'); analysisSheet.appendRow(DSF_SHEET_ANALYSIS_HEADERS); }
   analysisSheet.appendRow([
     inputRow,
     inputValue,
@@ -1809,9 +1819,12 @@ function dsfSaveResultsToSheets(inputRow, inputValue, market, analysis, slugs, d
     '', // SitePatron
     ''  // Wybrana Domena
   ]);
+  dsfLog('INFO', 'Zapisano ANALYSIS dla wiersza ' + inputRow, inputRow);
+  SpreadsheetApp.flush();
 
   // --- SLUGS ---
   var slugsSheet = ss.getSheetByName('SLUGS');
+  if (!slugsSheet) { slugsSheet = ss.insertSheet('SLUGS'); slugsSheet.appendRow(DSF_SHEET_SLUGS_HEADERS); }
   for (var i = 0; i < slugs.length; i++) {
     var s = slugs[i];
     var criteria = s.score_criteria || [];
@@ -1847,9 +1860,12 @@ function dsfSaveResultsToSheets(inputRow, inputValue, market, analysis, slugs, d
       false  // Wybrana — checkbox
     ]);
   }
+  dsfLog('INFO', 'Zapisano ' + slugs.length + ' slugow w SLUGS dla wiersza ' + inputRow, inputRow);
+  SpreadsheetApp.flush();
 
   // --- ASINS ---
   var asinsSheet = ss.getSheetByName('ASINS');
+  if (!asinsSheet) { asinsSheet = ss.insertSheet('ASINS'); asinsSheet.appendRow(DSF_SHEET_ASINS_HEADERS); }
   var targetSlug = slugs.length > 0 ? slugs[0].slug : '';
   var marketplace = DSF_MARKETPLACES[market] || DSF_MARKETPLACES['DE'];
 
@@ -1888,6 +1904,7 @@ function dsfSaveResultsToSheets(inputRow, inputValue, market, analysis, slugs, d
       ''  // Wybrana Domena
     ]);
   }
+  dsfLog('INFO', 'Zapisano ' + asins.length + ' ASINow w ASINS dla wiersza ' + inputRow, inputRow);
 
   SpreadsheetApp.flush();
 }
