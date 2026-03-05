@@ -1288,7 +1288,7 @@ var DSF_SHEET_INPUT_HEADERS = [
   'Typ', 'Wartosc', 'Rynek', 'Root Domain', 'Status',
   'Trigger', 'Timestamp zlecenia', 'Timestamp ukonczenia',
   'Top Slug', 'Score', 'Error',
-  'SellerNameAmazon', 'SitePatron'
+  'SellerID', 'SellerName', 'SellerNameAmazon', 'SitePatron'
 ];
 
 var DSF_SHEET_ANALYSIS_HEADERS = [
@@ -1307,8 +1307,7 @@ var DSF_SHEET_ANALYSIS_HEADERS = [
   'Top Sklepy', 'Top Sklepy (PL)',
   'Kontekst Kulturowy', 'Kontekst Kulturowy (PL)',
   'Timestamp',
-  'SellerNameAmazon', 'SitePatron',
-  'Wybrana Domena'
+  'SellerID', 'SellerName', 'SellerNameAmazon', 'SitePatron'
 ];
 
 var DSF_SHEET_SLUGS_HEADERS = [
@@ -1321,7 +1320,7 @@ var DSF_SHEET_SLUGS_HEADERS = [
   'Content Topics', 'Content Topics (PL)',
   'URL Slugs',
   'de_domain_status', 'status', 'Timestamp',
-  'SellerNameAmazon', 'SitePatron',
+  'SellerID', 'SellerName', 'SellerNameAmazon', 'SitePatron',
   'Wybrana'
 ];
 
@@ -1333,8 +1332,7 @@ var DSF_SHEET_ASINS_HEADERS = [
   'Manufacturer', 'ParentAsin', 'PriceFormatted', 'browse_node_id',
   'Description', 'Material', 'Marketplace', 'ColorName', 'SizeName',
   'SellerID', 'SellerName', 'SellerStorefrontUrl',
-  'SellerNameAmazon', 'SitePatron',
-  'Wybrana Domena'
+  'SellerNameAmazon', 'SitePatron'
 ];
 
 var DSF_SHEET_LOG_HEADERS = [
@@ -1394,11 +1392,7 @@ function dsfEnsureSheets_() {
     .build();
   rynekRange.setDataValidation(rule);
 
-  // SitePatron checkboxes in INPUT
-  var spColInput = DSF_SHEET_INPUT_HEADERS.indexOf('SitePatron') + 1;
-  if (spColInput > 0) inputSheet.getRange(2, spColInput, 200, 1).insertCheckboxes();
-
-  // Color SellerNameAmazon/SitePatron headers in INPUT
+  // Color seller-related headers in INPUT (no checkboxes — SitePatron holds SellerID text)
   dsfColorSellerHeaders_(inputSheet, DSF_SHEET_INPUT_HEADERS);
 
   // --- ANALYSIS ---
@@ -1448,22 +1442,10 @@ function dsfEnsureSheets_() {
   }
   dsfColorAsinsHeaders_(asinsSheet, DSF_SHEET_ASINS_HEADERS);
 
-  // SitePatron checkboxes in ASINS
+  // SitePatron checkboxes ONLY in ASINS (other sheets get SellerID text value)
   var spColAsins = DSF_SHEET_ASINS_HEADERS.indexOf('SitePatron') + 1;
   if (spColAsins > 0) {
     asinsSheet.getRange(2, spColAsins, Math.max(asinsSheet.getLastRow() - 1, 200), 1).insertCheckboxes();
-  }
-
-  // SitePatron checkboxes in ANALYSIS
-  var spColAnalysis = DSF_SHEET_ANALYSIS_HEADERS.indexOf('SitePatron') + 1;
-  if (spColAnalysis > 0 && analysisSheet) {
-    analysisSheet.getRange(2, spColAnalysis, Math.max(analysisSheet.getLastRow() - 1, 200), 1).insertCheckboxes();
-  }
-
-  // SitePatron checkboxes in SLUGS
-  var spColSlugs = DSF_SHEET_SLUGS_HEADERS.indexOf('SitePatron') + 1;
-  if (spColSlugs > 0 && slugsSheet) {
-    slugsSheet.getRange(2, spColSlugs, Math.max(slugsSheet.getLastRow() - 1, 200), 1).insertCheckboxes();
   }
 
   // --- LOG ---
@@ -1546,7 +1528,7 @@ var DSF_SP_API_HEADERS = [
 ];
 
 function dsfGetHeaderColor_(name) {
-  if (name === 'Wybrana Domena' || name === 'Wybrana') return { bg: '#0f9d58', fg: '#ffffff' }; // green
+  if (name === 'Wybrana') return { bg: '#0f9d58', fg: '#ffffff' }; // green
   if (DSF_ORANGE_HEADERS.indexOf(name) >= 0) return { bg: '#E67E22', fg: '#ffffff' }; // orange
   if (DSF_SP_API_HEADERS.indexOf(name) >= 0) return { bg: '#1F3864', fg: '#ffffff' }; // dark blue
   if (name.indexOf('(PL)') >= 0) return { bg: '#fffde7', fg: '#1a237e' }; // light yellow
@@ -1724,15 +1706,18 @@ function dsfEnsureSetupSheet_(ss) {
   addRow('SellerName', 'Nazwa sprzedawcy. Pobierana przez scraping jako fallback.');
   addRow('SellerStorefrontUrl', 'Link do sklepu sprzedawcy.');
   addRow('SellerNameAmazon', 'Reczna/przyjazna nazwa. Synchronizuje sie miedzy zakladkami.');
-  addRow('SitePatron', 'Checkbox. TRUE = ta marka jest lub moze byc klientem SitePatron.');
-  addRow('Wybrana Domena', 'Ktora domene obsluguja te ASINy. Wpisz recznie po wyborze sluga.');
+  addRow('SitePatron', 'W ASINS: checkbox. Zaznaczenie jednego ASIN zaznacza wszystkie z tym samym SellerID.');
+  addRow('', 'W INPUT/ANALYSIS/SLUGS: wpisywany automatycznie SellerID z zaznaczonego ASIN.');
   addBlank();
 
   // SEKCJA 6
   addSection('MECHANIZM SYNCHRONIZACJI SELLER', '#e65100');
-  addRow('Zrodlo prawdy', 'Zakladki INPUT i ASINS (kolumny SellerNameAmazon i SitePatron).');
-  addRow('Zmiana w INPUT', 'Propaguje do SLUGS, ANALYSIS, ASINS.');
-  addRow('Zmiana w ASINS', 'Propaguje do INPUT, SLUGS, ANALYSIS.');
+  addRow('Zrodlo prawdy', 'SitePatron checkbox w ASINS. Zaznaczenie propaguje SellerID do wszystkich zakladek.');
+  addRow('Zaznaczenie SitePatron', 'Zaznacz checkbox przy jednym ASIN w ASINS > automatycznie:');
+  addRow('', '1) Zaznacza SitePatron przy WSZYSTKICH ASINach z tym samym SellerID');
+  addRow('', '2) Wpisuje SellerID i SellerName do INPUT, ANALYSIS, SLUGS');
+  addRow('', '3) W INPUT/ANALYSIS/SLUGS kolumna SitePatron = wartosc SellerID (nie TRUE)');
+  addRow('SellerNameAmazon', 'Reczna nazwa — edytuj w INPUT lub ASINS, propaguje do reszty.');
   addRow('Warunek', 'Wymaga zainstalowanego triggera (Menu > Zainstaluj trigger).');
   addBlank();
 
@@ -1820,9 +1805,10 @@ function dsfSaveResultsToSheets(inputRow, inputValue, market, analysis, slugs, d
     JSON.stringify(analysis.cultural_context || []),
     JSON.stringify(analysis.cultural_context_pl || []),
     now,
+    '', // SellerID
+    '', // SellerName
     '', // SellerNameAmazon
-    '', // SitePatron
-    ''  // Wybrana Domena
+    ''  // SitePatron
   ]);
   dsfLog('INFO', 'Zapisano ANALYSIS dla wiersza ' + inputRow, inputRow);
   SpreadsheetApp.flush();
@@ -1860,6 +1846,8 @@ function dsfSaveResultsToSheets(inputRow, inputValue, market, analysis, slugs, d
       deStatus,
       'IDEA',
       now,
+      '', // SellerID
+      '', // SellerName
       '', // SellerNameAmazon
       '', // SitePatron
       false  // Wybrana — checkbox
@@ -1905,8 +1893,7 @@ function dsfSaveResultsToSheets(inputRow, inputValue, market, analysis, slugs, d
       '', // SellerName
       '', // SellerStorefrontUrl
       '', // SellerNameAmazon
-      '', // SitePatron
-      ''  // Wybrana Domena
+      false  // SitePatron — checkbox
     ]);
   }
   dsfLog('INFO', 'Zapisano ' + asins.length + ' ASINow w ASINS dla wiersza ' + inputRow, inputRow);
@@ -2223,32 +2210,125 @@ function dsfFetchSellerDataForSelected() {
  * Installable onEdit trigger for syncing SellerNameAmazon and SitePatron
  * between sheets. Source of truth: INPUT and ASINS.
  */
+/**
+ * Installable onEdit trigger.
+ * Handles two scenarios:
+ *
+ * A) SitePatron checked in ASINS → find SellerID of that ASIN →
+ *    check SitePatron for ALL ASINs with same SellerID →
+ *    propagate SellerID (as SitePatron value) + SellerName to INPUT, ANALYSIS, SLUGS
+ *
+ * B) SellerNameAmazon edited in INPUT or ASINS → propagate to other sheets
+ */
 function dsfOnEditSync(e) {
   var sheet = e.source.getActiveSheet();
   var name = sheet.getName();
   var col = e.range.getColumn();
   var row = e.range.getRow();
-  if (row < 2) return; // header row
+  if (row < 2) return;
 
   var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   var colName = headers[col - 1];
 
-  if (colName !== 'SellerNameAmazon' && colName !== 'SitePatron') return;
-  if (name !== 'INPUT' && name !== 'ASINS') return;
-
-  var inputRow;
-  if (name === 'INPUT') {
-    inputRow = row;
-  } else {
-    inputRow = sheet.getRange(row, 1).getValue();
+  // --- CASE A: SitePatron checkbox toggled in ASINS ---
+  if (colName === 'SitePatron' && name === 'ASINS') {
+    var newVal = e.range.getValue();
+    if (newVal === true || newVal === 'TRUE') {
+      dsfHandleSitePatronCheck_(sheet, row, headers);
+    }
+    return;
   }
-  if (!inputRow) return;
 
-  var newValue = e.range.getValue();
-  dsfSyncSellerColumn(inputRow, colName, newValue, name, row);
+  // --- CASE B: SellerNameAmazon edited in INPUT or ASINS ---
+  if (colName === 'SellerNameAmazon' && (name === 'INPUT' || name === 'ASINS')) {
+    var inputRow;
+    if (name === 'INPUT') {
+      inputRow = row;
+    } else {
+      inputRow = sheet.getRange(row, 1).getValue();
+    }
+    if (!inputRow) return;
+    var newValue = e.range.getValue();
+    dsfSyncColumnToSheets_(inputRow, 'SellerNameAmazon', newValue, name, row);
+    return;
+  }
 }
 
-function dsfSyncSellerColumn(inputRow, colName, newValue, sourceSheet, sourceRow) {
+/**
+ * When SitePatron is checked on an ASIN row:
+ * 1. Read that row's SellerID and SellerName
+ * 2. Check SitePatron on ALL ASIN rows with the same SellerID
+ * 3. Propagate SellerID + SellerName to INPUT, ANALYSIS, SLUGS
+ *    (SitePatron in those sheets = SellerID value, not TRUE)
+ */
+function dsfHandleSitePatronCheck_(asinsSheet, checkedRow, headers) {
+  var colIdx = function(name) {
+    for (var i = 0; i < headers.length; i++) { if (headers[i] === name) return i + 1; }
+    return -1;
+  };
+
+  var sellerIdCol = colIdx('SellerID');
+  var sellerNameCol = colIdx('SellerName');
+  var sitePatronCol = colIdx('SitePatron');
+  var inputRowCol = 1; // column A
+
+  if (sellerIdCol < 1 || sitePatronCol < 1) return;
+
+  var sellerId = asinsSheet.getRange(checkedRow, sellerIdCol).getValue();
+  var sellerName = sellerNameCol > 0 ? asinsSheet.getRange(checkedRow, sellerNameCol).getValue() : '';
+  var inputRow = asinsSheet.getRange(checkedRow, inputRowCol).getValue();
+
+  if (!sellerId) return; // no SellerID — nothing to propagate
+
+  // Check SitePatron for ALL ASINS rows with same SellerID
+  var data = asinsSheet.getDataRange().getValues();
+  for (var r = 1; r < data.length; r++) {
+    if (data[r][sellerIdCol - 1] == sellerId) {
+      asinsSheet.getRange(r + 1, sitePatronCol).setValue(true);
+    }
+  }
+
+  // Propagate to INPUT, ANALYSIS, SLUGS:
+  // SitePatron = SellerID value, SellerID = SellerID, SellerName = SellerName
+  var ss = SpreadsheetApp.getActive();
+  var targets = ['INPUT', 'ANALYSIS', 'SLUGS'];
+
+  for (var t = 0; t < targets.length; t++) {
+    var sh = ss.getSheetByName(targets[t]);
+    if (!sh || sh.getLastRow() < 2) continue;
+    var hdr = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+
+    var tSellerIdCol = -1, tSellerNameCol = -1, tSitePatronCol = -1;
+    for (var h = 0; h < hdr.length; h++) {
+      if (hdr[h] === 'SellerID') tSellerIdCol = h + 1;
+      if (hdr[h] === 'SellerName') tSellerNameCol = h + 1;
+      if (hdr[h] === 'SitePatron') tSitePatronCol = h + 1;
+    }
+
+    var shData = sh.getDataRange().getValues();
+    for (var dr = 1; dr < shData.length; dr++) {
+      var rowInputRow;
+      if (targets[t] === 'INPUT') {
+        rowInputRow = dr + 1;
+      } else {
+        rowInputRow = shData[dr][0];
+      }
+      if (rowInputRow != inputRow) continue;
+
+      if (tSellerIdCol > 0) sh.getRange(dr + 1, tSellerIdCol).setValue(sellerId);
+      if (tSellerNameCol > 0) sh.getRange(dr + 1, tSellerNameCol).setValue(sellerName);
+      if (tSitePatronCol > 0) sh.getRange(dr + 1, tSitePatronCol).setValue(sellerId);
+    }
+  }
+
+  SpreadsheetApp.flush();
+}
+
+/**
+ * Propagate a single column value to all sheets for a given INPUT_Row.
+ * Used for SellerNameAmazon sync.
+ */
+function dsfSyncColumnToSheets_(inputRow, colName, newValue, sourceSheet, sourceRow) {
   var ss = SpreadsheetApp.getActive();
   var sheets = ['INPUT', 'SLUGS', 'ANALYSIS', 'ASINS'];
 
@@ -2264,19 +2344,15 @@ function dsfSyncSellerColumn(inputRow, colName, newValue, sourceSheet, sourceRow
     if (targetCol < 1) continue;
 
     var data = sh.getDataRange().getValues();
-
-    for (var r = 1; r < data.length; r++) { // skip header
+    for (var r = 1; r < data.length; r++) {
       var rowInputRow;
       if (sheetName === 'INPUT') {
-        rowInputRow = r + 1; // row number IS the input row
+        rowInputRow = r + 1;
       } else {
-        rowInputRow = data[r][0]; // column A = INPUT_Row
+        rowInputRow = data[r][0];
       }
       if (rowInputRow != inputRow) continue;
-
-      // Don't overwrite source cell
       if (sheetName === sourceSheet && r + 1 === sourceRow) continue;
-
       sh.getRange(r + 1, targetCol).setValue(newValue);
     }
   }
