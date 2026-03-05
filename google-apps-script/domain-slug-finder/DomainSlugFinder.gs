@@ -2320,7 +2320,10 @@ function dsfHandleSitePatronCheck_(asinsSheet, checkedRow, headers) {
   for (var t = 0; t < targets.length; t++) {
     var sh = ss.getSheetByName(targets[t]);
     if (!sh || sh.getLastRow() < 2) continue;
-    var hdr = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+
+    // INPUT has banner in row 1, headers in row 2. Other sheets have headers in row 1.
+    var headerRowNum = (targets[t] === 'INPUT') ? 2 : 1;
+    var hdr = sh.getRange(headerRowNum, 1, 1, sh.getLastColumn()).getValues()[0];
 
     var tSellerIdCol = -1, tSellerNameCol = -1, tSitePatronCol = -1;
     for (var h = 0; h < hdr.length; h++) {
@@ -2329,19 +2332,20 @@ function dsfHandleSitePatronCheck_(asinsSheet, checkedRow, headers) {
       if (hdr[h] === 'SitePatron') tSitePatronCol = h + 1;
     }
 
-    var shData = sh.getDataRange().getValues();
-    for (var dr = 1; dr < shData.length; dr++) {
-      var rowInputRow;
-      if (targets[t] === 'INPUT') {
-        rowInputRow = dr + 1;
-      } else {
-        rowInputRow = shData[dr][0];
+    if (targets[t] === 'INPUT') {
+      // INPUT: inputRow IS the sheet row number — write directly
+      if (tSellerIdCol > 0) sh.getRange(inputRow, tSellerIdCol).setValue(sellerId);
+      if (tSellerNameCol > 0) sh.getRange(inputRow, tSellerNameCol).setValue(sellerName);
+      if (tSitePatronCol > 0) sh.getRange(inputRow, tSitePatronCol).setValue(sellerId);
+    } else {
+      // ANALYSIS, SLUGS: find rows by INPUT_Row in column A
+      var shData = sh.getDataRange().getValues();
+      for (var dr = 1; dr < shData.length; dr++) {
+        if (shData[dr][0] != inputRow) continue;
+        if (tSellerIdCol > 0) sh.getRange(dr + 1, tSellerIdCol).setValue(sellerId);
+        if (tSellerNameCol > 0) sh.getRange(dr + 1, tSellerNameCol).setValue(sellerName);
+        if (tSitePatronCol > 0) sh.getRange(dr + 1, tSitePatronCol).setValue(sellerId);
       }
-      if (rowInputRow != inputRow) continue;
-
-      if (tSellerIdCol > 0) sh.getRange(dr + 1, tSellerIdCol).setValue(sellerId);
-      if (tSellerNameCol > 0) sh.getRange(dr + 1, tSellerNameCol).setValue(sellerName);
-      if (tSitePatronCol > 0) sh.getRange(dr + 1, tSitePatronCol).setValue(sellerId);
     }
   }
 
@@ -2360,24 +2364,28 @@ function dsfSyncColumnToSheets_(inputRow, colName, newValue, sourceSheet, source
     var sheetName = sheets[s];
     var sh = ss.getSheetByName(sheetName);
     if (!sh || sh.getLastRow() < 2) continue;
-    var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+
+    // INPUT has banner in row 1, headers in row 2. Other sheets have headers in row 1.
+    var headerRowNum = (sheetName === 'INPUT') ? 2 : 1;
+    var headers = sh.getRange(headerRowNum, 1, 1, sh.getLastColumn()).getValues()[0];
     var targetCol = -1;
     for (var h = 0; h < headers.length; h++) {
       if (headers[h] === colName) { targetCol = h + 1; break; }
     }
     if (targetCol < 1) continue;
 
-    var data = sh.getDataRange().getValues();
-    for (var r = 1; r < data.length; r++) {
-      var rowInputRow;
-      if (sheetName === 'INPUT') {
-        rowInputRow = r + 1;
-      } else {
-        rowInputRow = data[r][0];
+    if (sheetName === 'INPUT') {
+      // INPUT: inputRow IS the sheet row number — write directly
+      if (!(sheetName === sourceSheet && inputRow === sourceRow)) {
+        sh.getRange(inputRow, targetCol).setValue(newValue);
       }
-      if (rowInputRow != inputRow) continue;
-      if (sheetName === sourceSheet && r + 1 === sourceRow) continue;
-      sh.getRange(r + 1, targetCol).setValue(newValue);
+    } else {
+      var data = sh.getDataRange().getValues();
+      for (var r = 1; r < data.length; r++) {
+        if (data[r][0] != inputRow) continue;
+        if (sheetName === sourceSheet && r + 1 === sourceRow) continue;
+        sh.getRange(r + 1, targetCol).setValue(newValue);
+      }
     }
   }
   SpreadsheetApp.flush();
