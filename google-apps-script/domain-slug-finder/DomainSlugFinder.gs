@@ -1365,11 +1365,16 @@ function dsfEnsureSheets_() {
     inputSheet.setColumnWidth(5, 120);
     inputSheet.setColumnWidth(9, 200);
   } else {
-    // Update existing INPUT headers to add new columns (SellerNameAmazon, SitePatron)
+    // Update existing INPUT headers: the INPUT sheet has a banner in row 1
+    // and actual headers in row 2 (old formatted names). Only add missing
+    // column labels (SellerNameAmazon, SitePatron) at the end of row 2.
+    var headerRow = 2; // INPUT uses row 2 for headers (row 1 = banner)
     var currentCols = inputSheet.getLastColumn();
     if (currentCols < DSF_SHEET_INPUT_HEADERS.length) {
-      inputSheet.getRange(1, 1, 1, DSF_SHEET_INPUT_HEADERS.length).setValues([DSF_SHEET_INPUT_HEADERS]);
-      inputSheet.getRange(1, 1, 1, DSF_SHEET_INPUT_HEADERS.length).setFontWeight('bold');
+      // Write only the missing headers (columns after currentCols)
+      for (var hi = currentCols; hi < DSF_SHEET_INPUT_HEADERS.length; hi++) {
+        inputSheet.getRange(headerRow, hi + 1).setValue(DSF_SHEET_INPUT_HEADERS[hi]).setFontWeight('bold');
+      }
     }
   }
 
