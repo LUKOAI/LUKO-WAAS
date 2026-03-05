@@ -118,6 +118,7 @@ function onOpen() {
   SpreadsheetApp.getUi().createMenu('Domain Finder')
     .addItem('Uruchom zaznaczone wiersze', 'dsfRunSelected')
     .addItem('Wznow kolejke (jesli przerwa)', 'dsfProcessQueue')
+    .addItem('Pobierz dane sprzedawcy (zaznaczone)', 'dsfFetchSellerDataForSelected')
     .addSeparator()
     .addItem('Konfiguruj API Keys', 'dsfSetConfig')
     .addItem('Zainstaluj trigger', 'dsfSetupTriggers')
@@ -141,12 +142,12 @@ function dsfFormatDateDE(date) {
 function dsfSetupTriggers() {
   var ui = SpreadsheetApp.getUi();
 
-  // Remove old DSF triggers (onEdit — no longer needed for auto-start)
+  // Remove old DSF triggers
   var triggers = ScriptApp.getProjectTriggers();
   var removed = 0;
   for (var i = 0; i < triggers.length; i++) {
     var fn = triggers[i].getHandlerFunction();
-    if (fn === 'dsfOnEditInstallable' || fn === 'dsfProcessQueue') {
+    if (fn === 'dsfOnEditInstallable' || fn === 'dsfProcessQueue' || fn === 'dsfOnEditSync') {
       ScriptApp.deleteTrigger(triggers[i]);
       removed++;
     }
@@ -156,12 +157,19 @@ function dsfSetupTriggers() {
   var onEditRemoved = dsfCleanupOldOnEditTriggers();
   removed += onEditRemoved;
 
+  // Install seller sync onEdit trigger
+  ScriptApp.newTrigger('dsfOnEditSync')
+    .forSpreadsheet(SpreadsheetApp.getActive())
+    .onEdit()
+    .create();
+
   // Ensure all sheets exist
   dsfEnsureSheets_();
 
   ui.alert('Setup wykonany',
     (removed > 0 ? 'Usunieto ' + removed + ' starych triggerow.\n' : '') +
-    'Zakladki utworzone: INPUT, ANALYSIS, SLUGS, ASINS, LOG.\n\n' +
+    'Zainstalowano trigger synchronizacji SellerNameAmazon/SitePatron.\n' +
+    'Zakladki utworzone: INPUT, ANALYSIS, SLUGS, ASINS, LOG, SETUP.\n\n' +
     'Uzycie:\n1. Wpisz dane w INPUT\n2. Zaznacz checkbox(y) w kolumnie F\n3. Menu > Uruchom zaznaczone wiersze',
     ui.ButtonSet.OK);
 }
@@ -503,11 +511,18 @@ function dsfRunJobForRow(rowNum) {
   // 8. Additional ASINs for the website
   var additionalAsins = [];
   if (slugsData.length > 0 && slugsData[0].amazon_test_phrase) {
-    additionalAsins = dsfCallSpApiSearchForAsins(slugsData[0].amazon_test_phrase, accessToken, marketplace);
+    additionalAsins = dsfCallSpApiSearchForAsins(slugsData[0].amazon_test_phrase, accessToken, marketplace, market);
   }
 
   // 9. Save to sheets
   dsfSaveResultsToSheets(rowNum, value, market, analysisData, slugsData, denicResults, additionalAsins, rootDomain);
+
+  // 10. Fetch seller data for ASINs
+  try {
+    dsfFetchSellerIds(additionalAsins, marketplace, rowNum);
+  } catch(e) {
+    dsfLog('WARNING', 'Blad pobierania seller info: ' + e.message, rowNum);
+  }
 
   // 10. Update INPUT status
   var topSlug = slugsData.length > 0 ? slugsData[0].slug : '';
@@ -742,12 +757,12 @@ function dsfCallSpApiSearch(keywords, token, marketplace) {
   };
 }
 
-function dsfCallSpApiSearchForAsins(keywords, token, marketplace) {
+function dsfCallSpApiSearchForAsins(keywords, token, marketplace, marketCode) {
   var url = DSF_SP_ENDPOINT + '/catalog/2022-04-01/items'
     + '?keywords=' + encodeURIComponent(keywords)
     + '&marketplaceIds=' + marketplace.id
     + '&pageSize=20'
-    + '&includedData=attributes,classifications,images,salesRanks,summaries';
+    + '&includedData=attributes,classifications,identifiers,images,productTypes,salesRanks,summaries,relationships';
 
   var response = UrlFetchApp.fetch(url, {
     method: 'get',
@@ -769,6 +784,8 @@ function dsfCallSpApiSearchForAsins(keywords, token, marketplace) {
 
     var bsrRank = '';
     var bsrCategory = '';
+    var browseNodeDisplayName = '';
+    var browseNodeId = '';
     for (var r = 0; r < salesRanks.length; r++) {
       if (salesRanks[r].marketplaceId === marketplace.id) {
         var classRanks = salesRanks[r].classificationRanks || [];
@@ -776,11 +793,17 @@ function dsfCallSpApiSearchForAsins(keywords, token, marketplace) {
           bsrRank = classRanks[0].rank || '';
           bsrCategory = classRanks[0].title || '';
         }
+        var displayRanks = salesRanks[r].displayGroupRanks || [];
+        if (displayRanks.length > 0) {
+          browseNodeDisplayName = displayRanks[0].title || '';
+          browseNodeId = displayRanks[0].link || '';
+        }
         break;
       }
     }
 
     var price = '';
+    var priceFormatted = '';
     if (attrs.list_price && attrs.list_price[0]) {
       var pd = attrs.list_price[0];
       if (pd.value_with_tax !== undefined) {
@@ -789,6 +812,7 @@ function dsfCallSpApiSearchForAsins(keywords, token, marketplace) {
       } else if (pd.value) {
         price = pd.value.toString();
       }
+      priceFormatted = (pd.value || '') + ' ' + (pd.currency || '');
     }
 
     var imgUrl = '';
@@ -806,6 +830,42 @@ function dsfCallSpApiSearchForAsins(keywords, token, marketplace) {
       category = summary.browseClassification.displayName || '';
     }
 
+    // Extract new SP API fields
+    var brandName = '';
+    try { brandName = attrs.brand[0].value || ''; } catch(e) {}
+    if (!brandName) try { brandName = summary.brandName || summary.brand || ''; } catch(e) {}
+
+    var bulletPoints = '';
+    try { bulletPoints = attrs.bullet_point.map(function(b){return b.value;}).join(' | '); } catch(e) {}
+
+    var features = '';
+    try { features = attrs.special_feature.map(function(f){return f.value;}).join(' | '); } catch(e) {}
+
+    var manufacturer = '';
+    try { manufacturer = attrs.manufacturer[0].value || ''; } catch(e) {}
+
+    var parentAsin = '';
+    try {
+      if (item.relationships && item.relationships[0]) {
+        parentAsin = item.relationships[0].parentAsin || '';
+      }
+    } catch(e) {}
+
+    var description = '';
+    try {
+      description = attrs.product_description[0].value || '';
+      if (description.length > 500) description = description.substring(0, 500) + '...';
+    } catch(e) {}
+
+    var material = '';
+    try { material = attrs.material[0].value || ''; } catch(e) {}
+
+    var colorName = '';
+    try { colorName = attrs.color[0].value || ''; } catch(e) {}
+
+    var sizeName = '';
+    try { sizeName = attrs.size[0].value || ''; } catch(e) {}
+
     results.push({
       asin: item.asin,
       title: summary.itemName || '',
@@ -813,7 +873,20 @@ function dsfCallSpApiSearchForAsins(keywords, token, marketplace) {
       category: category,
       bsrRank: bsrRank,
       bsrCategory: bsrCategory,
-      imageUrl: imgUrl
+      imageUrl: imgUrl,
+      brandName: brandName,
+      browseNodeDisplayName: browseNodeDisplayName,
+      bulletPoints: bulletPoints,
+      features: features,
+      manufacturer: manufacturer,
+      parentAsin: parentAsin,
+      priceFormatted: priceFormatted,
+      browseNodeId: browseNodeId,
+      description: description,
+      material: material,
+      marketplace: marketCode || '',
+      colorName: colorName,
+      sizeName: sizeName
     });
   }
 
@@ -1214,7 +1287,8 @@ function dsfLog(level, message, rowNum) {
 var DSF_SHEET_INPUT_HEADERS = [
   'Typ', 'Wartosc', 'Rynek', 'Root Domain', 'Status',
   'Trigger', 'Timestamp zlecenia', 'Timestamp ukonczenia',
-  'Top Slug', 'Score', 'Error'
+  'Top Slug', 'Score', 'Error',
+  'SellerNameAmazon', 'SitePatron'
 ];
 
 var DSF_SHEET_ANALYSIS_HEADERS = [
@@ -1233,6 +1307,7 @@ var DSF_SHEET_ANALYSIS_HEADERS = [
   'Top Sklepy', 'Top Sklepy (PL)',
   'Kontekst Kulturowy', 'Kontekst Kulturowy (PL)',
   'Timestamp',
+  'SellerNameAmazon', 'SitePatron',
   'Wybrana Domena'
 ];
 
@@ -1246,6 +1321,7 @@ var DSF_SHEET_SLUGS_HEADERS = [
   'Content Topics', 'Content Topics (PL)',
   'URL Slugs',
   'de_domain_status', 'status', 'Timestamp',
+  'SellerNameAmazon', 'SitePatron',
   'Wybrana'
 ];
 
@@ -1253,6 +1329,11 @@ var DSF_SHEET_ASINS_HEADERS = [
   'INPUT_Row', 'Target_Slug', 'ASIN', 'Title', 'Price (EUR)',
   'Category', 'BSR_rank', 'BSR_category', 'Image_URL',
   'Product_URL', 'Timestamp',
+  'BrandName', 'BrowseNodeDisplayName', 'BulletPoints', 'Features',
+  'Manufacturer', 'ParentAsin', 'PriceFormatted', 'browse_node_id',
+  'Description', 'Material', 'Marketplace', 'ColorName', 'SizeName',
+  'SellerID', 'SellerName', 'SellerStorefrontUrl',
+  'SellerNameAmazon', 'SitePatron',
   'Wybrana Domena'
 ];
 
@@ -1285,6 +1366,14 @@ function dsfEnsureSheets_() {
     inputSheet.setColumnWidth(9, 200);
   }
 
+  // Data validation for Typ column (A) — always apply
+  var typRange = inputSheet.getRange('A2:A1000');
+  var ruleA = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['ASIN','KEYWORD'], true)
+    .setAllowInvalid(false)
+    .build();
+  typRange.setDataValidation(ruleA);
+
   // Data validation for Rynek column (C) — always apply
   var rynekRange = inputSheet.getRange('C2:C1000');
   var rule = SpreadsheetApp.newDataValidation()
@@ -1292,6 +1381,13 @@ function dsfEnsureSheets_() {
     .setAllowInvalid(false)
     .build();
   rynekRange.setDataValidation(rule);
+
+  // SitePatron checkboxes in INPUT
+  var spColInput = DSF_SHEET_INPUT_HEADERS.indexOf('SitePatron') + 1;
+  if (spColInput > 0) inputSheet.getRange(2, spColInput, 200, 1).insertCheckboxes();
+
+  // Color SellerNameAmazon/SitePatron headers in INPUT
+  dsfColorSellerHeaders_(inputSheet, DSF_SHEET_INPUT_HEADERS);
 
   // --- ANALYSIS ---
   var analysisSheet = ss.getSheetByName('ANALYSIS');
@@ -1333,9 +1429,29 @@ function dsfEnsureSheets_() {
   if (!asinsSheet) {
     asinsSheet = ss.insertSheet('ASINS');
     asinsSheet.getRange(1, 1, 1, DSF_SHEET_ASINS_HEADERS.length).setValues([DSF_SHEET_ASINS_HEADERS]);
-    dsfFormatHeaderRow_(asinsSheet, DSF_SHEET_ASINS_HEADERS.length, '#ea4335', '#ffffff');
     asinsSheet.setFrozenRows(1);
     asinsSheet.setColumnWidth(4, 300);
+  } else {
+    dsfUpdateSheetHeaders_(asinsSheet, DSF_SHEET_ASINS_HEADERS);
+  }
+  dsfColorAsinsHeaders_(asinsSheet, DSF_SHEET_ASINS_HEADERS);
+
+  // SitePatron checkboxes in ASINS
+  var spColAsins = DSF_SHEET_ASINS_HEADERS.indexOf('SitePatron') + 1;
+  if (spColAsins > 0) {
+    asinsSheet.getRange(2, spColAsins, Math.max(asinsSheet.getLastRow() - 1, 200), 1).insertCheckboxes();
+  }
+
+  // SitePatron checkboxes in ANALYSIS
+  var spColAnalysis = DSF_SHEET_ANALYSIS_HEADERS.indexOf('SitePatron') + 1;
+  if (spColAnalysis > 0 && analysisSheet) {
+    analysisSheet.getRange(2, spColAnalysis, Math.max(analysisSheet.getLastRow() - 1, 200), 1).insertCheckboxes();
+  }
+
+  // SitePatron checkboxes in SLUGS
+  var spColSlugs = DSF_SHEET_SLUGS_HEADERS.indexOf('SitePatron') + 1;
+  if (spColSlugs > 0 && slugsSheet) {
+    slugsSheet.getRange(2, spColSlugs, Math.max(slugsSheet.getLastRow() - 1, 200), 1).insertCheckboxes();
   }
 
   // --- LOG ---
@@ -1350,6 +1466,9 @@ function dsfEnsureSheets_() {
     logSheet.setColumnWidth(3, 100);
     logSheet.setColumnWidth(4, 600);
   }
+
+  // --- SETUP ---
+  dsfEnsureSetupSheet_(ss);
 }
 
 /**
@@ -1404,41 +1523,60 @@ function dsfRemoveOldSubHeaderRow_(sheet) {
   }
 }
 
-/**
- * Color ANALYSIS headers: purple for data fields, light yellow for PL translations
- */
+// Seller/SitePatron column names for orange coloring
+var DSF_ORANGE_HEADERS = ['SellerNameAmazon', 'SitePatron'];
+// SP API data column names for dark blue coloring
+var DSF_SP_API_HEADERS = [
+  'BrandName', 'BrowseNodeDisplayName', 'BulletPoints', 'Features',
+  'Manufacturer', 'ParentAsin', 'PriceFormatted', 'browse_node_id',
+  'Description', 'Material', 'Marketplace', 'ColorName', 'SizeName',
+  'SellerID', 'SellerName', 'SellerStorefrontUrl'
+];
+
+function dsfGetHeaderColor_(name) {
+  if (name === 'Wybrana Domena' || name === 'Wybrana') return { bg: '#0f9d58', fg: '#ffffff' }; // green
+  if (DSF_ORANGE_HEADERS.indexOf(name) >= 0) return { bg: '#E67E22', fg: '#ffffff' }; // orange
+  if (DSF_SP_API_HEADERS.indexOf(name) >= 0) return { bg: '#1F3864', fg: '#ffffff' }; // dark blue
+  if (name.indexOf('(PL)') >= 0) return { bg: '#fffde7', fg: '#1a237e' }; // light yellow
+  return null; // use default
+}
+
 function dsfColorAnalysisHeaders_(sheet, headers) {
   for (var h = 0; h < headers.length; h++) {
     var cell = sheet.getRange(1, h + 1);
-    if (headers[h] === 'Wybrana Domena') {
-      cell.setBackground('#0f9d58').setFontColor('#ffffff'); // green
-    } else if (headers[h].indexOf('(PL)') >= 0) {
-      cell.setBackground('#fffde7').setFontColor('#1a237e');
-    } else {
-      cell.setBackground('#7b1fa2').setFontColor('#ffffff');
-    }
+    var c = dsfGetHeaderColor_(headers[h]);
+    if (c) { cell.setBackground(c.bg).setFontColor(c.fg); }
+    else { cell.setBackground('#7b1fa2').setFontColor('#ffffff'); } // purple
   }
 }
 
-/**
- * Color SLUGS headers: yellow for data fields, light yellow for PL translations
- */
 function dsfColorSlugsHeaders_(sheet, headers) {
   for (var s = 0; s < headers.length; s++) {
     var cell = sheet.getRange(1, s + 1);
-    if (headers[s] === 'Wybrana') {
-      cell.setBackground('#0f9d58').setFontColor('#ffffff'); // green
-    } else if (headers[s].indexOf('(PL)') >= 0) {
-      cell.setBackground('#fffde7').setFontColor('#1a237e');
-    } else {
-      cell.setBackground('#fbbc04').setFontColor('#000000');
+    var c = dsfGetHeaderColor_(headers[s]);
+    if (c) { cell.setBackground(c.bg).setFontColor(c.fg); }
+    else { cell.setBackground('#fbbc04').setFontColor('#000000'); } // yellow
+  }
+}
+
+function dsfColorAsinsHeaders_(sheet, headers) {
+  for (var a = 0; a < headers.length; a++) {
+    var cell = sheet.getRange(1, a + 1);
+    var c = dsfGetHeaderColor_(headers[a]);
+    if (c) { cell.setBackground(c.bg).setFontColor(c.fg); }
+    else { cell.setBackground('#ea4335').setFontColor('#ffffff'); } // red
+  }
+  sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+}
+
+function dsfColorSellerHeaders_(sheet, headers) {
+  for (var i = 0; i < headers.length; i++) {
+    if (DSF_ORANGE_HEADERS.indexOf(headers[i]) >= 0) {
+      sheet.getRange(1, i + 1).setBackground('#E67E22').setFontColor('#ffffff').setFontWeight('bold');
     }
   }
 }
 
-/**
- * Simple header formatting helper
- */
 function dsfFormatHeaderRow_(sheet, numCols, bgColor, fontColor) {
   sheet.getRange(1, 1, 1, numCols).setFontWeight('bold').setBackground(bgColor).setFontColor(fontColor);
 }
@@ -1475,6 +1613,157 @@ function dsfMigrateSheets() {
   dsfLog('INFO', 'Migracja arkuszy do v3 wykonana');
 
   ui.alert('Migracja v3', report, ui.ButtonSet.OK);
+}
+
+// ==================== SETUP SHEET ====================
+
+function dsfEnsureSetupSheet_(ss) {
+  var setupSheet = ss.getSheetByName('SETUP');
+  if (setupSheet) {
+    setupSheet.clear();
+  } else {
+    setupSheet = ss.insertSheet('SETUP');
+  }
+
+  var s = setupSheet;
+  var row = 1;
+
+  function addSection(title, bgColor) {
+    s.getRange(row, 1, 1, 5).merge().setValue(title)
+      .setBackground(bgColor).setFontColor('#ffffff').setFontWeight('bold').setFontSize(12);
+    row++;
+  }
+  function addRow(col1, col2) {
+    s.getRange(row, 1).setValue(col1).setFontWeight('bold');
+    if (col2 !== undefined) s.getRange(row, 2, 1, 4).merge().setValue(col2).setWrap(true);
+    row++;
+  }
+  function addBlank() { row++; }
+
+  // SEKCJA 1
+  addSection('JAK UZYWAC (krok po kroku)', '#1a237e');
+  addRow('1.', 'Zakladka INPUT > wpisz ASIN lub slowo kluczowe w kolumnie B');
+  addRow('2.', 'Kolumna A: wybierz typ ASIN lub KEYWORD z dropdown');
+  addRow('3.', 'Kolumna C: wybierz rynek z dropdown (DE/FR/IT/ES/UK/NL/BE/PL/SE/IE)');
+  addRow('4.', 'Kolumna D: wpisz root domene (domyslnie: lk24.shop)');
+  addRow('5.', 'Kolumna F: zaznacz checkbox START przy wierszach do przetworzenia');
+  addRow('6.', 'Menu "Domain Finder" > "Uruchom zaznaczone wiersze"');
+  addRow('7.', 'Poczekaj ~30-60 sek per wiersz. Status: PROCESSING > DONE');
+  addRow('8.', 'Przejdz do SLUGS > zaznacz "Wybrana" przy najlepszym slugu');
+  addRow('9.', 'Przejdz do ASINS > sprawdz pobrane produkty i dane sprzedawcow');
+  addRow('10.', 'Opcjonalnie: wpisz SellerNameAmazon i zaznacz SitePatron');
+  addRow('', 'Jesli wierszy duzo > skrypt zatrzyma sie po 5 min > Menu > "Wznow kolejke"');
+  addBlank();
+
+  // SEKCJA 2
+  addSection('OPIS ZAKLADEK', '#0d47a1');
+  addRow('INPUT', 'Tu wpisujesz co analizowac. Zrodlo kolejki przetwarzania.');
+  addRow('SLUGS', 'Kandydaci na slug domeny z ocena 0-7. Tu wybierasz zwyciezce.');
+  addRow('ANALYSIS', '13 list analitycznych (potrzeby, pytania, tematy contentu). W jezyku rynku + PL.');
+  addRow('ASINS', 'Lista produktow Amazon pasujacych do wybranej niszy. Dane z SP API.');
+  addRow('LOG', 'Historia operacji i bledow z timestampem.');
+  addRow('SETUP', 'Ta zakladka. Dokumentacja.');
+  addBlank();
+
+  // SEKCJA 3
+  addSection('KRYTERIA SLUGOW K1-K7', '#1b5e20');
+  addRow('K1 Potrzeba', 'Slug odpowiada glownej potrzebie/problemowi/nazwie rozwiazania klienta');
+  addRow('K2 Jasna', 'Fachowcy w tej niszy natychmiast rozumieja o co chodzi bez wyjasnienia');
+  addRow('K3 Nazwa produktu', 'Slug idealnie = czesc lub calosc nazwy produktu z Amazon');
+  addRow('K4 Jezyk rynku', 'Slug po niemiecku dla DE, po francusku dla FR, po wlosku dla IT, itd.');
+  addRow('K5 Dlugosc', 'Max 2-3 slowa, caly slug max 40 znakow');
+  addRow('K6 Znaki', 'Tylko a-z, 0-9, myslnik. Brak ae/oe/ue/e/c itd.');
+  addRow('K7 Amazon test', 'Wpisanie frazy na Amazon.XX daje trafne produkty z tej niszy');
+  addBlank();
+
+  // SEKCJA 4
+  addSection('OPIS KOLUMN ANALYSIS (13 list)', '#4a148c');
+  addRow('1. Potrzeby & Problemy', 'Czego naprawde szuka kupujacy. Podstawa SEO i content.');
+  addRow('2. Buyer Personas', 'Kto kupuje, po co, w jakim kontekscie zyciowym.');
+  addRow('3. Czeste Slowa', 'Slownik niszy. Slowa z nazw i opisow produktow.');
+  addRow('4. Keyword Kandydaci', 'Frazy do sprawdzenia w Google Search Console i Amazon autocomplete.');
+  addRow('5. Sytuacje Uzycia', 'W jakich projektach/pracach produkt jest potrzebny.');
+  addRow('6. Triggery Szukania', 'Co spowodowalo ze ktos zaczal szukac. Punkt wyjscia dla contentu.');
+  addRow('7. Pytania', 'Co ludzie wpisuja w Google i Amazon. Gotowe tematy FAQ.');
+  addRow('8. Tematy Poradnikowe', '"Jak zrobic X". Generuja ruch organiczny.');
+  addRow('9. Czego Nie Robic', '"Bledy przy X". Bardzo klikalny format.');
+  addRow('10. Influencerzy', 'YouTuberzy/podcasty w tej tematyce. Do monitorowania i partnerstw.');
+  addRow('11. Blogi', 'Konkurencja i miejsca do linkbuilding.');
+  addRow('12. Top Sklepy', 'Kontekst rynkowy. Gdzie kupujacy szukaja tych produktow.');
+  addRow('13. Kontekst Kulturowy', 'Gdzie produkt pojawia sie w codziennym zyciu. Do naturalnego contentu.');
+  addRow('', 'Kazda lista ma blizniacz kolumne (PL) z tlumaczeniem na polski.');
+  addBlank();
+
+  // SEKCJA 5
+  addSection('OPIS KOLUMN ASINS', '#b71c1c');
+  addRow('INPUT Row', 'Laczy z wierszem w INPUT. Klucz relacyjny.');
+  addRow('Target Slug', 'Slug wybrany jako cel tej strony.');
+  addRow('ASIN', 'Unikalny identyfikator produktu Amazon.');
+  addRow('Title', 'Pelna nazwa produktu z listingu.');
+  addRow('Price EUR', 'Cena lista.');
+  addRow('BSR Rank', 'Best Seller Rank: pozycja w kategorii. Nizszy = popularniejszy.');
+  addRow('BrandName', 'Marka z atrybutow produktu (z SP API attributes.brand).');
+  addRow('BulletPoints', 'Punkty bullet z listingu. Bezcenne dla SEO i analizy.');
+  addRow('Features', 'Cechy specjalne produktu (special_feature).');
+  addRow('Manufacturer', 'Producent. Moze roznic sie od marki.');
+  addRow('ParentAsin', 'Jesli produkt jest wariantem — ASIN rodzica.');
+  addRow('Description', 'Opis produktu (skrocony do 500 znakow).');
+  addRow('SellerID', 'ID sprzedawcy z SP API getItemOffers. Pobierany automatycznie.');
+  addRow('SellerName', 'Nazwa sprzedawcy. Pobierana przez scraping jako fallback.');
+  addRow('SellerStorefrontUrl', 'Link do sklepu sprzedawcy.');
+  addRow('SellerNameAmazon', 'Reczna/przyjazna nazwa. Synchronizuje sie miedzy zakladkami.');
+  addRow('SitePatron', 'Checkbox. TRUE = ta marka jest lub moze byc klientem SitePatron.');
+  addRow('Wybrana Domena', 'Ktora domene obsluguja te ASINy. Wpisz recznie po wyborze sluga.');
+  addBlank();
+
+  // SEKCJA 6
+  addSection('MECHANIZM SYNCHRONIZACJI SELLER', '#e65100');
+  addRow('Zrodlo prawdy', 'Zakladki INPUT i ASINS (kolumny SellerNameAmazon i SitePatron).');
+  addRow('Zmiana w INPUT', 'Propaguje do SLUGS, ANALYSIS, ASINS.');
+  addRow('Zmiana w ASINS', 'Propaguje do INPUT, SLUGS, ANALYSIS.');
+  addRow('Warunek', 'Wymaga zainstalowanego triggera (Menu > Zainstaluj trigger).');
+  addBlank();
+
+  // SEKCJA 7
+  addSection('KOLUMNY SellerID / SellerName — SKAD DANE', '#37474f');
+  addRow('SellerID', 'Pobierany przez SP API Pricing endpoint getItemOffers. Rate limit: 0.5 req/sec.');
+  addRow('Fallback', 'Jesli API zwroci blad 403 > fallback do scraping strony produktu.');
+  addRow('SellerName', 'Pobierany przez scraping strony /dp/{ASIN}. Zawodne — uzupelnij recznie.');
+  addRow('SellerStorefrontUrl', 'Konstruowany automatycznie: https://www.amazon.XX/sp?seller={SellerID}.');
+  addBlank();
+
+  // SEKCJA 8
+  addSection('STATUSY WIERSZY W INPUT', '#263238');
+  addRow('(puste)', 'Nowy wiersz, nie przetworzony.');
+  addRow('PROCESSING', 'Skrypt aktualnie przetwarza.');
+  addRow('DONE', 'Zakonczone. Wyniki w SLUGS, ANALYSIS, ASINS.');
+  addRow('ERROR', 'Blad. Szczegoly w kolumnie K (Error).');
+  addBlank();
+
+  // SEKCJA 9
+  addSection('KONFIGURACJA API KEYS', '#880e4f');
+  addRow('Menu', 'Domain Finder > Konfiguruj API Keys');
+  addRow('CLAUDE_API_KEY', 'console.anthropic.com > API Keys');
+  addRow('SP_LWA_CLIENT_ID', 'developer.amazon.com > Twoja aplikacja');
+  addRow('SP_LWA_CLIENT_SECRET', 'developer.amazon.com > Twoja aplikacja');
+  addRow('SP_REFRESH_TOKEN', 'developer.amazon.com > Autoryzacja sellera');
+  addRow('SP_SELLER_ID', 'sellercentral.amazon.de > Ustawienia konta');
+  addBlank();
+
+  // SEKCJA 10
+  addSection('CZESTE BLEDY', '#c62828');
+  addRow('Brak srodkow Claude', 'Doladuj na console.anthropic.com/settings/billing');
+  addRow('401 SP API', 'Nieprawidlowe klucze. Menu > Konfiguruj API Keys');
+  addRow('403 getItemOffers', 'Produkt nie w Twoim inventory. Automatyczny fallback do scraping.');
+  addRow('ASIN not found', 'ASIN niedostepny na tym rynku. Sprawdz marketplace.');
+  addRow('Nieznany rynek', 'Uzyj dropdown: DE/FR/IT/ES/UK/NL/BE/PL/SE/IE');
+  addRow('Przerwa — limit', 'Normalne przy duzej kolejce. Menu > Wznow kolejke.');
+  addRow('Scraping failed', 'Amazon zablokowal request. Uzupelnij recznie.');
+
+  // Formatting
+  s.setColumnWidth(1, 200);
+  s.setColumnWidth(2, 600);
+  s.setFrozenRows(0);
 }
 
 function dsfSaveResultsToSheets(inputRow, inputValue, market, analysis, slugs, denicResults, asins, rootDomain) {
@@ -1516,7 +1805,9 @@ function dsfSaveResultsToSheets(inputRow, inputValue, market, analysis, slugs, d
     JSON.stringify(analysis.cultural_context || []),
     JSON.stringify(analysis.cultural_context_pl || []),
     now,
-    ''  // Wybrana Domena — uzupelnic recznie
+    '', // SellerNameAmazon
+    '', // SitePatron
+    ''  // Wybrana Domena
   ]);
 
   // --- SLUGS ---
@@ -1551,7 +1842,9 @@ function dsfSaveResultsToSheets(inputRow, inputValue, market, analysis, slugs, d
       deStatus,
       'IDEA',
       now,
-      false  // Wybrana — checkbox, domyslnie false
+      '', // SellerNameAmazon
+      '', // SitePatron
+      false  // Wybrana — checkbox
     ]);
   }
 
@@ -1574,7 +1867,25 @@ function dsfSaveResultsToSheets(inputRow, inputValue, market, analysis, slugs, d
       a.imageUrl || '',
       'https://' + marketplace.domain + '/dp/' + (a.asin || ''),
       now,
-      ''  // Wybrana Domena — uzupelnic recznie
+      a.brandName || '',
+      a.browseNodeDisplayName || '',
+      a.bulletPoints || '',
+      a.features || '',
+      a.manufacturer || '',
+      a.parentAsin || '',
+      a.priceFormatted || '',
+      a.browseNodeId || '',
+      a.description || '',
+      a.material || '',
+      a.marketplace || market,
+      a.colorName || '',
+      a.sizeName || '',
+      '', // SellerID — filled by dsfFetchSellerIds
+      '', // SellerName
+      '', // SellerStorefrontUrl
+      '', // SellerNameAmazon
+      '', // SitePatron
+      ''  // Wybrana Domena
     ]);
   }
 
@@ -1700,8 +2011,254 @@ function dsfTestClaude() {
  * until user runs "Zainstaluj trigger" to clean up old triggers.
  */
 function dsfOnEditInstallable(e) {
-  // Intentionally empty — old auto-trigger no longer used.
-  // Run "Domain Finder > Zainstaluj trigger" to remove this trigger.
+  // Legacy — redirect to new sync trigger
+  dsfOnEditSync(e);
+}
+
+// ==================== HELPER: dsfGetColIndex ====================
+
+function dsfGetColIndex(sheetName, colName) {
+  var sh = SpreadsheetApp.getActive().getSheetByName(sheetName);
+  if (!sh || sh.getLastColumn() < 1) return -1;
+  var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  for (var i = 0; i < headers.length; i++) {
+    if (headers[i] === colName) return i + 1; // 1-based
+  }
+  return -1;
+}
+
+// ==================== SELLER DATA FUNCTIONS ====================
+
+function dsfFetchSellerFromPage(asin, marketplace) {
+  try {
+    var url = 'https://www.' + marketplace.domain + '/dp/' + asin;
+    var resp = UrlFetchApp.fetch(url, {
+      muteHttpExceptions: true,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0',
+        'Accept-Language': marketplace.hlParam + '-' + marketplace.lang.toUpperCase() + ',' + marketplace.hlParam + ';q=0.9',
+        'Accept': 'text/html,application/xhtml+xml'
+      }
+    });
+    if (resp.getResponseCode() !== 200) return {sellerId:'', sellerName:'', storefrontUrl:''};
+    var html = resp.getContentText();
+
+    var sellerIdMatch = html.match(/\/sp\?seller=([A-Z0-9]{10,20})/);
+    var sellerId = sellerIdMatch ? sellerIdMatch[1] : '';
+
+    var sellerName = '';
+    var patterns = [
+      /id="sellerProfileTriggerId"[^>]*>([^<]+)</,
+      /Verkäufer:[^<]*<[^>]*>([^<\s][^<]+)</,
+      /Sold by[^<]*<[^>]*>([^<\s][^<]+)</,
+      /Vendu par[^<]*<[^>]*>([^<\s][^<]+)</,
+      /Venduto da[^<]*<[^>]*>([^<\s][^<]+)</,
+      /Vendido por[^<]*<[^>]*>([^<\s][^<]+)</
+    ];
+    for (var i = 0; i < patterns.length; i++) {
+      var m = html.match(patterns[i]);
+      if (m && m[1]) { sellerName = m[1].trim(); break; }
+    }
+
+    var storefrontUrl = sellerId ?
+      'https://www.' + marketplace.domain + '/sp?seller=' + sellerId : '';
+
+    return { sellerId: sellerId, sellerName: sellerName, storefrontUrl: storefrontUrl };
+  } catch(e) {
+    return { sellerId: '', sellerName: '', storefrontUrl: '' };
+  }
+}
+
+function dsfFetchSellerIds(asinList, marketplace, inputRow) {
+  var token = dsfGetSpApiToken();
+  var ss = SpreadsheetApp.getActive();
+  var asinsSheet = ss.getSheetByName('ASINS');
+  if (!asinsSheet) return;
+
+  var sellerIdCol = dsfGetColIndex('ASINS', 'SellerID');
+  var sellerNameCol = dsfGetColIndex('ASINS', 'SellerName');
+  var sellerUrlCol = dsfGetColIndex('ASINS', 'SellerStorefrontUrl');
+  var asinCol = dsfGetColIndex('ASINS', 'ASIN');
+  if (sellerIdCol < 1 || asinCol < 1) return;
+
+  var allData = asinsSheet.getDataRange().getValues();
+  var startTime = Date.now();
+
+  for (var r = 1; r < allData.length; r++) { // skip header row 0
+    if (allData[r][0] != inputRow) continue;
+    var asin = allData[r][asinCol - 1];
+    if (!asin) continue;
+
+    // Check time limit (4 min)
+    if (Date.now() - startTime > 4 * 60 * 1000) {
+      dsfLog('WARNING', 'dsfFetchSellerIds: przerwa z powodu limitu czasu.', inputRow);
+      break;
+    }
+
+    var sellerData = { sellerId: '', sellerName: '', storefrontUrl: '' };
+
+    try {
+      var apiUrl = 'https://sellingpartnerapi-eu.amazon.com/products/pricing/v0/items/'
+                 + encodeURIComponent(asin) + '/offers'
+                 + '?MarketplaceId=' + marketplace.id
+                 + '&ItemCondition=New&CustomerType=Consumer';
+      var apiResp = UrlFetchApp.fetch(apiUrl, {
+        method: 'GET',
+        headers: { 'x-amz-access-token': token },
+        muteHttpExceptions: true
+      });
+      var code = apiResp.getResponseCode();
+
+      if (code === 200) {
+        var json = JSON.parse(apiResp.getContentText());
+        var sid = '';
+        try { sid = json.payload.Offers[0].SellerId || ''; } catch(e) {}
+        sellerData.sellerId = sid;
+        if (sid) sellerData.storefrontUrl = 'https://www.' + marketplace.domain + '/sp?seller=' + sid;
+        dsfLog('INFO', 'ASIN ' + asin + ': SellerID=' + (sid || 'brak'), inputRow);
+      } else if (code === 403) {
+        dsfLog('WARNING', 'ASIN ' + asin + ': getItemOffers 403 - brak dostepu. Probuje scraping...', inputRow);
+        Utilities.sleep(1000);
+        sellerData = dsfFetchSellerFromPage(asin, marketplace);
+        dsfLog('INFO', 'ASIN ' + asin + ' scraping: SellerID=' + (sellerData.sellerId || 'brak') + ' SellerName=' + (sellerData.sellerName || 'brak'), inputRow);
+      } else if (code === 429) {
+        dsfLog('WARNING', 'ASIN ' + asin + ': rate limit 429, czekam 5s...', inputRow);
+        Utilities.sleep(5000);
+      } else {
+        dsfLog('WARNING', 'ASIN ' + asin + ': getItemOffers HTTP ' + code, inputRow);
+      }
+    } catch(e) {
+      dsfLog('WARNING', 'ASIN ' + asin + ': blad getItemOffers: ' + e.message, inputRow);
+    }
+
+    if (sellerData.sellerId && sellerIdCol > 0) {
+      asinsSheet.getRange(r + 1, sellerIdCol).setValue(sellerData.sellerId);
+    }
+    if (sellerData.sellerName && sellerNameCol > 0) {
+      asinsSheet.getRange(r + 1, sellerNameCol).setValue(sellerData.sellerName);
+    }
+    if (sellerData.storefrontUrl && sellerUrlCol > 0) {
+      asinsSheet.getRange(r + 1, sellerUrlCol).setValue(sellerData.storefrontUrl);
+    }
+    SpreadsheetApp.flush();
+
+    // Rate limit: 0.5 req/sec
+    Utilities.sleep(2100);
+  }
+}
+
+function dsfFetchSellerDataForSelected() {
+  var ss = SpreadsheetApp.getActive();
+  var ui = SpreadsheetApp.getUi();
+  var asinsSheet = ss.getSheetByName('ASINS');
+  if (!asinsSheet) { ui.alert('Brak zakladki ASINS'); return; }
+
+  var inputSheet = ss.getSheetByName('INPUT');
+  if (!inputSheet) { ui.alert('Brak zakladki INPUT'); return; }
+
+  // Find INPUT rows with checked triggers
+  var lastRow = inputSheet.getLastRow();
+  var inputRows = [];
+  if (lastRow >= 2) {
+    var triggerData = inputSheet.getRange(2, 6, lastRow - 1, 1).getValues();
+    for (var i = 0; i < triggerData.length; i++) {
+      if (triggerData[i][0] === true) inputRows.push(i + 2);
+    }
+  }
+
+  if (inputRows.length === 0) {
+    ui.alert('Zaznacz checkbox(y) w kolumnie F w INPUT dla wierszy, ktorych ASINy chcesz uzupelnic.');
+    return;
+  }
+
+  var startTime = Date.now();
+  for (var r = 0; r < inputRows.length; r++) {
+    var rowNum = inputRows[r];
+    var market = (inputSheet.getRange(rowNum, 3).getValue() || 'DE').toString().trim().toUpperCase();
+    var marketplace = DSF_MARKETPLACES[market];
+    if (!marketplace) continue;
+
+    if (Date.now() - startTime > 4 * 60 * 1000) {
+      dsfLog('WARNING', 'dsfFetchSellerDataForSelected: przerwa z powodu limitu czasu.');
+      ui.alert('Przerwa', 'Limit czasu. Nie wszystkie ASINy zostaly przetworzone. Uruchom ponownie.', ui.ButtonSet.OK);
+      return;
+    }
+
+    dsfLog('INFO', 'Pobieranie seller data dla wiersza INPUT ' + rowNum, rowNum);
+    try {
+      dsfFetchSellerIds([], marketplace, rowNum);
+    } catch(e) {
+      dsfLog('WARNING', 'Blad seller data wiersz ' + rowNum + ': ' + e.message, rowNum);
+    }
+  }
+
+  ui.alert('Gotowe', 'Dane sprzedawcow pobrane dla ' + inputRows.length + ' wierszy.', ui.ButtonSet.OK);
+}
+
+// ==================== SELLER SYNC (onEdit) ====================
+
+/**
+ * Installable onEdit trigger for syncing SellerNameAmazon and SitePatron
+ * between sheets. Source of truth: INPUT and ASINS.
+ */
+function dsfOnEditSync(e) {
+  var sheet = e.source.getActiveSheet();
+  var name = sheet.getName();
+  var col = e.range.getColumn();
+  var row = e.range.getRow();
+  if (row < 2) return; // header row
+
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var colName = headers[col - 1];
+
+  if (colName !== 'SellerNameAmazon' && colName !== 'SitePatron') return;
+  if (name !== 'INPUT' && name !== 'ASINS') return;
+
+  var inputRow;
+  if (name === 'INPUT') {
+    inputRow = row;
+  } else {
+    inputRow = sheet.getRange(row, 1).getValue();
+  }
+  if (!inputRow) return;
+
+  var newValue = e.range.getValue();
+  dsfSyncSellerColumn(inputRow, colName, newValue, name, row);
+}
+
+function dsfSyncSellerColumn(inputRow, colName, newValue, sourceSheet, sourceRow) {
+  var ss = SpreadsheetApp.getActive();
+  var sheets = ['INPUT', 'SLUGS', 'ANALYSIS', 'ASINS'];
+
+  for (var s = 0; s < sheets.length; s++) {
+    var sheetName = sheets[s];
+    var sh = ss.getSheetByName(sheetName);
+    if (!sh || sh.getLastRow() < 2) continue;
+    var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    var targetCol = -1;
+    for (var h = 0; h < headers.length; h++) {
+      if (headers[h] === colName) { targetCol = h + 1; break; }
+    }
+    if (targetCol < 1) continue;
+
+    var data = sh.getDataRange().getValues();
+
+    for (var r = 1; r < data.length; r++) { // skip header
+      var rowInputRow;
+      if (sheetName === 'INPUT') {
+        rowInputRow = r + 1; // row number IS the input row
+      } else {
+        rowInputRow = data[r][0]; // column A = INPUT_Row
+      }
+      if (rowInputRow != inputRow) continue;
+
+      // Don't overwrite source cell
+      if (sheetName === sourceSheet && r + 1 === sourceRow) continue;
+
+      sh.getRange(r + 1, targetCol).setValue(newValue);
+    }
+  }
+  SpreadsheetApp.flush();
 }
 
 // ==================== HELPERS ====================
