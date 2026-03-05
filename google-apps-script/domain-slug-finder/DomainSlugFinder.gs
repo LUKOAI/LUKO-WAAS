@@ -124,7 +124,6 @@ function onOpen() {
     .addItem('Zainstaluj trigger', 'dsfSetupTriggers')
     .addSeparator()
     .addItem('Wyczysc kolejke', 'dsfClearQueue')
-    .addItem('Napraw puste wiersze', 'dsfCleanupOrphanCheckboxes')
     .addItem('Pokaz LOG', 'dsfShowLog')
     .addToUi();
 }
