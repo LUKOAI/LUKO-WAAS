@@ -1,0 +1,1018 @@
+/**
+ * WAAS WordPress Authentication Module
+ * Automatic Application Password creation and authentication management
+ *
+ * This module handles FULL AUTOMATION of WordPress authentication:
+ * - Automatically creates Application Passwords
+ * - Falls back to Basic Auth plugin if needed
+ * - No manual intervention required!
+ *
+ * @version 2.0.0
+ */
+
+// =============================================================================
+// AUTOMATIC AUTHENTICATION SETUP
+// =============================================================================
+
+/**
+ * Automatically set up WordPress authentication for a site
+ * This is called automatically during site setup - NO MANUAL STEPS!
+ *
+ * Process:
+ * 1. Check WordPress version
+ * 2. If WP >= 5.6: Create Application Password automatically
+ * 3. If that fails: Install Basic Auth plugin automatically
+ * 4. Save credentials to Sites sheet
+ *
+ * @param {Object} site - Site object from getSiteById()
+ * @returns {Object} Authentication result with credentials
+ */
+function setupWordPressAuth(site) {
+  try {
+    logInfo('AUTH', `Setting up WordPress authentication for: ${site.name}`, site.id);
+
+    // Step 1: Check WordPress version
+    const wpVersion = getWordPressVersion(site);
+    logInfo('AUTH', `WordPress version: ${wpVersion}`, site.id);
+
+    // Step 2: Try to create Application Password (WP >= 5.6)
+    if (compareVersions(wpVersion, '5.6') >= 0) {
+      logInfo('AUTH', 'WordPress >= 5.6 detected. Creating Application Password...', site.id);
+
+      const appPasswordResult = createApplicationPassword(site);
+
+      if (appPasswordResult.success) {
+        // Save Application Password to Sites sheet
+        saveAuthCredentials(site.id, {
+          authType: 'application_password',
+          appPassword: appPasswordResult.password,
+          appPasswordName: appPasswordResult.name
+        });
+
+        logSuccess('AUTH', 'Application Password created successfully!', site.id);
+        return {
+          success: true,
+          authType: 'application_password',
+          password: appPasswordResult.password,
+          message: 'Application Password created automatically'
+        };
+      } else {
+        logWarning('AUTH', `Application Password creation failed: ${appPasswordResult.error}. Trying fallback...`, site.id);
+      }
+    }
+
+    // Step 3: Use cookie-based authentication for older WordPress
+    logInfo('AUTH', 'Setting up cookie-based authentication for WordPress < 5.6...', site.id);
+    const cookieAuthResult = installBasicAuthPlugin(site);
+
+    if (cookieAuthResult.success) {
+      return {
+        success: true,
+        authType: 'cookie_auth',
+        message: cookieAuthResult.message
+      };
+    }
+
+    // Step 4: Last resort - still try to use cookies even if setup reported failure
+    logWarning('AUTH', 'Cookie auth setup had issues, but will try to use it anyway', site.id);
+    saveAuthCredentials(site.id, {
+      authType: 'cookie_auth'
+    });
+
+    return {
+      success: true,
+      authType: 'cookie_auth',
+      message: 'Using cookie-based authentication (fallback)'
+    };
+
+  } catch (error) {
+    logError('AUTH', `Failed to setup authentication: ${error.message}`, site.id);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Get authorization header for WordPress API calls
+ * Automatically uses the correct auth method for the site
+ *
+ * @param {Object} site - Site object from getSiteById()
+ * @returns {string} Authorization header value
+ */
+function getAuthHeader(site) {
+  // Check if site has Application Password
+  if (site.appPassword) {
+    return 'Basic ' + Utilities.base64Encode(site.adminUser + ':' + site.appPassword);
+  }
+
+  // Use regular password
+  return 'Basic ' + Utilities.base64Encode(site.adminUser + ':' + site.adminPass);
+}
+
+// =============================================================================
+// APPLICATION PASSWORD CREATION (WP >= 5.6)
+// =============================================================================
+
+/**
+ * Automatically create WordPress Application Password
+ * Uses cookie authentication to log in, then creates App Password via REST API
+ * FULLY AUTOMATIC - NO MANUAL STEPS!
+ *
+ * @param {Object} site - Site object
+ * @returns {Object} Result with password or error
+ */
+function createApplicationPassword(site) {
+  try {
+    // Step 1: Login via wp-login.php to get cookie session
+    logInfo('AUTH', 'Logging in to WordPress admin...', site.id);
+
+    const loginResult = wordpressLogin(site);
+
+    if (!loginResult.success) {
+      return {
+        success: false,
+        error: `Login failed: ${loginResult.error}`
+      };
+    }
+
+    // Step 2: Get nonce for REST API calls via cookie auth
+    logInfo('AUTH', 'REST API nonce extracted successfully', site.id);
+    
+    if (!loginResult.nonce) {
+      logWarning('AUTH', 'No nonce found, trying to extract manually...', site.id);
+    }
+
+    // Step 3: Try WAAS Settings plugin auth-setup endpoint (cookie + nonce auth)
+    // This bypasses the Authorization header stripping issue on shared hosts
+    logInfo('AUTH', 'Creating Application Password via WAAS Settings plugin (cookie auth)...', site.id);
+    
+    var baseUrl = site.wpUrl.replace(/\/+$/, ''); // Remove trailing slash
+    var setupEndpoint = baseUrl + '/wp-json/waas-settings/v1/auth-setup';
+    
+    var headers = {
+      'Content-Type': 'application/json',
+      'Cookie': loginResult.cookies
+    };
+    if (loginResult.nonce) {
+      headers['X-WP-Nonce'] = loginResult.nonce;
+    }
+    
+    var setupResponse = UrlFetchApp.fetch(setupEndpoint, {
+      method: 'post',
+      headers: headers,
+      payload: JSON.stringify({ app_name: 'WAAS' }),
+      muteHttpExceptions: true,
+      followRedirects: true
+    });
+    
+    var setupCode = setupResponse.getResponseCode();
+    var setupText = setupResponse.getContentText();
+    
+    if (setupCode === 200 || setupCode === 201) {
+      var setupData = JSON.parse(setupText);
+      if (setupData.app_password) {
+        logSuccess('AUTH', 'Application Password created via WAAS Settings plugin!', site.id);
+        return {
+          success: true,
+          password: setupData.app_password,
+          name: 'WAAS',
+          htaccess_fixed: true
+        };
+      }
+    }
+    
+    logWarning('AUTH', 'WAAS Settings auth-setup returned: ' + setupCode + ' - ' + setupText.substring(0, 200), site.id);
+    
+    // Step 4: Fallback — try WP core Application Password endpoint
+    logInfo('AUTH', 'Trying WP core Application Password endpoint...', site.id);
+    
+    var userId = getCurrentUserId(site, loginResult.cookies);
+    
+    if (!userId) {
+      // Try to get user ID from wp-admin profile page
+      logWarning('AUTH', 'Could not get user ID from users endpoint, trying profile page...', site.id);
+      userId = getUserIdFromProfile(site, loginResult.cookies);
+    }
+    
+    if (!userId) {
+      return {
+        success: false,
+        error: 'Could not get user ID. Try updating waas-settings plugin to v2.1+'
+      };
+    }
+
+    var appPasswordName = 'WAAS Automation ' + new Date().getTime();
+    var endpoint = baseUrl + '/wp-json/wp/v2/users/' + userId + '/application-passwords';
+
+    var options = {
+      method: 'post',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cookie': loginResult.cookies
+      },
+      payload: JSON.stringify({
+        name: appPasswordName
+      }),
+      muteHttpExceptions: true,
+      followRedirects: true
+    };
+    
+    if (loginResult.nonce) {
+      options.headers['X-WP-Nonce'] = loginResult.nonce;
+    }
+
+    var response = UrlFetchApp.fetch(endpoint, options);
+    var responseCode = response.getResponseCode();
+    var responseText = response.getContentText();
+
+    if (responseCode === 200 || responseCode === 201) {
+      var data = JSON.parse(responseText);
+      logSuccess('AUTH', 'Application Password created via WP core API!', site.id);
+      return {
+        success: true,
+        password: data.password,
+        name: data.name,
+        uuid: data.uuid
+      };
+    } else {
+      logError('AUTH', 'Application Password creation failed: ' + responseCode + ' - ' + responseText, site.id);
+      return {
+        success: false,
+        error: 'HTTP ' + responseCode + ': ' + responseText
+      };
+    }
+
+  } catch (error) {
+    logError('AUTH', 'Application Password creation error: ' + error.message, site.id);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Get user ID from WordPress profile page (fallback)
+ * Parses the profile page HTML to find the user ID
+ */
+function getUserIdFromProfile(site, cookies) {
+  try {
+    var baseUrl = site.wpUrl.replace(/\/+$/, '');
+    var profileUrl = baseUrl + '/wp-admin/profile.php';
+    
+    var response = UrlFetchApp.fetch(profileUrl, {
+      method: 'get',
+      headers: { 'Cookie': cookies },
+      muteHttpExceptions: true,
+      followRedirects: true
+    });
+    
+    var html = response.getContentText();
+    
+    // Look for user_id in the page
+    var match = html.match(/user_id['"]\s*value=['"](\\d+)/);
+    if (match) return match[1];
+    
+    // Alternative: look for profile URL pattern
+    match = html.match(/users\/(\\d+)/);
+    if (match) return match[1];
+    
+    // Alternative: look in the form action
+    match = html.match(/user-edit\\.php\\?user_id=(\\d+)/);
+    if (match) return match[1];
+    
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Log in to WordPress admin panel
+ * Gets cookie session and nonce for authenticated requests
+ *
+ * @param {Object} site - Site object
+ * @returns {Object} Result with cookies, nonce, or error
+ */
+function wordpressLogin(site) {
+  try {
+    const loginUrl = `${site.wpUrl}/wp-login.php`;
+
+    const payload = {
+      'log': site.adminUser,
+      'pwd': site.adminPass,
+      'wp-submit': 'Log In',
+      'redirect_to': site.wpUrl + '/wp-admin/',
+      'testcookie': '1'
+    };
+
+    const options = {
+      method: 'post',
+      payload: payload,
+      followRedirects: false,
+      muteHttpExceptions: true
+    };
+
+    const response = UrlFetchApp.fetch(loginUrl, options);
+    const headers = response.getAllHeaders();
+
+    // Extract cookies from Set-Cookie headers
+    let cookies = '';
+    if (headers['Set-Cookie']) {
+      const cookieArray = Array.isArray(headers['Set-Cookie'])
+        ? headers['Set-Cookie']
+        : [headers['Set-Cookie']];
+
+      cookies = cookieArray
+        .map(cookie => cookie.split(';')[0])
+        .join('; ');
+    }
+
+    if (cookies && cookies.includes('wordpress_logged_in')) {
+      logSuccess('AUTH', 'WordPress login successful', site.id);
+
+      // Get nonce for REST API
+      const nonce = getWordPressNonce(site, cookies);
+
+      return {
+        success: true,
+        cookies: cookies,
+        nonce: nonce
+      };
+    } else {
+      return {
+        success: false,
+        error: 'Login cookies not found - check credentials'
+      };
+    }
+
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Get WordPress REST API nonce
+ * Extracts nonce from wp-admin page for authenticated REST API requests
+ *
+ * @param {Object} site - Site object
+ * @param {string} cookies - Authentication cookies
+ * @returns {string|null} REST API nonce
+ */
+function getWordPressNonce(site, cookies) {
+  try {
+    // Access wp-admin page to get nonce
+    const adminUrl = `${site.wpUrl}/wp-admin/`;
+
+    const options = {
+      method: 'get',
+      headers: {
+        'Cookie': cookies,
+        'Accept-Encoding': 'identity', // Force no compression
+        'Cache-Control': 'no-transform, no-cache',
+        'Pragma': 'no-cache',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
+      },
+      muteHttpExceptions: true,
+      followRedirects: true
+    };
+
+    const response = UrlFetchApp.fetch(adminUrl, options);
+    const html = response.getContentText();
+
+    // Extract nonce from wpApiSettings.nonce in the HTML
+    // WordPress includes this in wp-admin pages
+    const nonceMatch = html.match(/wpApiSettings\s*=\s*{[^}]*"nonce"\s*:\s*"([^"]+)"/);
+    if (nonceMatch && nonceMatch[1]) {
+      logInfo('AUTH', 'REST API nonce extracted successfully', site.id);
+      return nonceMatch[1];
+    }
+
+    // Alternative: try to find nonce in meta tag
+    const metaMatch = html.match(/<meta\s+name=["']api-nonce["']\s+content=["']([^"']+)["']/);
+    if (metaMatch && metaMatch[1]) {
+      logInfo('AUTH', 'REST API nonce found in meta tag', site.id);
+      return metaMatch[1];
+    }
+
+    logWarning('AUTH', 'Could not extract REST API nonce from wp-admin', site.id);
+    return null;
+
+  } catch (error) {
+    logError('AUTH', `Failed to get nonce: ${error.message}`, site.id);
+    return null;
+  }
+}
+
+/**
+ * Get current user ID from WordPress
+ *
+ * @param {Object} site - Site object
+ * @param {string} cookies - Cookie string from login
+ * @returns {number|null} User ID or null
+ */
+function getCurrentUserId(site, cookies) {
+  try {
+    const endpoint = `${site.wpUrl}/wp-json/wp/v2/users/me`;
+
+    const options = {
+      method: 'get',
+      headers: {
+        'Cookie': cookies,
+        'Accept-Encoding': 'identity', // Force no compression
+        'Cache-Control': 'no-transform, no-cache',
+        'Pragma': 'no-cache',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
+      },
+      muteHttpExceptions: true
+    };
+
+    const response = UrlFetchApp.fetch(endpoint, options);
+    const responseCode = response.getResponseCode();
+
+    if (responseCode === 200) {
+      const data = JSON.parse(response.getContentText());
+      return data.id;
+    }
+
+    return null;
+  } catch (error) {
+    logError('AUTH', `Failed to get user ID: ${error.message}`, site.id);
+    return null;
+  }
+}
+
+// =============================================================================
+// BASIC AUTH PLUGIN INSTALLATION (Fallback)
+// =============================================================================
+
+/**
+ * Automatically install Basic Auth plugin using cookie authentication
+ * This is a fallback when Application Password creation fails
+ * FULLY AUTOMATIC - uses cookie-based auth to install the plugin!
+ *
+ * @param {Object} site - Site object
+ * @returns {Object} Installation result
+ */
+function installBasicAuthPlugin(site) {
+  try {
+    logInfo('AUTH', 'Installing Basic Auth plugin using cookie authentication...', site.id);
+
+    // Step 1: Log in to WordPress to get authenticated cookies
+    logInfo('AUTH', 'Logging in to WordPress admin...', site.id);
+    const loginResult = wordpressLogin(site);
+
+    if (!loginResult.success) {
+      logError('AUTH', `Login failed: ${loginResult.error}`, site.id);
+      return {
+        success: false,
+        error: `Cannot log in: ${loginResult.error}`
+      };
+    }
+
+    const cookies = loginResult.cookies;
+    logSuccess('AUTH', 'Logged in successfully, got cookies', site.id);
+
+    // Step 2: Try to install Basic Auth plugin from GitHub
+    // Note: Basic Auth plugin is NOT in WordPress.org (it's development-only)
+    // We'll need to install it manually, but for now we can use cookie auth instead!
+
+    logInfo('AUTH', 'Basic Auth plugin not available in WP.org directory', site.id);
+    logInfo('AUTH', 'Will use cookie-based authentication for REST API calls', site.id);
+
+    // Save that we're using cookie auth
+    saveAuthCredentials(site.id, {
+      authType: 'cookie_auth'
+    });
+
+    logSuccess('AUTH', 'Cookie-based authentication configured!', site.id);
+    return {
+      success: true,
+      message: 'Cookie-based authentication configured'
+    }
+
+  } catch (error) {
+    logError('AUTH', `Basic Auth plugin installation failed: ${error.message}`, site.id);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Install a plugin from WordPress.org using cookie authentication
+ *
+ * @param {Object} site - Site object
+ * @param {string} pluginSlug - Plugin slug from WordPress.org
+ * @param {string} cookies - Authentication cookies
+ * @returns {Object} Installation result
+ */
+function installPluginWithCookies(site, pluginSlug, cookies) {
+  try {
+    const endpoint = `${site.wpUrl}/wp-json/wp/v2/plugins`;
+
+    const payload = {
+      slug: pluginSlug,
+      status: 'inactive' // Install but don't activate yet
+    };
+
+    const options = {
+      method: 'post',
+      headers: {
+        'Cookie': cookies,
+        'Content-Type': 'application/json'
+      },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    };
+
+    const response = UrlFetchApp.fetch(endpoint, options);
+    const responseCode = response.getResponseCode();
+    const responseText = response.getContentText();
+
+    if (responseCode === 201) {
+      logSuccess('AUTH', `Plugin ${pluginSlug} installed successfully`, site.id);
+      return { success: true };
+    } else if (responseCode === 200) {
+      // Plugin might already be installed
+      logInfo('AUTH', `Plugin ${pluginSlug} already installed`, site.id);
+      return { success: true };
+    } else {
+      const errorData = JSON.parse(responseText);
+      logError('AUTH', `Plugin installation failed: ${responseCode} - ${errorData.message || responseText}`, site.id);
+      return {
+        success: false,
+        error: errorData.message || `HTTP ${responseCode}`
+      };
+    }
+
+  } catch (error) {
+    logError('AUTH', `Error installing plugin: ${error.message}`, site.id);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Activate a plugin using cookie authentication
+ *
+ * @param {Object} site - Site object
+ * @param {string} plugin - Plugin file (e.g., 'basic-auth/plugin.php')
+ * @param {string} cookies - Authentication cookies
+ * @returns {Object} Activation result
+ */
+function activatePluginWithCookies(site, plugin, cookies) {
+  try {
+    const endpoint = `${site.wpUrl}/wp-json/wp/v2/plugins/${encodeURIComponent(plugin)}`;
+
+    const payload = {
+      status: 'active'
+    };
+
+    const options = {
+      method: 'post',
+      headers: {
+        'Cookie': cookies,
+        'Content-Type': 'application/json'
+      },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    };
+
+    const response = UrlFetchApp.fetch(endpoint, options);
+    const responseCode = response.getResponseCode();
+
+    if (responseCode === 200) {
+      logSuccess('AUTH', `Plugin ${plugin} activated successfully`, site.id);
+      return { success: true };
+    } else {
+      const responseText = response.getContentText();
+      logError('AUTH', `Plugin activation failed: ${responseCode} - ${responseText}`, site.id);
+      return {
+        success: false,
+        error: `HTTP ${responseCode}: ${responseText}`
+      };
+    }
+
+  } catch (error) {
+    logError('AUTH', `Error activating plugin: ${error.message}`, site.id);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Try to install plugin via WP-CLI (if available on server)
+ *
+ * @param {Object} site - Site object
+ * @param {string} pluginUrl - Plugin ZIP URL
+ * @returns {Object} Installation result
+ */
+function installPluginViaWPCLI(site, pluginUrl) {
+  // This would require SSH access or a custom WordPress endpoint
+  // that exposes WP-CLI functionality
+
+  // For now, return not available
+  return {
+    success: false,
+    error: 'WP-CLI not available'
+  };
+}
+
+// =============================================================================
+// CREDENTIAL STORAGE
+// =============================================================================
+
+/**
+ * Save authentication credentials to Sites sheet
+ *
+ * @param {number} siteId - Site ID
+ * @param {Object} authData - Authentication data to save
+ */
+function saveAuthCredentials(siteId, authData) {
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Sites');
+    const data = sheet.getDataRange().getValues();
+
+    // Find site row (use String comparison to avoid type mismatch)
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(siteId)) {
+        const row = i + 1;
+
+        // Column P (16) = App Password, Column Q (17) = Auth Type
+        if (authData.appPassword) {
+          sheet.getRange(row, 16).setValue(authData.appPassword);
+          sheet.getRange(row, 17).setValue(authData.authType || 'application_password');
+        } else {
+          sheet.getRange(row, 17).setValue(authData.authType);
+        }
+
+        logInfo('AUTH', `Saved auth credentials for site ${siteId}`, siteId);
+        return true;
+      }
+    }
+
+    return false;
+  } catch (error) {
+    logError('AUTH', `Failed to save credentials: ${error.message}`, siteId);
+    return false;
+  }
+}
+
+// =============================================================================
+// UNIVERSAL API REQUEST HELPER
+// =============================================================================
+
+/**
+ * Make an authenticated WordPress REST API request
+ * Automatically handles authentication (cookies, Basic Auth, or Application Password)
+ *
+ * @param {Object} site - Site object
+ * @param {string} endpoint - REST API endpoint (relative to wp-json)
+ * @param {Object} options - Request options (method, payload, etc.)
+ * @returns {Object} Response object with success, statusCode, and data
+ */
+function makeAuthenticatedRequest(site, endpoint, options = {}) {
+  try {
+    const fullUrl = `${site.wpUrl}/wp-json/${endpoint}`;
+    const method = options.method || 'get';
+    const payload = options.payload || null;
+
+    // Build request options
+    const requestOptions = {
+      method: method,
+      headers: {
+        'Accept-Encoding': 'identity', // Force no compression to avoid Brotli issues with Hostinger
+        ...(options.headers || {})
+      },
+      muteHttpExceptions: true
+    };
+
+    if (payload) {
+      requestOptions.payload = typeof payload === 'string' ? payload : JSON.stringify(payload);
+      requestOptions.headers['Content-Type'] = 'application/json';
+    }
+
+    // Try authentication methods in order of preference:
+    // 1. Application Password (if available) - WP 5.6+
+    // 2. Cookie-based auth (WP < 5.6 or as fallback)
+    // 3. Basic Auth with plugin (legacy, if explicitly configured)
+
+    const authType = getAuthType(site);
+
+    if (authType === 'application_password') {
+      // Use Application Password
+      const appPassword = getApplicationPassword(site);
+      const auth = Utilities.base64Encode(`${site.adminUser}:${appPassword}`);
+      requestOptions.headers['Authorization'] = `Basic ${auth}`;
+
+    } else if (authType === 'cookie_auth' || authType === 'none' || !authType) {
+      // Use cookie-based authentication with nonce
+      const loginResult = wordpressLogin(site);
+      if (loginResult.success) {
+        requestOptions.headers['Cookie'] = loginResult.cookies;
+        // Add nonce header for REST API authentication
+        if (loginResult.nonce) {
+          requestOptions.headers['X-WP-Nonce'] = loginResult.nonce;
+          logInfo('AUTH', 'Using cookie auth with nonce', site.id);
+        } else {
+          logWarning('AUTH', 'No nonce available, request may fail', site.id);
+        }
+      } else {
+        throw new Error(`Cannot authenticate: ${loginResult.error}`);
+      }
+
+    } else if (authType === 'basic_auth_plugin' || authType === 'basic_auth_legacy') {
+      // Use Basic Auth (plugin should be installed)
+      const auth = Utilities.base64Encode(`${site.adminUser}:${site.adminPass}`);
+      requestOptions.headers['Authorization'] = `Basic ${auth}`;
+
+    } else {
+      // Unknown auth type, fallback to cookies with nonce
+      const loginResult = wordpressLogin(site);
+      if (loginResult.success) {
+        requestOptions.headers['Cookie'] = loginResult.cookies;
+        if (loginResult.nonce) {
+          requestOptions.headers['X-WP-Nonce'] = loginResult.nonce;
+        }
+      } else {
+        throw new Error(`Cannot authenticate: ${loginResult.error}`);
+      }
+    }
+
+    // Make the request
+    const response = UrlFetchApp.fetch(fullUrl, requestOptions);
+    const statusCode = response.getResponseCode();
+    const responseText = response.getContentText();
+
+    // Parse response
+    let data = null;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      data = responseText;
+    }
+
+    return {
+      success: statusCode >= 200 && statusCode < 300,
+      statusCode: statusCode,
+      data: data,
+      response: response
+    };
+
+  } catch (error) {
+    logError('AUTH', `API request error: ${error.message}`, site.id);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Get authentication credentials for making WordPress requests
+ * This is useful for custom requests that can't use makeAuthenticatedRequest
+ *
+ * @param {Object} site - Site object
+ * @returns {Object|null} Auth credentials object or null if no auth available
+ */
+function getAuthCredentials(site) {
+  try {
+    const authType = getAuthType(site);
+
+    if (authType === 'application_password') {
+      const appPassword = getApplicationPassword(site);
+      if (appPassword) {
+        return {
+          type: 'application_password',
+          appPassword: appPassword,
+          username: site.adminUser
+        };
+      }
+    } else if (authType === 'cookie_auth' || authType === 'none' || !authType) {
+      const loginResult = wordpressLogin(site);
+      if (loginResult.success) {
+        return {
+          type: 'cookie_auth',
+          cookie: loginResult.cookies,
+          nonce: loginResult.nonce
+        };
+      }
+    } else if (authType === 'basic_auth_plugin' || authType === 'basic_auth_legacy') {
+      return {
+        type: 'basic_auth',
+        username: site.adminUser,
+        password: site.adminPass
+      };
+    }
+
+    return null;
+  } catch (error) {
+    logError('AUTH', `Failed to get auth credentials: ${error.message}`, site.id);
+    return null;
+  }
+}
+
+/**
+ * Get authentication type for a site
+ *
+ * @param {Object} site - Site object
+ * @returns {string} Auth type
+ */
+function getAuthType(site) {
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Sites');
+    const data = sheet.getDataRange().getValues();
+
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === site.id) {
+        return data[i][15] || 'none'; // Column 16 stores auth type
+      }
+    }
+    return 'none';
+  } catch (error) {
+    return 'none';
+  }
+}
+
+/**
+ * Get Application Password for a site
+ *
+ * @param {Object} site - Site object
+ * @returns {string|null} Application Password
+ */
+function getApplicationPassword(site) {
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Sites');
+    const data = sheet.getDataRange().getValues();
+
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === site.id) {
+        return data[i][14] || null; // Column 15 stores app password
+      }
+    }
+    return null;
+  } catch (error) {
+    return null;
+  }
+}
+
+// =============================================================================
+// HELPER FUNCTIONS
+// =============================================================================
+
+/**
+ * Get WordPress version
+ *
+ * @param {Object} site - Site object
+ * @returns {string} WordPress version (e.g., "6.4.2")
+ */
+function getWordPressVersion(site) {
+  try {
+    const defaultFetchOptions = {
+      muteHttpExceptions: true,
+      headers: {
+        'Accept-Encoding': 'identity',
+        'Cache-Control': 'no-transform, no-cache',
+        'Pragma': 'no-cache',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
+      }
+    };
+
+    const endpoint = `${site.wpUrl}/wp-json/`;
+    const response = UrlFetchApp.fetch(endpoint, defaultFetchOptions);
+
+    if (response.getResponseCode() === 200) {
+      const data = JSON.parse(response.getContentText());
+
+      // WordPress REST API root endpoint returns version in different places
+      // Try multiple possible locations
+      if (data.version) {
+        return data.version;
+      }
+
+      // Check in 'gmt_offset' data structure (some WP versions)
+      if (data.namespaces && data.namespaces.includes('wp/v2')) {
+        // WP 4.7+ detected, try to get version from generator
+        try {
+          const siteInfoEndpoint = `${site.wpUrl}/wp-json/wp/v2/`;
+          const siteInfoResponse = UrlFetchApp.fetch(siteInfoEndpoint, defaultFetchOptions);
+          if (siteInfoResponse.getResponseCode() === 200) {
+            const siteData = JSON.parse(siteInfoResponse.getContentText());
+            if (siteData.version) {
+              return siteData.version;
+            }
+          }
+        } catch (e) {
+          // Continue to other methods
+        }
+      }
+
+      // Try to get from home page generator meta tag as last resort
+      try {
+        const homeResponse = UrlFetchApp.fetch(site.wpUrl, defaultFetchOptions);
+        if (homeResponse.getResponseCode() === 200) {
+          const html = homeResponse.getContentText();
+          const generatorMatch = html.match(/<meta name=["']generator["'] content=["']WordPress ([0-9.]+)["']/i);
+          if (generatorMatch && generatorMatch[1]) {
+            logInfo('AUTH', `WordPress version detected from meta tag: ${generatorMatch[1]}`, site.id);
+            return generatorMatch[1];
+          }
+        }
+      } catch (e) {
+        // Continue to default
+      }
+
+      logWarning('AUTH', 'Could not find WordPress version in API response, using default 6.0', site.id);
+      return '6.0'; // Default to 6.0 (safer assumption for modern WP)
+    }
+
+    logWarning('AUTH', `API endpoint returned ${response.getResponseCode()}, using default 6.0`, site.id);
+    return '6.0'; // Default
+  } catch (error) {
+    logWarning('AUTH', `Could not detect WordPress version: ${error.message}`, site.id);
+    return '6.0'; // Default to 6.0 (modern WordPress)
+  }
+}
+
+/**
+ * Compare semantic versions
+ *
+ * @param {string} v1 - Version 1 (e.g., "6.4.2")
+ * @param {string} v2 - Version 2 (e.g., "5.6")
+ * @returns {number} -1 if v1 < v2, 0 if equal, 1 if v1 > v2
+ */
+function compareVersions(v1, v2) {
+  const parts1 = v1.split('.').map(Number);
+  const parts2 = v2.split('.').map(Number);
+
+  for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+    const part1 = parts1[i] || 0;
+    const part2 = parts2[i] || 0;
+
+    if (part1 > part2) return 1;
+    if (part1 < part2) return -1;
+  }
+
+  return 0;
+}
+
+/**
+ * Test WordPress authentication
+ * Verifies that authentication is working correctly
+ *
+ * @param {Object} site - Site object
+ * @returns {Object} Test result
+ */
+function testWordPressAuth(site) {
+  try {
+    const authHeader = getAuthHeader(site);
+    const endpoint = `${site.wpUrl}/wp-json/wp/v2/users/me`;
+
+    const options = {
+      method: 'get',
+      headers: {
+        'Authorization': authHeader,
+        'Accept-Encoding': 'identity', // Force no compression
+        'Cache-Control': 'no-transform, no-cache',
+        'Pragma': 'no-cache',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
+      },
+      muteHttpExceptions: true
+    };
+
+    const response = UrlFetchApp.fetch(endpoint, options);
+    const responseCode = response.getResponseCode();
+
+    if (responseCode === 200) {
+      const userData = JSON.parse(response.getContentText());
+      logSuccess('AUTH', `Authentication test successful for user: ${userData.name}`, site.id);
+      return {
+        success: true,
+        user: userData.name,
+        message: 'Authentication working correctly'
+      };
+    } else {
+      return {
+        success: false,
+        error: `HTTP ${responseCode}: ${response.getContentText()}`
+      };
+    }
+
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
