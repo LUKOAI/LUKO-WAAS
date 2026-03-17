@@ -200,7 +200,7 @@ function cpSiteTransition() {
     '1. Update Legal (Impressum, Datenschutz, Footer)\n' +
     '2. Delete old posts, products, tags\n' +
     '3. Clean remnants (stare nazwy)\n' +
-    '4. Rewrite ALL page texts via Claude AI\n' +
+    '4. Niche Replace (bulk str_replace from sheet)\n' +
     '5. Generate 3 basic blog posts via Claude AI\n' +
     '6. Deploy menu\n' +
     '7. Verify site\n\n' +
@@ -217,7 +217,7 @@ function cpSiteTransition() {
       { id: 'update_legal', name: 'Update Legal + Footer', done: false },
       { id: 'delete_old', name: 'Delete Old Content', done: false },
       { id: 'clean_remnants', name: 'Clean Remnants', done: false },
-      { id: 'rewrite_pages', name: 'Rewrite Page Texts (Claude AI)', done: false },
+      { id: 'rewrite_pages', name: 'Niche Replace (Bulk str_replace)', done: false },
       { id: 'generate_posts', name: 'Generate Blog Posts (Claude AI)', done: false },
       { id: 'export_posts', name: 'Export Posts to WordPress', done: false },
       { id: 'deploy_menu', name: 'Deploy Menu', done: false },
@@ -349,9 +349,9 @@ function _tsExecuteStep(state, step, wpUrl, auth, startTime, maxRt) {
       }
       break;
     
-    // --- STEP 4: REWRITE PAGES VIA CLAUDE ---
+    // --- STEP 4: NICHE REPLACE (bulk str_replace from sheet) ---
     case 'rewrite_pages':
-      return _tsRewritePagesAuto(state, wpUrl, auth, startTime, maxRt);
+      return _tsBulkNicheReplace(state, wpUrl, auth);
     
     // --- STEP 5: GENERATE BLOG POSTS VIA CLAUDE ---
     case 'generate_posts':
@@ -805,6 +805,172 @@ function cpTransitionCleanRemnants() {
   var a = cpGetWPAuthForMedia(site, w); if (!a.cookies) { ui.alert('Auth fail'); return; }
   var r = _cpCleanupCall(w, a, 'clean_remnants', { old_names: _cpGetOldNames(), new_name: v.siteName });
   ui.alert('✅ Cleaned ' + (r.results.fixed || 0) + ' → "' + v.siteName + '"');
+}
+
+
+// ============================================================================
+// NICHE REPLACE — deterministic bulk str_replace (replaces AI rewrite)
+// ============================================================================
+
+function _tsBulkNicheReplace(state, wpUrl, auth) {
+  // 1. Read replacement pairs from Transition_Map_CP sheet
+  var pairs = _tsGetReplacementPairs(state.domain);
+  if (pairs.length === 0) {
+    _tsLog(state, '⚠️ No replacement pairs in Transition_Map_CP for ' + state.domain + ' — skip');
+    return 'OK';
+  }
+
+  // 2. Dry run first
+  _tsLog(state, '🔎 Niche Replace: ' + pairs.length + ' pairs — dry run...');
+  var scanResult = _cpCleanupCall(wpUrl, auth, 'niche_replace', { pairs: pairs, dry_run: true });
+  if (scanResult && scanResult.results && scanResult.results.stats) {
+    var totalHits = 0;
+    scanResult.results.stats.forEach(function(s) { totalHits += (s.hits || 0); });
+    _tsLog(state, '  📊 Dry run: ' + totalHits + ' total hits across ' + pairs.length + ' pairs');
+    if (totalHits === 0) {
+      _tsLog(state, '  ✅ Nothing to replace — all clean');
+      return 'OK';
+    }
+  }
+
+  // 3. Execute replacement
+  _tsLog(state, '🔄 Executing niche replace...');
+  var result = _cpCleanupCall(wpUrl, auth, 'niche_replace', { pairs: pairs, dry_run: false });
+
+  if (result && result.success) {
+    state.results.nicheReplace = result.results;
+    _tsLog(state, '✅ Niche replace done: ' + result.results.pairs_processed + ' pairs applied');
+  } else {
+    _tsLog(state, '❌ Niche replace failed');
+  }
+
+  return 'OK';
+}
+
+function _tsGetReplacementPairs(targetDomain) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Transition_Map_CP');
+  if (!sheet) return [];
+
+  var data = sheet.getDataRange().getValues();
+  if (data.length < 2) return [];
+  var headers = data[0];
+  var col = {};
+  headers.forEach(function(h, i) { col[h.toString().trim()] = i; });
+
+  var pairs = [];
+  for (var r = 1; r < data.length; r++) {
+    var row = data[r];
+    var rowTarget = (row[col['Target_Domain']] || '').toString().trim();
+    if (rowTarget !== targetDomain && rowTarget !== '*') continue;
+    if (row[col['Active']] !== true && row[col['Active']].toString().toUpperCase() !== 'TRUE') continue;
+
+    var oldTerm = (row[col['Source_Term']] || '').toString().trim();
+    var newTerm = (row[col['Target_Term']] || '').toString().trim();
+    if (!oldTerm || !newTerm || oldTerm === newTerm) continue;
+
+    var priority = parseInt(row[col['Priority']] || 0) || 0;
+    pairs.push({ old: oldTerm, new: newTerm, priority: priority });
+  }
+
+  // Sort: highest priority first, then longest string first
+  pairs.sort(function(a, b) {
+    if (b.priority !== a.priority) return b.priority - a.priority;
+    return b.old.length - a.old.length;
+  });
+
+  return pairs;
+}
+
+
+// ============================================================================
+// TRANSITION MAP SHEET — setup and populate
+// ============================================================================
+
+function cpSetupTransitionMapSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var existing = ss.getSheetByName('Transition_Map_CP');
+  if (existing) {
+    SpreadsheetApp.getUi().alert('Sheet "Transition_Map_CP" already exists.');
+    return;
+  }
+
+  var sheet = ss.insertSheet('Transition_Map_CP');
+  var headers = ['Source_Template', 'Source_Term', 'Target_Term', 'Target_Domain', 'Type', 'Priority', 'Active', 'Notes'];
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold').setBackground('#4a86c8').setFontColor('white');
+  sheet.setFrozenRows(1);
+
+  // Column widths
+  sheet.setColumnWidth(1, 220); // Source_Template
+  sheet.setColumnWidth(2, 200); // Source_Term
+  sheet.setColumnWidth(3, 200); // Target_Term
+  sheet.setColumnWidth(4, 220); // Target_Domain
+  sheet.setColumnWidth(5, 100); // Type
+  sheet.setColumnWidth(6, 80);  // Priority
+  sheet.setColumnWidth(7, 70);  // Active
+  sheet.setColumnWidth(8, 250); // Notes
+
+  // Data validation for Type column
+  var typeRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['brand', 'product', 'technical', 'description', 'category', 'slug', 'meta'], true)
+    .setAllowInvalid(false).build();
+  sheet.getRange(2, 5, 500, 1).setDataValidation(typeRule);
+
+  // Checkboxes for Active column
+  sheet.getRange(2, 7, 500, 1).insertCheckboxes();
+
+  SpreadsheetApp.getUi().alert('✅ Sheet "Transition_Map_CP" created.\n\nUse "Populate Map for Domain" to add template rows for a target domain.');
+}
+
+function cpPopulateTransitionMap() {
+  var ui = SpreadsheetApp.getUi();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Transition_Map_CP');
+  if (!sheet) { ui.alert('❌ Sheet "Transition_Map_CP" not found.\nUse "Setup Transition Map" first.'); return; }
+
+  var resp = ui.prompt('📋 Populate Transition Map',
+    'Enter the TARGET domain (e.g., rasenkante.lk24.shop):', ui.ButtonSet.OK_CANCEL);
+  if (resp.getSelectedButton() !== ui.Button.OK) return;
+  var targetDomain = resp.getResponseText().trim();
+
+  var resp2 = ui.prompt('📋 Source Template',
+    'Enter the SOURCE template domain (default: erdloch-bohren.lk24.shop):', ui.ButtonSet.OK_CANCEL);
+  var sourceTemplate = 'erdloch-bohren.lk24.shop';
+  if (resp2.getSelectedButton() === ui.Button.OK && resp2.getResponseText().trim()) {
+    sourceTemplate = resp2.getResponseText().trim();
+  }
+
+  // Template terms for erdloch-bohren (extend as needed)
+  var templateTerms = [
+    { term: 'Erdloch-Bohren', type: 'brand', priority: 100, notes: 'Site name / brand' },
+    { term: 'Erdbohrer', type: 'product', priority: 90, notes: 'Main product category' },
+    { term: 'Erdlochbohrer', type: 'product', priority: 90, notes: 'Product variant' },
+    { term: 'Erdloch bohren', type: 'technical', priority: 85, notes: 'Main action' },
+    { term: 'Bohrung', type: 'technical', priority: 80, notes: 'Technical noun' },
+    { term: 'Bohren', type: 'technical', priority: 70, notes: 'Action verb' },
+    { term: 'Bohrtiefe', type: 'technical', priority: 75, notes: 'Technical term' },
+    { term: 'Bohrdurchmesser', type: 'technical', priority: 75, notes: 'Technical term' },
+    { term: 'Erdbohrer-Ratgeber', type: 'category', priority: 80, notes: 'Category name' },
+    { term: 'Bohr-Tipps', type: 'category', priority: 80, notes: 'Category name' },
+    { term: 'Zaunpfahl', type: 'product', priority: 70, notes: 'Related product' },
+    { term: 'Pflanzloch', type: 'technical', priority: 70, notes: 'Use case' },
+  ];
+
+  var rows = templateTerms.map(function(t) {
+    return [sourceTemplate, t.term, '', targetDomain, t.type, t.priority, true, t.notes + ' — FILL Target_Term!'];
+  });
+
+  var lastRow = Math.max(sheet.getLastRow(), 1);
+  sheet.getRange(lastRow + 1, 1, rows.length, 8).setValues(rows);
+
+  // Re-apply checkboxes
+  sheet.getRange(lastRow + 1, 7, rows.length, 1).insertCheckboxes();
+  // Highlight empty Target_Term cells
+  sheet.getRange(lastRow + 1, 3, rows.length, 1).setBackground('#FFEB3B');
+
+  ui.alert('✅ Added ' + rows.length + ' template rows for ' + targetDomain + '.\n\n' +
+    '⚠️ FILL IN the yellow Target_Term column!\n' +
+    'Then run Transition to apply.');
 }
 
 
