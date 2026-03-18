@@ -6,9 +6,10 @@
  * Provides bulk str_replace across all WordPress database tables.
  *
  * Endpoint: POST /wp-json/waas-niche/v1/replace
+ * Endpoint: POST /wp-json/waas-niche/v1/cleanup-shortcodes
  * Auth: Cookie + X-WP-Nonce (same as waas-pipeline endpoints)
  *
- * @version 1.0
+ * @version 1.1
  * @date 2026-03-18
  */
 
@@ -30,7 +31,7 @@ add_action('rest_api_init', function() {
             return rest_ensure_response([
                 'success' => true,
                 'plugin'  => 'waas-niche-replace',
-                'version' => '1.0',
+                'version' => '1.1',
                 'time'    => current_time('mysql'),
             ]);
         },
@@ -49,6 +50,11 @@ add_action('rest_api_init', function() {
     ]);
 });
 
+
+// ============================================================================
+// CLEANUP SHORTCODES — remove [waas_product ...] from post content
+// ============================================================================
+
 function waas_niche_cleanup_shortcodes_handler($request) {
     global $wpdb;
 
@@ -57,22 +63,30 @@ function waas_niche_cleanup_shortcodes_handler($request) {
 
     // Find posts with waas_product shortcodes
     $posts_with_shortcodes = $wpdb->get_results(
-        "SELECT ID, post_title FROM {$wpdb->posts} WHERE post_content LIKE '%[waas_product%' AND post_status IN ('publish','draft')"
+        "SELECT ID, post_title FROM {$wpdb->posts} WHERE post_content LIKE '%[waas\_product%' AND post_status IN ('publish','draft')"
     );
 
     $affected = count($posts_with_shortcodes);
 
     if (!$dry_run && $affected > 0) {
-        // Remove all [waas_product ...] shortcodes (any attributes)
-        // MySQL REGEXP_REPLACE available in MySQL 8+ / MariaDB 10.0.5+
-        $wpdb->query(
-            "UPDATE {$wpdb->posts} SET post_content = REGEXP_REPLACE(post_content, '\\\\[waas_product[^\\\\]]*\\\\]', '') WHERE post_content LIKE '%[waas_product%'"
-        );
+        // Use PHP preg_replace per post — works on any MySQL version
+        foreach ($posts_with_shortcodes as $post) {
+            $content = $wpdb->get_var($wpdb->prepare(
+                "SELECT post_content FROM {$wpdb->posts} WHERE ID = %d", $post->ID
+            ));
+            if (!$content) continue;
 
-        // Also clean up empty paragraphs left behind
-        $wpdb->query(
-            "UPDATE {$wpdb->posts} SET post_content = REPLACE(post_content, '<p></p>', '') WHERE post_content LIKE '%<p></p>%'"
-        );
+            // Remove [waas_product ...] shortcodes (any attributes inside brackets)
+            $new_content = preg_replace('/\[waas_product[^\]]*\]/', '', $content);
+
+            // Clean up empty paragraphs left behind
+            $new_content = str_replace('<p></p>', '', $new_content);
+            $new_content = preg_replace('/\n{3,}/', "\n\n", $new_content);
+
+            if ($new_content !== $content) {
+                $wpdb->update($wpdb->posts, ['post_content' => $new_content], ['ID' => $post->ID]);
+            }
+        }
 
         // Clear caches
         $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '%et_divi_static%'");
@@ -92,6 +106,13 @@ function waas_niche_cleanup_shortcodes_handler($request) {
         ],
     ]);
 }
+
+
+// ============================================================================
+// NICHE REPLACE — bulk str_replace with multiple pairs
+// ============================================================================
+
+function waas_niche_replace_handler($request) {
     global $wpdb;
 
     $params  = $request->get_json_params();
