@@ -201,9 +201,12 @@ function cpSiteTransition() {
     '2. Delete old posts, products, tags\n' +
     '3. Clean remnants (stare nazwy)\n' +
     '4. Niche Replace (bulk str_replace from sheet)\n' +
-    '5. Generate 3 basic blog posts via Claude AI\n' +
-    '6. Deploy menu\n' +
-    '7. Verify site\n\n' +
+    '5. AI Rewrite Markenprofil\n' +
+    '6. Cleanup broken product shortcodes\n' +
+    '7. Generate 3 basic blog posts via Claude AI\n' +
+    '8. Export posts to WordPress\n' +
+    '9. Deploy menu (auto via AI)\n' +
+    '10. Verify site\n\n' +
     'Start?', ui.ButtonSet.YES_NO);
   if (confirm !== ui.Button.YES) return;
   
@@ -212,15 +215,17 @@ function cpSiteTransition() {
     domain: domain, wpUrl: wpUrl, status: 'running',
     siteName: validation.siteName, niche: validation.niche,
     partnerTag: validation.partnerTag, patron: validation.patron,
-    currentStep: 0, totalSteps: 8,
+    currentStep: 0, totalSteps: 10,
     steps: [
       { id: 'update_legal', name: 'Update Legal + Footer', done: false },
       { id: 'delete_old', name: 'Delete Old Content', done: false },
       { id: 'clean_remnants', name: 'Clean Remnants', done: false },
       { id: 'rewrite_pages', name: 'Niche Replace (Bulk str_replace)', done: false },
+      { id: 'rewrite_markenprofil', name: 'AI Rewrite Markenprofil', done: false },
+      { id: 'cleanup_shortcodes', name: 'Cleanup Broken Shortcodes', done: false },
       { id: 'generate_posts', name: 'Generate Blog Posts (Claude AI)', done: false },
       { id: 'export_posts', name: 'Export Posts to WordPress', done: false },
-      { id: 'deploy_menu', name: 'Deploy Menu', done: false },
+      { id: 'deploy_menu', name: 'Deploy Menu (Auto)', done: false },
       { id: 'verify', name: 'Verify Site', done: false },
     ],
     results: {}, log: [], ourPostIds: [],
@@ -352,7 +357,15 @@ function _tsExecuteStep(state, step, wpUrl, auth, startTime, maxRt) {
     // --- STEP 4: NICHE REPLACE (bulk str_replace from sheet) ---
     case 'rewrite_pages':
       return _tsBulkNicheReplace(state, wpUrl, auth);
-    
+
+    // --- STEP 4b: AI REWRITE MARKENPROFIL ---
+    case 'rewrite_markenprofil':
+      return _tsRewriteMarkenprofil(state, wpUrl, auth);
+
+    // --- STEP 4c: CLEANUP BROKEN PRODUCT SHORTCODES ---
+    case 'cleanup_shortcodes':
+      return _tsCleanupShortcodes(state, wpUrl, auth);
+
     // --- STEP 5: GENERATE BLOG POSTS VIA CLAUDE ---
     case 'generate_posts':
       return _tsGeneratePostsAuto(state, wpUrl, auth, startTime, maxRt);
@@ -733,6 +746,175 @@ function _tsReadMenuFromSheet(domain, sheet) {
   }
   items.sort(function(a, b) { return a.order - b.order; });
   return items;
+}
+
+
+// ============================================================================
+// MARKENPROFIL AI REWRITE — rewrite brand profile page via Claude
+// ============================================================================
+
+function _tsRewriteMarkenprofil(state, wpUrl, auth) {
+  // 1. Find markenprofil page
+  var pagesResp = UrlFetchApp.fetch(wpUrl + '/wp-json/wp/v2/pages?per_page=50&_fields=id,title,slug,status', {
+    headers: { 'Cookie': auth.cookies, 'X-WP-Nonce': auth.nonce }, muteHttpExceptions: true
+  });
+  if (pagesResp.getResponseCode() !== 200) {
+    _tsLog(state, '⚠️ Markenprofil: cannot get pages');
+    return 'OK';
+  }
+  var pages = JSON.parse(pagesResp.getContentText());
+  var mp = null;
+  for (var i = 0; i < pages.length; i++) {
+    if (pages[i].slug === 'markenprofil' && pages[i].status === 'publish') { mp = pages[i]; break; }
+  }
+  if (!mp) {
+    _tsLog(state, '⏭️ Markenprofil: page not found — skip');
+    return 'OK';
+  }
+
+  // 2. Extract current texts from markenprofil
+  var exResp = UrlFetchApp.fetch(wpUrl + '/wp-json/waas-pipeline/v1/extract-texts/' + mp.id, {
+    headers: { 'Cookie': auth.cookies, 'X-WP-Nonce': auth.nonce }, muteHttpExceptions: true
+  });
+  if (exResp.getResponseCode() !== 200) {
+    _tsLog(state, '⚠️ Markenprofil: extract-texts failed');
+    return 'OK';
+  }
+  var extracted = JSON.parse(exResp.getContentText());
+  if (extracted.texts_found === 0) {
+    _tsLog(state, '⏭️ Markenprofil: no texts found');
+    return 'OK';
+  }
+
+  // 3. Build texts list
+  var texts = extracted.texts.map(function(t) {
+    return '[' + t.idx + '] (' + t.type + '): "' + t.text + '"';
+  }).join('\n');
+
+  // 4. Call Claude to rewrite
+  _tsLog(state, '🤖 Markenprofil: rewriting ' + extracted.texts_found + ' texts via Claude AI...');
+
+  var prompt = 'MARKENPROFIL REWRITE\n\n' +
+    'Website: "' + state.siteName + '" (' + state.domain + ')\n' +
+    'Nische: ' + state.niche + '\n\n' +
+    'KONTEXT: Diese Website ist ein UNABHÄNGIGES Informationsportal über ' + state.niche + '. ' +
+    'Es ist KEINE Herstellerseite und KEINE Markenwebsite. ' +
+    'Die Seite "Markenprofil" soll das PORTAL beschreiben, nicht einen Hersteller.\n\n' +
+    'AKTUELLE TEXTE (nach str_replace — enthalten noch alte Markengeschichte die nicht passt):\n' + texts + '\n\n' +
+    'AUFGABE: Schreibe JEDEN Text neu. Das Portal stellt sich vor:\n' +
+    '- Wer wir sind: unabhängiges Informationsportal für ' + state.niche + '\n' +
+    '- Was wir bieten: Produktvergleiche, Ratgeber, Anleitungen, aktuelle Tests\n' +
+    '- Unser Versprechen: ehrliche Empfehlungen, regelmäßig aktualisierte Inhalte\n' +
+    '- Amazon-Partner: "Als Amazon-Partner verlinken wir auf Produkte, die wir empfehlen"\n' +
+    '- KEINE Firmenhistorie, KEINE Herstellerkontakte, KEINE persönlichen Namen\n' +
+    '- KEINE Telefonnummern, KEINE E-Mail-Adressen, KEINE Postanschriften\n' +
+    '- Professionell, "Sie"-Form, deutsch\n' +
+    '- Gleiche ungefähre Textlänge wie Original (±30%)\n' +
+    '- Button-Texte: kurz (2-4 Wörter)\n\n' +
+    'Antworte NUR mit JSON:\n' +
+    '{"page_rewrite":{"page_id":' + mp.id + ',"new_title":"' + state.siteName + ' — Über uns",' +
+    '"new_slug":"markenprofil",' +
+    '"meta":{"rank_math_title":"Über uns | ' + state.siteName + '",' +
+    '"rank_math_description":"' + state.siteName + ' — Ihr unabhängiges Informationsportal für ' + state.niche + '. Ratgeber, Tests und Produktvergleiche.",' +
+    '"rank_math_focus_keyword":"' + state.niche.split(' ')[0] + ' Ratgeber"},' +
+    '"replacements":[{"old":"EXAKTER Original-Text","new":"Neuer Text"}]}}\n\n' +
+    'WICHTIG: "old" muss EXAKT dem Original entsprechen. Jeder Text braucht ein replacement.';
+
+  var aiResult = _tsCallClaude(prompt,
+    'Du bist ein professioneller deutscher Website-Texter für Informationsportale. Antworte NUR mit JSON. Kein Text davor oder danach.',
+    4096);
+
+  if (!aiResult.success) {
+    _tsLog(state, '❌ Markenprofil Claude error: ' + aiResult.error);
+    return 'OK';
+  }
+
+  // 5. Parse and apply
+  try {
+    var rewrite = _tsExtractJson(aiResult.text);
+    if (rewrite.page_rewrite && rewrite.page_rewrite.replacements) {
+      var payload = {
+        post_id: mp.id,
+        replacements: rewrite.page_rewrite.replacements,
+        meta: rewrite.page_rewrite.meta || {},
+        new_title: rewrite.page_rewrite.new_title || '',
+        new_slug: rewrite.page_rewrite.new_slug || ''
+      };
+
+      var applyResp = UrlFetchApp.fetch(wpUrl + '/wp-json/waas-pipeline/v1/replace-texts', {
+        method: 'POST',
+        headers: { 'Cookie': auth.cookies, 'X-WP-Nonce': auth.nonce, 'Content-Type': 'application/json' },
+        payload: JSON.stringify(payload), muteHttpExceptions: true
+      });
+
+      if (applyResp.getResponseCode() === 200) {
+        var applyResult = JSON.parse(applyResp.getContentText());
+        state.results.markenprofil = { replacements: applyResult.replacements_made || 0 };
+        _tsLog(state, '✅ Markenprofil rewritten: ' + (applyResult.replacements_made || 0) + ' replacements');
+      } else {
+        _tsLog(state, '⚠️ Markenprofil apply failed: HTTP ' + applyResp.getResponseCode());
+      }
+    } else {
+      _tsLog(state, '⚠️ Markenprofil: no replacements in Claude response');
+    }
+  } catch(e) {
+    _tsLog(state, '❌ Markenprofil JSON parse error: ' + e.message);
+  }
+
+  return 'OK';
+}
+
+
+// ============================================================================
+// CLEANUP BROKEN SHORTCODES — remove [waas_product ...] from content
+// ============================================================================
+
+function _tsCleanupShortcodes(state, wpUrl, auth) {
+  // 1. Dry run — see how many posts are affected
+  _tsLog(state, '🔎 Cleanup shortcodes: scanning...');
+  try {
+    var scanResp = UrlFetchApp.fetch(wpUrl + '/wp-json/waas-niche/v1/cleanup-shortcodes', {
+      method: 'POST',
+      headers: { 'Cookie': auth.cookies, 'X-WP-Nonce': auth.nonce, 'Content-Type': 'application/json' },
+      payload: JSON.stringify({ dry_run: true }),
+      muteHttpExceptions: true
+    });
+
+    if (scanResp.getResponseCode() !== 200) {
+      _tsLog(state, '⚠️ Cleanup shortcodes: endpoint not available (HTTP ' + scanResp.getResponseCode() + ')');
+      return 'OK';
+    }
+
+    var scanResult = JSON.parse(scanResp.getContentText());
+    var affected = scanResult.results.affected_posts || 0;
+
+    if (affected === 0) {
+      _tsLog(state, '✅ No broken shortcodes found');
+      return 'OK';
+    }
+
+    _tsLog(state, '  📊 Found ' + affected + ' posts with [waas_product] shortcodes');
+
+    // 2. Execute cleanup
+    var execResp = UrlFetchApp.fetch(wpUrl + '/wp-json/waas-niche/v1/cleanup-shortcodes', {
+      method: 'POST',
+      headers: { 'Cookie': auth.cookies, 'X-WP-Nonce': auth.nonce, 'Content-Type': 'application/json' },
+      payload: JSON.stringify({ dry_run: false }),
+      muteHttpExceptions: true
+    });
+
+    if (execResp.getResponseCode() === 200) {
+      var execResult = JSON.parse(execResp.getContentText());
+      state.results.shortcodesCleanup = { affected: execResult.results.affected_posts };
+      _tsLog(state, '✅ Cleaned shortcodes from ' + execResult.results.affected_posts + ' posts');
+    } else {
+      _tsLog(state, '⚠️ Cleanup shortcodes execute failed: HTTP ' + execResp.getResponseCode());
+    }
+  } catch(e) {
+    _tsLog(state, '❌ Cleanup shortcodes error: ' + e.message);
+  }
+
+  return 'OK';
 }
 
 

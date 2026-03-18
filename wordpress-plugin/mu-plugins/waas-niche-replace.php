@@ -38,9 +38,60 @@ add_action('rest_api_init', function() {
             return current_user_can('manage_options');
         },
     ]);
+
+    // Cleanup broken product shortcodes
+    register_rest_route('waas-niche/v1', '/cleanup-shortcodes', [
+        'methods'  => 'POST',
+        'callback' => 'waas_niche_cleanup_shortcodes_handler',
+        'permission_callback' => function($request) {
+            return current_user_can('manage_options');
+        },
+    ]);
 });
 
-function waas_niche_replace_handler($request) {
+function waas_niche_cleanup_shortcodes_handler($request) {
+    global $wpdb;
+
+    $params  = $request->get_json_params();
+    $dry_run = !empty($params['dry_run']);
+
+    // Find posts with waas_product shortcodes
+    $posts_with_shortcodes = $wpdb->get_results(
+        "SELECT ID, post_title FROM {$wpdb->posts} WHERE post_content LIKE '%[waas_product%' AND post_status IN ('publish','draft')"
+    );
+
+    $affected = count($posts_with_shortcodes);
+
+    if (!$dry_run && $affected > 0) {
+        // Remove all [waas_product ...] shortcodes (any attributes)
+        // MySQL REGEXP_REPLACE available in MySQL 8+ / MariaDB 10.0.5+
+        $wpdb->query(
+            "UPDATE {$wpdb->posts} SET post_content = REGEXP_REPLACE(post_content, '\\\\[waas_product[^\\\\]]*\\\\]', '') WHERE post_content LIKE '%[waas_product%'"
+        );
+
+        // Also clean up empty paragraphs left behind
+        $wpdb->query(
+            "UPDATE {$wpdb->posts} SET post_content = REPLACE(post_content, '<p></p>', '') WHERE post_content LIKE '%<p></p>%'"
+        );
+
+        // Clear caches
+        $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '%et_divi_static%'");
+        $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient%'");
+        do_action('litespeed_purge_all');
+        wp_cache_flush();
+    }
+
+    $post_titles = array_map(function($p) { return $p->post_title; }, $posts_with_shortcodes);
+
+    return rest_ensure_response([
+        'success'  => true,
+        'results'  => [
+            'affected_posts' => $affected,
+            'post_titles'    => $post_titles,
+            'dry_run'        => $dry_run,
+        ],
+    ]);
+}
     global $wpdb;
 
     $params  = $request->get_json_params();
