@@ -820,9 +820,9 @@ function _tsBulkNicheReplace(state, wpUrl, auth) {
     return 'OK';
   }
 
-  // 2. Dry run first
+  // 2. Dry run first (via standalone waas-niche-replace.php endpoint)
   _tsLog(state, '🔎 Niche Replace: ' + pairs.length + ' pairs — dry run...');
-  var scanResult = _cpCleanupCall(wpUrl, auth, 'niche_replace', { pairs: pairs, dry_run: true });
+  var scanResult = _tsNicheReplaceCall(wpUrl, auth, pairs, true);
   if (scanResult && scanResult.results && scanResult.results.stats) {
     var totalHits = 0;
     scanResult.results.stats.forEach(function(s) { totalHits += (s.hits || 0); });
@@ -835,16 +835,43 @@ function _tsBulkNicheReplace(state, wpUrl, auth) {
 
   // 3. Execute replacement
   _tsLog(state, '🔄 Executing niche replace...');
-  var result = _cpCleanupCall(wpUrl, auth, 'niche_replace', { pairs: pairs, dry_run: false });
+  var result = _tsNicheReplaceCall(wpUrl, auth, pairs, false);
 
   if (result && result.success) {
     state.results.nicheReplace = result.results;
     _tsLog(state, '✅ Niche replace done: ' + result.results.pairs_processed + ' pairs applied');
   } else {
-    _tsLog(state, '❌ Niche replace failed');
+    _tsLog(state, '❌ Niche replace failed: ' + (result ? JSON.stringify(result).substring(0, 200) : 'no response'));
   }
 
   return 'OK';
+}
+
+/**
+ * Call standalone waas-niche-replace.php endpoint (bypasses OPcache issue)
+ * Endpoint: POST /wp-json/waas-niche/v1/replace
+ */
+function _tsNicheReplaceCall(wpUrl, auth, pairs, dryRun) {
+  try {
+    var r = UrlFetchApp.fetch(wpUrl + '/wp-json/waas-niche/v1/replace', {
+      method: 'POST',
+      headers: {
+        'Cookie': auth.cookies,
+        'X-WP-Nonce': auth.nonce,
+        'Content-Type': 'application/json'
+      },
+      payload: JSON.stringify({ pairs: pairs, dry_run: !!dryRun }),
+      muteHttpExceptions: true
+    });
+    if (r.getResponseCode() === 200) {
+      return JSON.parse(r.getContentText());
+    }
+    Logger.log('Niche replace HTTP ' + r.getResponseCode() + ': ' + r.getContentText().substring(0, 300));
+    return null;
+  } catch(e) {
+    Logger.log('Niche replace error: ' + e.message);
+    return null;
+  }
 }
 
 function _tsGetReplacementPairs(targetDomain) {
