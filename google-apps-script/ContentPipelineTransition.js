@@ -701,7 +701,9 @@ function _tsDeployMenu(state, wpUrl, auth) {
       _tsLog(state, '⚠️ Menu deploy error: ' + e.message);
     }
   } else {
-    _tsLog(state, '⏭️ No menu in Menu_CP for ' + state.domain + ' — skip (create manually)');
+    // Fallback: auto-generate menu from existing pages via Claude AI
+    _tsLog(state, '📋 No menu in Menu_CP — generating auto-menu via AI...');
+    return _tsAutoMenu(state, wpUrl, auth);
   }
   return 'OK';
 }
@@ -731,6 +733,145 @@ function _tsReadMenuFromSheet(domain, sheet) {
   }
   items.sort(function(a, b) { return a.order - b.order; });
   return items;
+}
+
+
+// ============================================================================
+// AUTO-MENU — generate hierarchical menu from existing pages via Claude AI
+// ============================================================================
+
+function _tsAutoMenu(state, wpUrl, auth) {
+  // 1. Get site structure (pages list)
+  try {
+    var structResp = UrlFetchApp.fetch(wpUrl + '/wp-json/waas-pipeline/v1/get-site-structure', {
+      headers: { 'Cookie': auth.cookies, 'X-WP-Nonce': auth.nonce },
+      muteHttpExceptions: true
+    });
+    if (structResp.getResponseCode() !== 200) {
+      _tsLog(state, '❌ Auto-menu: get-site-structure failed (HTTP ' + structResp.getResponseCode() + ')');
+      return 'OK';
+    }
+    var structure = JSON.parse(structResp.getContentText());
+    var pages = structure.pages || [];
+    if (pages.length === 0) {
+      _tsLog(state, '⚠️ Auto-menu: no pages found');
+      return 'OK';
+    }
+  } catch(e) {
+    _tsLog(state, '❌ Auto-menu: ' + e.message);
+    return 'OK';
+  }
+
+  // 2. Filter out legal/utility pages
+  var skipSlugs = ['impressum', 'datenschutzerklaerung', 'datenschutz', 'amazon-partnerhinweis',
+    'partnerhinweis', 'warenkorb', 'mein-konto', 'kasse', 'widerrufsbelehrung'];
+  var menuPages = pages.filter(function(p) {
+    return skipSlugs.indexOf(p.slug) === -1;
+  });
+
+  if (menuPages.length === 0) {
+    _tsLog(state, '⚠️ Auto-menu: all pages are legal/utility — skip');
+    return 'OK';
+  }
+
+  // 3. Build page list for Claude prompt
+  var pageList = menuPages.map(function(p, i) {
+    return (i + 1) + '. "' + p.title + '" (ID: ' + p.id + ', slug: ' + p.slug + ')';
+  }).join('\n');
+
+  var prompt = 'Erstelle ein logisches Navigationsmenü für die Website "' + state.siteName + '".\n' +
+    'Nische: ' + state.niche + '\n\n' +
+    'Vorhandene Seiten:\n' + pageList + '\n\n' +
+    'REGELN:\n' +
+    '- Homepage (slug: leer oder "home" oder erste Seite) → Menütitel "Start", immer erster Punkt\n' +
+    '- Blog/Ratgeber-Seite → eigener Hauptpunkt\n' +
+    '- Markenprofil → eigener Hauptpunkt (wenn vorhanden)\n' +
+    '- Shop-Seite → eigener Hauptpunkt (wenn vorhanden)\n' +
+    '- Legal-Seiten (Impressum, Datenschutz, Partnerhinweis, Warenkorb) → NICHT im Menü\n' +
+    '- Restliche Seiten → logisch gruppieren: thematisch verwandte Seiten als Unterpunkte unter einem Hauptpunkt\n' +
+    '- Maximal 6 Hauptpunkte, maximal 4 Unterpunkte pro Hauptpunkt\n' +
+    '- Menütitel: kurz (2-3 Wörter), benutzerfreundlich\n\n' +
+    'Antworte NUR mit JSON-Array:\n' +
+    '[{"title":"Start","page_id":70,"children":[]},{"title":"Werkzeuge","page_id":31,"children":[{"title":"Ratgeber","page_id":28}]},...]';
+
+  // 4. Call Claude AI
+  _tsLog(state, '🤖 Auto-menu: calling Claude AI for ' + menuPages.length + ' pages...');
+  var aiResult = _tsCallClaude(prompt,
+    'Du bist ein Website-Menü-Experte. Erstelle eine klare, logische Navigation. Antworte NUR mit einem JSON-Array. Kein Text davor oder danach.',
+    2048);
+
+  if (!aiResult.success) {
+    _tsLog(state, '❌ Auto-menu Claude error: ' + aiResult.error);
+    return 'OK';
+  }
+
+  // 5. Parse Claude response
+  var hierarchy;
+  try {
+    var clean = aiResult.text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+    var start = clean.indexOf('[');
+    var end = clean.lastIndexOf(']');
+    if (start >= 0 && end > start) clean = clean.substring(start, end + 1);
+    hierarchy = JSON.parse(clean);
+  } catch(e) {
+    _tsLog(state, '❌ Auto-menu JSON parse error: ' + e.message);
+    _tsLog(state, '  Raw: ' + aiResult.text.substring(0, 200));
+    return 'OK';
+  }
+
+  if (!Array.isArray(hierarchy) || hierarchy.length === 0) {
+    _tsLog(state, '⚠️ Auto-menu: empty hierarchy from Claude');
+    return 'OK';
+  }
+
+  // 6. Convert hierarchy to flat set-menu format (parents BEFORE children!)
+  var menuItems = [];
+  hierarchy.forEach(function(item) {
+    menuItems.push({
+      title: item.title || '',
+      type: 'page',
+      object_id: item.page_id || 0,
+      parent: ''
+    });
+    if (item.children && item.children.length > 0) {
+      item.children.forEach(function(child) {
+        menuItems.push({
+          title: child.title || '',
+          type: 'page',
+          object_id: child.page_id || 0,
+          parent: item.title || ''
+        });
+      });
+    }
+  });
+
+  if (menuItems.length === 0) {
+    _tsLog(state, '⚠️ Auto-menu: no items after conversion');
+    return 'OK';
+  }
+
+  // 7. Deploy menu via set-menu endpoint
+  _tsLog(state, '🔄 Auto-menu: deploying ' + menuItems.length + ' items...');
+  try {
+    var menuResp = UrlFetchApp.fetch(wpUrl + '/wp-json/waas-pipeline/v1/set-menu', {
+      method: 'POST',
+      headers: { 'Cookie': auth.cookies, 'X-WP-Nonce': auth.nonce, 'Content-Type': 'application/json' },
+      payload: JSON.stringify({ menu_name: 'Hauptmenü', items: menuItems }),
+      muteHttpExceptions: true
+    });
+
+    if (menuResp.getResponseCode() === 200) {
+      var mr = JSON.parse(menuResp.getContentText());
+      state.results.autoMenu = { items: mr.items_created, hierarchy: hierarchy.length + ' top-level' };
+      _tsLog(state, '✅ Auto-menu deployed: ' + mr.items_created + ' items (' + hierarchy.length + ' top-level)');
+    } else {
+      _tsLog(state, '❌ Auto-menu set-menu failed: HTTP ' + menuResp.getResponseCode());
+    }
+  } catch(e) {
+    _tsLog(state, '❌ Auto-menu deploy error: ' + e.message);
+  }
+
+  return 'OK';
 }
 
 
