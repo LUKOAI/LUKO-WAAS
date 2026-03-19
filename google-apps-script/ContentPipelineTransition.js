@@ -529,17 +529,21 @@ function _tsGeneratePostsAuto(state, wpUrl, auth, startTime, maxRt) {
   
   _tsLog(state, '🤖 Generating 3 blog posts via Claude...');
   
+  var currentYear = new Date().getFullYear();
+
   var prompt = 'CONTENT GENERATION FÜR AFFILIATE-WEBSITE\n\n' +
     'Website: "' + state.siteName + '" (' + state.domain + ')\n' +
     'Nische: ' + state.niche + '\n' +
     (state.patron ? 'Markenpartner: ' + state.patron + '\n' : '') +
-    'Amazon Partner Tag: ' + state.partnerTag + '\n\n' +
+    'Amazon Partner Tag: ' + state.partnerTag + '\n' +
+    'Aktuelles Jahr: ' + currentYear + '\n\n' +
     'AUFGABE: Erstelle 3 komplett verschiedene Blog-Artikel für diese Nische.\n\n' +
     'ANFORDERUNGEN PRO ARTIKEL:\n' +
     '- 1200-1800 Wörter\n' +
     '- Professionell, "Sie"-Form, deutsch\n' +
     '- SEO-optimiert (Keyword im Titel, H2s, erste 100 Wörter)\n' +
-    '- Affiliate-Hinweis: "Als Amazon-Partner verdiene ich an qualifizierten Verkäufen."\n' +
+    '- Aktuelles Jahr ' + currentYear + ' im Titel oder Einleitung verwenden (z.B. "Ratgeber ' + currentYear + '")\n' +
+    '- NIEMALS den Amazon-Partnerhinweis/Disclosure im Artikeltext einfügen! Der Hinweis "Als Amazon-Partner verdiene ich an qualifizierten Verkäufen" erscheint AUTOMATISCH im Footer der Website. NICHT im Artikel wiederholen!\n' +
     '- Mindestens 4 H2-Sektionen mit content_html\n' +
     '- Fazit-Sektion am Ende\n' +
     '- Keine Preise nennen → "Aktuellen Preis auf Amazon prüfen"\n\n' +
@@ -555,7 +559,7 @@ function _tsGeneratePostsAuto(state, wpUrl, auth, startTime, maxRt) {
     '- Jeder Artikel MUSS sich thematisch deutlich unterscheiden\n' +
     '- Echte, nützliche Inhalte — kein Fülltext\n' +
     '- Sections: mindestens 4 pro Artikel, mit heading + content_html + type\n' +
-    '- Disclosure ("Als Amazon-Partner...") als erste Zeile im ersten content_html';
+    '- KEIN Amazon-Partnerhinweis/Disclosure im Text — erscheint automatisch im Footer';
   
   var aiResult = _tsCallClaude(prompt,
     'Du bist ein erfahrener deutscher SEO-Texter für Amazon Affiliate Websites. Antworte NUR mit JSON. Kein Text davor oder danach.',
@@ -772,56 +776,42 @@ function _tsRewriteMarkenprofil(state, wpUrl, auth) {
     return 'OK';
   }
 
-  // 2. Extract current texts from markenprofil
-  var exResp = UrlFetchApp.fetch(wpUrl + '/wp-json/waas-pipeline/v1/extract-texts/' + mp.id, {
-    headers: { 'Cookie': auth.cookies, 'X-WP-Nonce': auth.nonce }, muteHttpExceptions: true
-  });
-  if (exResp.getResponseCode() !== 200) {
-    _tsLog(state, '⚠️ Markenprofil: extract-texts failed');
-    return 'OK';
-  }
-  var extracted = JSON.parse(exResp.getContentText());
-  if (extracted.texts_found === 0) {
-    _tsLog(state, '⏭️ Markenprofil: no texts found');
-    return 'OK';
-  }
+  // 2. Generate NEW Markenprofil content via Claude AI
+  //    Approach: generate complete Divi 5 sections, then publish via /update-content
+  //    This avoids the fragile extract→replace approach that fails with 20+ text blocks
+  _tsLog(state, '🤖 Markenprofil: generating new content via Claude AI...');
 
-  // 3. Build texts list
-  var texts = extracted.texts.map(function(t) {
-    return '[' + t.idx + '] (' + t.type + '): "' + t.text + '"';
-  }).join('\n');
+  var nicheShort = state.niche.split('.')[0].split(',')[0].trim();
 
-  // 4. Call Claude to rewrite
-  _tsLog(state, '🤖 Markenprofil: rewriting ' + extracted.texts_found + ' texts via Claude AI...');
-
-  var prompt = 'MARKENPROFIL REWRITE\n\n' +
+  var prompt = 'MARKENPROFIL — NEUE SEITE GENERIEREN\n\n' +
     'Website: "' + state.siteName + '" (' + state.domain + ')\n' +
     'Nische: ' + state.niche + '\n\n' +
-    'KONTEXT: Diese Website ist ein UNABHÄNGIGES Informationsportal über ' + state.niche + '. ' +
-    'Es ist KEINE Herstellerseite und KEINE Markenwebsite. ' +
-    'Die Seite "Markenprofil" soll das PORTAL beschreiben, nicht einen Hersteller.\n\n' +
-    'AKTUELLE TEXTE (nach str_replace — enthalten noch alte Markengeschichte die nicht passt):\n' + texts + '\n\n' +
-    'AUFGABE: Schreibe JEDEN Text neu. Das Portal stellt sich vor:\n' +
-    '- Wer wir sind: unabhängiges Informationsportal für ' + state.niche + '\n' +
-    '- Was wir bieten: Produktvergleiche, Ratgeber, Anleitungen, aktuelle Tests\n' +
-    '- Unser Versprechen: ehrliche Empfehlungen, regelmäßig aktualisierte Inhalte\n' +
-    '- Amazon-Partner: "Als Amazon-Partner verlinken wir auf Produkte, die wir empfehlen"\n' +
-    '- KEINE Firmenhistorie, KEINE Herstellerkontakte, KEINE persönlichen Namen\n' +
-    '- KEINE Telefonnummern, KEINE E-Mail-Adressen, KEINE Postanschriften\n' +
-    '- Professionell, "Sie"-Form, deutsch\n' +
-    '- Gleiche ungefähre Textlänge wie Original (±30%)\n' +
-    '- Button-Texte: kurz (2-4 Wörter)\n\n' +
+    'KONTEXT: Diese Website ist ein UNABHÄNGIGES Informationsportal über ' + nicheShort + '. ' +
+    'Es ist KEINE Herstellerseite, KEINE Marke und KEIN Hersteller. ' +
+    'Das Portal bietet Ratgeber, Tests, Vergleiche und Kaufberatung.\n\n' +
+    'AUFGABE: Erstelle den kompletten Seiteninhalt für "Über uns / Markenprofil".\n\n' +
+    'INHALT MUSS ENTHALTEN:\n' +
+    '1. Headline: "Über ' + state.siteName + '"\n' +
+    '2. Einleitung: Wer wir sind — unabhängiges Informationsportal für ' + nicheShort + '\n' +
+    '3. Was wir bieten: Produktvergleiche, Ratgeber, Anleitungen, aktuelle Tests\n' +
+    '4. Unser Versprechen: ehrliche, unabhängige Empfehlungen\n' +
+    '5. Wie wir arbeiten: Produkte recherchieren, vergleichen, Erfahrungen teilen\n' +
+    '6. Amazon-Partnerschaft: Kurzer Hinweis dass wir als Amazon-Partner Produkte verlinken\n\n' +
+    'VERBOTEN:\n' +
+    '- KEINE Firmenhistorie, KEINE Gründergeschichte\n' +
+    '- KEINE persönlichen Namen (keine WERonika, HElena, oder andere)\n' +
+    '- KEINE Telefonnummern, E-Mail-Adressen, Postanschriften\n' +
+    '- KEINE Herstellerkontakte oder Firmendaten\n' +
+    '- KEINE erfundenen Zahlen oder Statistiken\n\n' +
+    'FORMAT: Professionell, "Sie"-Form, deutsch, 400-600 Wörter gesamt.\n\n' +
     'Antworte NUR mit JSON:\n' +
-    '{"page_rewrite":{"page_id":' + mp.id + ',"new_title":"' + state.siteName + ' — Über uns",' +
-    '"new_slug":"markenprofil",' +
-    '"meta":{"rank_math_title":"Über uns | ' + state.siteName + '",' +
-    '"rank_math_description":"' + state.siteName + ' — Ihr unabhängiges Informationsportal für ' + state.niche + '. Ratgeber, Tests und Produktvergleiche.",' +
-    '"rank_math_focus_keyword":"' + state.niche.split(' ')[0] + ' Ratgeber"},' +
-    '"replacements":[{"old":"EXAKTER Original-Text","new":"Neuer Text"}]}}\n\n' +
-    'WICHTIG: "old" muss EXAKT dem Original entsprechen. Jeder Text braucht ein replacement.';
+    '{"sections":[{"heading":"Überschrift","content_html":"<p>HTML...</p>"},...],\n' +
+    '"seo_title":"Über uns | ' + state.siteName + '",\n' +
+    '"meta_description":"' + state.siteName + ' — Ihr unabhängiges Portal für ' + nicheShort + '. Ratgeber, Tests und Produktvergleiche.",\n' +
+    '"focus_keyword":"' + nicheShort + ' Ratgeber"}';
 
   var aiResult = _tsCallClaude(prompt,
-    'Du bist ein professioneller deutscher Website-Texter für Informationsportale. Antworte NUR mit JSON. Kein Text davor oder danach.',
+    'Du bist ein professioneller deutscher Website-Texter. Erstelle Inhalte für ein unabhängiges Informationsportal. Antworte NUR mit JSON.',
     4096);
 
   if (!aiResult.success) {
@@ -829,36 +819,53 @@ function _tsRewriteMarkenprofil(state, wpUrl, auth) {
     return 'OK';
   }
 
-  // 5. Parse and apply
+  // 3. Parse response and build Divi 5 content
   try {
-    var rewrite = _tsExtractJson(aiResult.text);
-    if (rewrite.page_rewrite && rewrite.page_rewrite.replacements) {
-      var payload = {
-        post_id: mp.id,
-        replacements: rewrite.page_rewrite.replacements,
-        meta: rewrite.page_rewrite.meta || {},
-        new_title: rewrite.page_rewrite.new_title || '',
-        new_slug: rewrite.page_rewrite.new_slug || ''
-      };
+    var data = _tsExtractJson(aiResult.text);
+    if (!data.sections || data.sections.length === 0) {
+      _tsLog(state, '⚠️ Markenprofil: no sections in Claude response');
+      return 'OK';
+    }
 
-      var applyResp = UrlFetchApp.fetch(wpUrl + '/wp-json/waas-pipeline/v1/replace-texts', {
-        method: 'POST',
-        headers: { 'Cookie': auth.cookies, 'X-WP-Nonce': auth.nonce, 'Content-Type': 'application/json' },
-        payload: JSON.stringify(payload), muteHttpExceptions: true
-      });
+    // Build Divi 5 block content from sections
+    var content = _tsBuildDiviContent(data.sections);
 
-      if (applyResp.getResponseCode() === 200) {
-        var applyResult = JSON.parse(applyResp.getContentText());
-        state.results.markenprofil = { replacements: applyResult.replacements_made || 0 };
-        _tsLog(state, '✅ Markenprofil rewritten: ' + (applyResult.replacements_made || 0) + ' replacements');
-      } else {
-        _tsLog(state, '⚠️ Markenprofil apply failed: HTTP ' + applyResp.getResponseCode());
+    // 4. Update the page via WP REST API (direct update, not replace-texts)
+    var updatePayload = {
+      title: 'Über ' + state.siteName,
+      content: content
+    };
+
+    var updateResp = UrlFetchApp.fetch(wpUrl + '/wp-json/wp/v2/pages/' + mp.id, {
+      method: 'POST',
+      headers: { 'Cookie': auth.cookies, 'X-WP-Nonce': auth.nonce, 'Content-Type': 'application/json' },
+      payload: JSON.stringify(updatePayload), muteHttpExceptions: true
+    });
+
+    if (updateResp.getResponseCode() === 200) {
+      // Update SEO meta via postmeta
+      var metaUpdates = {};
+      if (data.seo_title) metaUpdates.rank_math_title = data.seo_title;
+      if (data.meta_description) metaUpdates.rank_math_description = data.meta_description;
+      if (data.focus_keyword) metaUpdates.rank_math_focus_keyword = data.focus_keyword;
+
+      if (Object.keys(metaUpdates).length > 0) {
+        // Use replace-texts endpoint just for meta (no replacements, just meta)
+        UrlFetchApp.fetch(wpUrl + '/wp-json/waas-pipeline/v1/replace-texts', {
+          method: 'POST',
+          headers: { 'Cookie': auth.cookies, 'X-WP-Nonce': auth.nonce, 'Content-Type': 'application/json' },
+          payload: JSON.stringify({ post_id: mp.id, replacements: [], meta: metaUpdates }),
+          muteHttpExceptions: true
+        });
       }
+
+      state.results.markenprofil = { sections: data.sections.length, method: 'full_replace' };
+      _tsLog(state, '✅ Markenprofil rewritten: ' + data.sections.length + ' sections (full content replace)');
     } else {
-      _tsLog(state, '⚠️ Markenprofil: no replacements in Claude response');
+      _tsLog(state, '⚠️ Markenprofil update failed: HTTP ' + updateResp.getResponseCode());
     }
   } catch(e) {
-    _tsLog(state, '❌ Markenprofil JSON parse error: ' + e.message);
+    _tsLog(state, '❌ Markenprofil error: ' + e.message);
   }
 
   return 'OK';
