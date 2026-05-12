@@ -144,32 +144,52 @@ function spSetupSearchKeywordsSheet() {
 
 // ==================== BATCH RUN ====================
 
+const SP_KEYWORDS_CONTINUATION_TRIGGER = 'spRunKeywordBatchContinuation';
+
 /**
- * Menu: Run keyword batch.
- * Iteruje wiersze w Search_Keywords gdzie Search = TRUE, sekwencyjnie
- * wywoluje spSearchProducts + spFetchAndWriteProducts i zapisuje wynik.
+ * Menu entry: pyta uzytkownika i uruchamia batch.
  */
 function spRunKeywordBatch() {
-  const ui = SpreadsheetApp.getUi();
+  _spRunKeywordBatchInternal({ skipConfirm: false });
+}
+
+/**
+ * Trigger entry: wywolywane automatycznie przez ScriptApp gdy poprzedni
+ * przebieg trafil na timeout i zostawil wiersze PENDING. Sprzata wlasny
+ * trigger na starcie i leci dalej bez UI.
+ */
+function spRunKeywordBatchContinuation() {
+  _spKeywordsCleanupTriggers();
+  _spRunKeywordBatchInternal({ skipConfirm: true, fromTrigger: true });
+}
+
+function _spRunKeywordBatchInternal(opts) {
+  opts = opts || {};
+  const fromTrigger = !!opts.fromTrigger;
+  let ui = null;
+  try { ui = SpreadsheetApp.getUi(); } catch (e) { ui = null; }
+
+  function notify(title, msg) {
+    if (ui) ui.alert(title, msg, ui.ButtonSet.OK);
+    else Logger.log(`[SP-API Keyword Batch] ${title}: ${msg}`);
+  }
 
   if (!spHasCredentials()) {
-    ui.alert('SP-API nie skonfigurowane',
-      'Brak danych SP-API.\n\nUruchom: WAAS > SP-API Import > Setup Credentials',
-      ui.ButtonSet.OK);
+    notify('SP-API nie skonfigurowane', 'Brak danych SP-API.\n\nUruchom: WAAS > SP-API Import > Setup Credentials');
     return;
   }
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SP_KEYWORDS_SHEET);
   if (!sheet) {
-    ui.alert('Brak karty', `Karta "${SP_KEYWORDS_SHEET}" nie istnieje.\n\nUruchom: WAAS > SP-API Import > Setup Search Keywords Sheet`, ui.ButtonSet.OK);
+    notify('Brak karty', `Karta "${SP_KEYWORDS_SHEET}" nie istnieje.`);
     return;
   }
 
   const lastRow = sheet.getLastRow();
   const lastCol = sheet.getLastColumn();
   if (lastRow < 2 || lastCol < 1) {
-    ui.alert('Brak danych', 'Karta jest pusta. Wprowadz frazy i zaznacz Search.', ui.ButtonSet.OK);
+    if (!fromTrigger) notify('Brak danych', 'Karta jest pusta. Wprowadz frazy i zaznacz Search.');
     return;
   }
 
@@ -177,12 +197,9 @@ function spRunKeywordBatch() {
   const col = {};
   headers.forEach((h, i) => { col[h] = i; });
 
-  const required = ['Keyword', 'Search'];
-  for (const name of required) {
+  for (const name of ['Keyword', 'Search']) {
     if (col[name] === undefined) {
-      ui.alert('Brak kolumny',
-        `Karta ${SP_KEYWORDS_SHEET} nie ma kolumny "${name}".\n\nUruchom: WAAS > SP-API Import > Setup Search Keywords Sheet`,
-        ui.ButtonSet.OK);
+      notify('Brak kolumny', `Karta ${SP_KEYWORDS_SHEET} nie ma kolumny "${name}".`);
       return;
     }
   }
@@ -209,27 +226,30 @@ function spRunKeywordBatch() {
   }
 
   if (queue.length === 0) {
-    ui.alert('Brak zaznaczonych wierszy',
-      'Zaznacz checkbox "Search" w wierszach do przetworzenia i sprobuj ponownie.',
-      ui.ButtonSet.OK);
+    if (!fromTrigger) notify('Brak zaznaczonych wierszy', 'Zaznacz checkbox "Search" w wierszach do przetworzenia i sprobuj ponownie.');
+    _spKeywordsCleanupTriggers();
     return;
   }
 
-  const confirm = ui.alert(
-    'Uruchomic batch?',
-    `Znaleziono ${queue.length} zaznaczonych fraz do przetworzenia.\n\n` +
-    queue.slice(0, 8).map(q => `  - "${q.keyword}" (${q.marketplace}, limit ${q.limit})`).join('\n') +
-    (queue.length > 8 ? `\n  ... + ${queue.length - 8} kolejnych` : '') +
-    '\n\nKazda fraza jest przetwarzana sekwencyjnie. Operacja moze zajac kilka minut.',
-    ui.ButtonSet.YES_NO
-  );
-  if (confirm !== ui.Button.YES) return;
+  if (!opts.skipConfirm && ui) {
+    const confirm = ui.alert(
+      'Uruchomic batch?',
+      `Znaleziono ${queue.length} zaznaczonych fraz do przetworzenia.\n\n` +
+      queue.slice(0, 8).map(q => `  - "${q.keyword}" (${q.marketplace}, limit ${q.limit})`).join('\n') +
+      (queue.length > 8 ? `\n  ... + ${queue.length - 8} kolejnych` : '') +
+      '\n\nKazda fraza jest przetwarzana sekwencyjnie. Jezeli batch trafi w timeout Apps Script,' +
+      ' pozostale wiersze zostana automatycznie wznowione za 1 minute.',
+      ui.ButtonSet.YES_NO
+    );
+    if (confirm !== ui.Button.YES) return;
+  }
 
   const accessToken = spGetAccessToken();
   const startTime = Date.now();
-  const maxTime = 5 * 60 * 1000; // 5 min - rezerwa do limitu 6 min Apps Script
+  const maxTime = 5 * 60 * 1000;
 
   const stats = { done: 0, failed: 0, skipped: 0, totalImported: 0 };
+  let timedOut = false;
 
   for (let q = 0; q < queue.length; q++) {
     const item = queue[q];
@@ -237,9 +257,10 @@ function spRunKeywordBatch() {
     if (Date.now() - startTime > maxTime) {
       _spKeywordsWriteRow(sheet, col, item.rowIndex, {
         status: 'PENDING',
-        notes: 'Przerwano - timeout Apps Script. Uruchom batch ponownie.'
+        notes: 'Przerwano - timeout Apps Script. Auto-wznowienie za 1 min.'
       });
       stats.skipped++;
+      timedOut = true;
       continue;
     }
 
@@ -296,13 +317,56 @@ function spRunKeywordBatch() {
     SpreadsheetApp.flush();
   }
 
-  ui.alert('SP-API Keyword Batch - zakonczone',
+  let suffix = '';
+  if (timedOut) {
+    _spKeywordsScheduleContinuation();
+    suffix = '\n\nPozostalo ' + stats.skipped + ' wierszy PENDING - auto-wznowienie za 1 minute.';
+  } else {
+    _spKeywordsCleanupTriggers();
+  }
+
+  const summary =
     `Przetworzono: ${queue.length} fraz\n` +
     `  DONE:     ${stats.done}\n` +
     `  FAILED:   ${stats.failed}\n` +
     `  SKIPPED:  ${stats.skipped} (timeout)\n\n` +
-    `Lacznie zaimportowano do Products: ${stats.totalImported} produktow.`,
-    ui.ButtonSet.OK);
+    `Lacznie zaimportowano do Products: ${stats.totalImported} produktow.` +
+    suffix;
+
+  if (ui && !fromTrigger) {
+    ui.alert('SP-API Keyword Batch - zakonczone', summary, ui.ButtonSet.OK);
+  } else {
+    ss.toast(`DONE=${stats.done}, FAILED=${stats.failed}, PENDING=${stats.skipped}, imported=${stats.totalImported}` + (timedOut ? ' (auto-wznowienie za 1 min)' : ''), 'SP-API Keyword Batch', 20);
+    Logger.log(`[SP-API Keyword Batch] ${summary.replace(/\n/g, ' | ')}`);
+  }
+}
+
+/**
+ * Instaluje jednorazowy trigger spRunKeywordBatchContinuation za ~1 minute.
+ * Najpierw kasuje istniejace triggery zeby nie skumulowac duplikatow.
+ */
+function _spKeywordsScheduleContinuation() {
+  _spKeywordsCleanupTriggers();
+  ScriptApp.newTrigger(SP_KEYWORDS_CONTINUATION_TRIGGER)
+    .timeBased()
+    .after(60 * 1000)
+    .create();
+  Logger.log('[SP-API Keyword Batch] Continuation trigger installed (+60s)');
+}
+
+/**
+ * Usuwa wszystkie zainstalowane triggery kontynuacji.
+ */
+function _spKeywordsCleanupTriggers() {
+  const triggers = ScriptApp.getProjectTriggers();
+  let removed = 0;
+  for (const t of triggers) {
+    if (t.getHandlerFunction() === SP_KEYWORDS_CONTINUATION_TRIGGER) {
+      ScriptApp.deleteTrigger(t);
+      removed++;
+    }
+  }
+  if (removed) Logger.log(`[SP-API Keyword Batch] Removed ${removed} continuation trigger(s).`);
 }
 
 // ==================== HELPERS ====================

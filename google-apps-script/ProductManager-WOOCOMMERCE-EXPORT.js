@@ -1204,3 +1204,181 @@ function exportSelectedWithDomain(domain, setDomain) {
   // Teraz eksportuj
   exportSelectedToWooCommerce();
 }
+
+// =============================================================================
+// BULK MARK ASINs (Select + Target Domain z listy ASIN-ow)
+// =============================================================================
+
+/**
+ * Menu: zbiorcze zaznaczenie ASIN-ow w karcie Products.
+ *
+ * UX:
+ *   1. Pyta o domene docelowa (Target Domain) - z lista dostepnych domen z Sites.
+ *   2. Pyta o liste ASIN-ow - akceptuje dowolny format (przecinek, spacja,
+ *      nowa linia, mieszany; ASIN-y wylowione regexem [A-Z0-9]{10}).
+ *   3. Dla kazdego ASIN-a w Products:
+ *        - Select  -> TRUE (checkbox zaznaczony)
+ *        - Target Domain -> wpisana domena
+ *   4. NIE wysyla niczego do WordPressa - to robi uzytkownik osobno
+ *      (np. WAAS > WooCommerce Export > Export Selected, albo recznie
+ *      usuwa wiersze).
+ *
+ * Funkcja jest idempotentna - mozna odpalac wielokrotnie. Jezeli ASIN-a
+ * nie ma w Products, jest raportowany jako "not found".
+ */
+function productsBulkMarkByAsins() {
+  const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('Products');
+
+  if (!sheet) {
+    ui.alert('Brak karty', 'Karta "Products" nie istnieje.', ui.ButtonSet.OK);
+    return;
+  }
+
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  if (lastRow < 2) {
+    ui.alert('Brak danych', 'Karta Products jest pusta.', ui.ButtonSet.OK);
+    return;
+  }
+
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  const asinColIdx = headers.indexOf('ASIN');
+  const selectColIdx = headers.indexOf('Select');
+  const domainColIdx = headers.indexOf('Target Domain');
+
+  if (asinColIdx === -1) {
+    ui.alert('Brak kolumny', 'Kolumna "ASIN" nie istnieje w Products.', ui.ButtonSet.OK);
+    return;
+  }
+  if (selectColIdx === -1 || domainColIdx === -1) {
+    ui.alert('Brak kolumn',
+      'Kolumny "Select" i/lub "Target Domain" nie istnieja.\n\nUruchom: WAAS > WooCommerce Export > Setup Export Columns',
+      ui.ButtonSet.OK);
+    return;
+  }
+
+  // 1) Wybor domeny
+  const sitesSheet = ss.getSheetByName('Sites');
+  const availableDomains = [];
+  if (sitesSheet) {
+    const sitesData = sitesSheet.getDataRange().getValues();
+    for (let i = 1; i < sitesData.length; i++) {
+      const d = (sitesData[i][2] || '').toString().trim();
+      if (d) availableDomains.push(d);
+    }
+  }
+
+  const domainPromptMsg =
+    'Wpisz lub wklej domene docelowa (Target Domain).\n\n' +
+    (availableDomains.length
+      ? 'Dostepne domeny z karty Sites:\n  ' + availableDomains.slice(0, 20).join('\n  ') +
+        (availableDomains.length > 20 ? `\n  ... + ${availableDomains.length - 20} kolejnych` : '')
+      : '(Brak domen w karcie Sites - wpisz domene recznie)');
+
+  const domainResp = ui.prompt('Bulk Mark ASINs - krok 1/2: domena', domainPromptMsg, ui.ButtonSet.OK_CANCEL);
+  if (domainResp.getSelectedButton() !== ui.Button.OK) return;
+
+  const targetDomain = domainResp.getResponseText().trim();
+  if (!targetDomain) {
+    ui.alert('Brak domeny', 'Nie podano domeny - operacja anulowana.', ui.ButtonSet.OK);
+    return;
+  }
+
+  if (availableDomains.length && availableDomains.indexOf(targetDomain) === -1) {
+    const ok = ui.alert('Domena spoza listy',
+      `Domena "${targetDomain}" nie jest na liscie z karty Sites.\nKontynuowac mimo to?`,
+      ui.ButtonSet.YES_NO);
+    if (ok !== ui.Button.YES) return;
+  }
+
+  // 2) Lista ASIN-ow
+  const asinResp = ui.prompt('Bulk Mark ASINs - krok 2/2: ASIN-y',
+    'Wklej liste ASIN-ow (po przecinku, spacji lub jeden pod drugim).\n' +
+    'ASIN-y zostana wylowione automatycznie z dowolnego tekstu.',
+    ui.ButtonSet.OK_CANCEL);
+  if (asinResp.getSelectedButton() !== ui.Button.OK) return;
+
+  const rawInput = asinResp.getResponseText() || '';
+  const asinMatches = rawInput.toUpperCase().match(/B[0-9A-Z]{9}/g) || [];
+  const asins = Array.from(new Set(asinMatches));
+
+  if (asins.length === 0) {
+    ui.alert('Brak ASIN-ow', 'W podanym tekscie nie znaleziono prawidlowych ASIN-ow (format B + 9 znakow).', ui.ButtonSet.OK);
+    return;
+  }
+
+  // 3) Mapa ASIN -> rowIndex w Products
+  const productsData = sheet.getRange(2, asinColIdx + 1, lastRow - 1, 1).getValues();
+  const asinToRow = {};
+  for (let i = 0; i < productsData.length; i++) {
+    const asin = (productsData[i][0] || '').toString().trim().toUpperCase();
+    if (asin && !asinToRow[asin]) {
+      asinToRow[asin] = i + 2;
+    }
+  }
+
+  const matched = [];
+  const notFound = [];
+  for (const asin of asins) {
+    if (asinToRow[asin]) matched.push({ asin, rowIndex: asinToRow[asin] });
+    else notFound.push(asin);
+  }
+
+  if (matched.length === 0) {
+    ui.alert('Nic nie zaznaczono',
+      `Zaden z ${asins.length} ASIN-ow nie zostal znaleziony w karcie Products.\n\n` +
+      `Brakuje:\n${notFound.slice(0, 20).join(', ')}` +
+      (notFound.length > 20 ? `\n... + ${notFound.length - 20} kolejnych` : ''),
+      ui.ButtonSet.OK);
+    return;
+  }
+
+  // 4) Potwierdzenie
+  const confirmMsg =
+    `Domena: ${targetDomain}\n` +
+    `Zaznaczyc Select=TRUE i wpisac Target Domain dla ${matched.length} produktow?\n\n` +
+    (notFound.length ? `Nieznalezione ASIN-y (${notFound.length}): pominiete.\n\n` : '') +
+    'WordPress NIE bedzie powiadomiony - tylko zaznaczenie w arkuszu.';
+
+  const confirm = ui.alert('Potwierdzenie', confirmMsg, ui.ButtonSet.YES_NO);
+  if (confirm !== ui.Button.YES) return;
+
+  // 5) Zapis - jednym setValues per kolumna dla wydajnosci
+  const sortedRows = matched.map(m => m.rowIndex).sort((a, b) => a - b);
+  const minRow = sortedRows[0];
+  const maxRow = sortedRows[sortedRows.length - 1];
+  const span = maxRow - minRow + 1;
+
+  // Pobierz aktualne wartosci, aby zmienic tylko te wlasciwe wiersze
+  const selectRange = sheet.getRange(minRow, selectColIdx + 1, span, 1);
+  const domainRange = sheet.getRange(minRow, domainColIdx + 1, span, 1);
+  const selectVals = selectRange.getValues();
+  const domainVals = domainRange.getValues();
+
+  const matchedSet = new Set(sortedRows);
+  for (let i = 0; i < span; i++) {
+    if (matchedSet.has(minRow + i)) {
+      selectVals[i][0] = true;
+      domainVals[i][0] = targetDomain;
+    }
+  }
+  selectRange.setValues(selectVals);
+  domainRange.setValues(domainVals);
+
+  ss.toast(`Zaznaczono ${matched.length} ASIN-ow dla ${targetDomain}`, 'Bulk Mark ASINs', 10);
+
+  ui.alert('Bulk Mark ASINs - gotowe',
+    `Zaznaczono: ${matched.length}\n` +
+    `Pominieto (brak w Products): ${notFound.length}\n\n` +
+    (notFound.length
+      ? `Brakujace ASIN-y:\n${notFound.slice(0, 30).join(', ')}` +
+        (notFound.length > 30 ? `\n... + ${notFound.length - 30} kolejnych` : '') + '\n\n'
+      : '') +
+    `Domena: ${targetDomain}\n\n` +
+    `Nastepny krok (recznie):\n` +
+    `  - Eksport: WAAS > WooCommerce Export > Export Selected Products\n` +
+    `  - Usuniecie: zaznacz wiersze (Select=TRUE) i usun recznie z arkusza`,
+    ui.ButtonSet.OK);
+}
