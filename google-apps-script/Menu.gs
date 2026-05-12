@@ -43,6 +43,7 @@ function onOpen() {
       .addItem('✅ Select All Products', 'selectAllProducts')
       .addItem('❌ Deselect All Products', 'deselectAllProducts')
       .addItem('🏷️ Bulk Mark ASINs (Select + Domain)', 'productsBulkMarkByAsins')
+      .addItem('🧹 Bulk Unmark ASINs (clear Select + Domain)', 'productsBulkUnmarkByAsins')
       .addSeparator()
       .addItem('📤 Export Selected Products', 'showExportToWooCommerceDialog')
       .addItem('📤 Export All Products', 'exportAllToWooCommerce')

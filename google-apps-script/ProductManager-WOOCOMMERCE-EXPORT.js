@@ -1392,3 +1392,163 @@ function productsBulkMarkByAsins() {
     `  - Usuniecie: zaznacz wiersze (Select=TRUE) i usun recznie z arkusza`,
     ui.ButtonSet.OK);
 }
+
+/**
+ * Menu: zbiorcze odznaczenie ASIN-ow w karcie Products.
+ *
+ * UX:
+ *   1. Pyta o liste ASIN-ow / ISBN-10 (dowolny format - regex wyciaga).
+ *   2. Dla kazdego dopasowanego ASIN-a w Products:
+ *        - Select         -> FALSE (checkbox odznaczony)
+ *        - Target Domain  -> puste
+ *   3. Pomija "DONE" w Select (juz wyeksportowane do WordPressa) - pyta,
+ *      czy ruszac takie wiersze; domyslnie zostawia w spokoju.
+ *
+ * Nie usuwa wierszy z Products - tylko czysci zaznaczenie i domene.
+ */
+function productsBulkUnmarkByAsins() {
+  const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('Products');
+
+  if (!sheet) {
+    ui.alert('Brak karty', 'Karta "Products" nie istnieje.', ui.ButtonSet.OK);
+    return;
+  }
+
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  if (lastRow < 2) {
+    ui.alert('Brak danych', 'Karta Products jest pusta.', ui.ButtonSet.OK);
+    return;
+  }
+
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  const asinColIdx = headers.indexOf('ASIN');
+  const selectColIdx = headers.indexOf('Select');
+  const domainColIdx = headers.indexOf('Target Domain');
+
+  if (asinColIdx === -1) {
+    ui.alert('Brak kolumny', 'Kolumna "ASIN" nie istnieje w Products.', ui.ButtonSet.OK);
+    return;
+  }
+  if (selectColIdx === -1 || domainColIdx === -1) {
+    ui.alert('Brak kolumn',
+      'Kolumny "Select" i/lub "Target Domain" nie istnieja.\n\nUruchom: WAAS > WooCommerce Export > Setup Export Columns',
+      ui.ButtonSet.OK);
+    return;
+  }
+
+  const asinResp = ui.prompt('Bulk Unmark ASINs',
+    'Wklej liste ASIN-ow / ISBN-10 do odznaczenia.\n' +
+    'Czysci kolumny Select (-> FALSE) i Target Domain (-> puste).\n\n' +
+    'Akceptowane formaty:\n' +
+    '  - ASIN Amazon: B + 9 znakow (np. B0BSY4PPJC)\n' +
+    '  - ISBN-10 ksiazek: 10 cyfr lub 9 cyfr + X (np. 3702242449, 357010544X)',
+    ui.ButtonSet.OK_CANCEL);
+  if (asinResp.getSelectedButton() !== ui.Button.OK) return;
+
+  const rawInput = asinResp.getResponseText() || '';
+  const idRegex = /\b(B[0-9A-Z]{9}|[0-9]{9}[0-9X])\b/g;
+  const matches = rawInput.toUpperCase().match(idRegex) || [];
+  const asins = Array.from(new Set(matches));
+
+  if (asins.length === 0) {
+    ui.alert('Brak ASIN-ow', 'W podanym tekscie nie znaleziono prawidlowych ASIN-ow / ISBN-10.', ui.ButtonSet.OK);
+    return;
+  }
+
+  // Mapa ASIN -> rowIndex + biezacy stan Select
+  const productsData = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  const asinToRow = {};
+  for (let i = 0; i < productsData.length; i++) {
+    const asin = (productsData[i][asinColIdx] || '').toString().trim().toUpperCase();
+    if (asin && !asinToRow[asin]) {
+      asinToRow[asin] = {
+        rowIndex: i + 2,
+        currentSelect: productsData[i][selectColIdx],
+        currentDomain: productsData[i][domainColIdx]
+      };
+    }
+  }
+
+  const matched = [];
+  const notFound = [];
+  const doneRows = [];
+  for (const asin of asins) {
+    const row = asinToRow[asin];
+    if (!row) { notFound.push(asin); continue; }
+    if (row.currentSelect === 'DONE') doneRows.push({ asin, ...row });
+    else matched.push({ asin, ...row });
+  }
+
+  if (matched.length === 0 && doneRows.length === 0) {
+    ui.alert('Nic do odznaczenia',
+      `Zaden z ${asins.length} ASIN-ow nie zostal znaleziony w Products.\n\n` +
+      `Brakuje:\n${notFound.slice(0, 20).join(', ')}` +
+      (notFound.length > 20 ? `\n... + ${notFound.length - 20} kolejnych` : ''),
+      ui.ButtonSet.OK);
+    return;
+  }
+
+  // Pytanie o wiersze DONE (wyeksportowane)
+  let includeDone = false;
+  if (doneRows.length > 0) {
+    const askDone = ui.alert('Wiersze ze stanem DONE',
+      `${doneRows.length} ASIN-ow ma Select = "DONE" (juz wyeksportowane do WordPress).\n\n` +
+      `Czy odznaczyc tez te wiersze?\n\n` +
+      `  YES = wyczysc tez DONE (utracisz oznaczenie eksportu w arkuszu)\n` +
+      `  NO  = pomin te wiersze, ruszaj tylko zwykle zaznaczenia`,
+      ui.ButtonSet.YES_NO);
+    includeDone = (askDone === ui.Button.YES);
+  }
+
+  const toUnmark = includeDone ? matched.concat(doneRows) : matched;
+
+  if (toUnmark.length === 0) {
+    ui.alert('Nic nie zmieniono', 'Wszystkie dopasowane wiersze byly DONE i zostaly pominiete.', ui.ButtonSet.OK);
+    return;
+  }
+
+  const confirmMsg =
+    `Odznaczyc Select=FALSE i wyczyscic Target Domain dla ${toUnmark.length} produktow?\n\n` +
+    (notFound.length ? `Nieznalezione ASIN-y: ${notFound.length} (pominiete)\n` : '') +
+    (doneRows.length && !includeDone ? `DONE pominiete: ${doneRows.length}\n` : '') +
+    `\nUwaga: produkty zostana w karcie Products - to tylko czyszczenie zaznaczenia.`;
+
+  const confirm = ui.alert('Potwierdzenie', confirmMsg, ui.ButtonSet.YES_NO);
+  if (confirm !== ui.Button.YES) return;
+
+  // Zapis bulk
+  const rows = toUnmark.map(m => m.rowIndex).sort((a, b) => a - b);
+  const minRow = rows[0];
+  const maxRow = rows[rows.length - 1];
+  const span = maxRow - minRow + 1;
+
+  const selectRange = sheet.getRange(minRow, selectColIdx + 1, span, 1);
+  const domainRange = sheet.getRange(minRow, domainColIdx + 1, span, 1);
+  const selectVals = selectRange.getValues();
+  const domainVals = domainRange.getValues();
+
+  const matchedSet = new Set(rows);
+  for (let i = 0; i < span; i++) {
+    if (matchedSet.has(minRow + i)) {
+      selectVals[i][0] = false;
+      domainVals[i][0] = '';
+    }
+  }
+  selectRange.setValues(selectVals);
+  domainRange.setValues(domainVals);
+
+  ss.toast(`Odznaczono ${toUnmark.length} ASIN-ow`, 'Bulk Unmark ASINs', 10);
+
+  ui.alert('Bulk Unmark ASINs - gotowe',
+    `Odznaczono: ${toUnmark.length}\n` +
+    (doneRows.length && !includeDone ? `DONE pominiete: ${doneRows.length}\n` : '') +
+    `Nieznalezione: ${notFound.length}` +
+    (notFound.length
+      ? `\n\nBrakujace ASIN-y:\n${notFound.slice(0, 30).join(', ')}` +
+        (notFound.length > 30 ? `\n... + ${notFound.length - 30} kolejnych` : '')
+      : ''),
+    ui.ButtonSet.OK);
+}
