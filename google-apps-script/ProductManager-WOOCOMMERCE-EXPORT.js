@@ -1293,19 +1293,29 @@ function productsBulkMarkByAsins() {
     if (ok !== ui.Button.YES) return;
   }
 
-  // 2) Lista ASIN-ow
+  // 2) Lista ASIN-ow / ISBN-10
   const asinResp = ui.prompt('Bulk Mark ASINs - krok 2/2: ASIN-y',
     'Wklej liste ASIN-ow (po przecinku, spacji lub jeden pod drugim).\n' +
-    'ASIN-y zostana wylowione automatycznie z dowolnego tekstu.',
+    'Akceptowane formaty:\n' +
+    '  - ASIN Amazon: B + 9 znakow (np. B0BSY4PPJC)\n' +
+    '  - ISBN-10 ksiazek: 10 cyfr lub 9 cyfr + X (np. 3702242449, 357010544X)\n\n' +
+    'ASIN-y i ISBN-y zostana wylowione automatycznie z dowolnego tekstu.',
     ui.ButtonSet.OK_CANCEL);
   if (asinResp.getSelectedButton() !== ui.Button.OK) return;
 
   const rawInput = asinResp.getResponseText() || '';
-  const asinMatches = rawInput.toUpperCase().match(/B[0-9A-Z]{9}/g) || [];
-  const asins = Array.from(new Set(asinMatches));
+  // B + 9 znakow (ASIN) lub 9 cyfr + cyfra/X (ISBN-10). \b chroni przed
+  // wycinaniem srodka dluzszych liczb (np. 11-cyfrowych numerow).
+  const idRegex = /\b(B[0-9A-Z]{9}|[0-9]{9}[0-9X])\b/g;
+  const matches = rawInput.toUpperCase().match(idRegex) || [];
+  const asins = Array.from(new Set(matches));
 
   if (asins.length === 0) {
-    ui.alert('Brak ASIN-ow', 'W podanym tekscie nie znaleziono prawidlowych ASIN-ow (format B + 9 znakow).', ui.ButtonSet.OK);
+    ui.alert('Brak ASIN-ow',
+      'W podanym tekscie nie znaleziono prawidlowych ASIN-ow / ISBN-10.\n\n' +
+      'Format ASIN: B + 9 znakow (np. B0BSY4PPJC)\n' +
+      'Format ISBN-10: 10 cyfr lub 9 cyfr + X (np. 3702242449, 357010544X)',
+      ui.ButtonSet.OK);
     return;
   }
 
