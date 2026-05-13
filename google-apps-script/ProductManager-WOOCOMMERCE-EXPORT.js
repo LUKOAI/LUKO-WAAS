@@ -740,6 +740,14 @@ function getSiteByDomain_(domain) {
  */
 
 /**
+ * Max images shipped to WooCommerce per product (featured + gallery combined).
+ * Amazon SP-API can return 10+ image hashes, some of which are visually near-
+ * identical extra angles. Cap keeps galleries tidy and shrinks media library
+ * footprint. Adjust if you want more or fewer.
+ */
+const WAAS_MAX_IMAGES_PER_PRODUCT = 5;
+
+/**
  * Normalize Amazon image URL: strip size/quality variant tokens like
  * "._SX300_", "._AC_UL900_", "._SS300_QL70_FMwebp_" so different size
  * variants of the same physical image map to the same canonical URL.
@@ -793,6 +801,12 @@ function _collectDedupedProductImages(product) {
 
   push(product.image_url || product.imageurl || product['Image URL']);
 
+  // Hard cap: keep at most N images per product (featured + gallery combined).
+  // Amazon SP-API often returns 10-18 image hashes, including extra angles
+  // that look near-identical. Cap trims to a clean count.
+  if (out.length > WAAS_MAX_IMAGES_PER_PRODUCT) {
+    return out.slice(0, WAAS_MAX_IMAGES_PER_PRODUCT);
+  }
   return out;
 }
 
