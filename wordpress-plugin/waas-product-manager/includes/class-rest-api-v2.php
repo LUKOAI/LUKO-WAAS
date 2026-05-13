@@ -862,14 +862,31 @@ class WAAS_REST_API_V2 {
             return new WP_Error('no_image', 'No image URL provided');
         }
 
-        // Check if we already have this image attached to the product
+        // Normalize Amazon image URL (strips size/quality variants like _SX300_)
+        // so the same physical image under different size URLs maps to one file.
+        $normalized_url = $this->normalize_amazon_image_url($image_url);
+
+        // Check if we already have this image attached to the product (legacy + normalized)
         $existing_image_id = get_post_thumbnail_id($product_id);
         if ($existing_image_id) {
             $existing_url = get_post_meta($existing_image_id, '_waas_source_url', true);
-            if ($existing_url === $image_url) {
-                // Same image already attached, skip
+            if ($existing_url === $image_url || $existing_url === $normalized_url) {
                 return $existing_image_id;
             }
+        }
+
+        // NEW: reuse attachment from media library if the same canonical URL
+        // was already downloaded for ANY product (also fixes re-export duplicates).
+        try {
+            $reused_id = $this->find_existing_attachment_by_source_url($normalized_url);
+            if ($reused_id) {
+                error_log("WAAS: Reusing existing attachment #{$reused_id} for {$normalized_url}");
+                set_post_thumbnail($product_id, $reused_id);
+                return $reused_id;
+            }
+        } catch (Exception $e) {
+            // Fall through to download path
+            error_log("WAAS: attachment lookup failed, falling back to download: " . $e->getMessage());
         }
 
         // Download image
@@ -877,8 +894,9 @@ class WAAS_REST_API_V2 {
         require_once(ABSPATH . 'wp-admin/includes/media.php');
         require_once(ABSPATH . 'wp-admin/includes/image.php');
 
-        // Get the file
-        $tmp = download_url($image_url);
+        // Get the file (uses normalized URL so cached copy gets the canonical form)
+        $download_url = $normalized_url ? $normalized_url : $image_url;
+        $tmp = download_url($download_url);
 
         if (is_wp_error($tmp)) {
             error_log("WAAS: Failed to download image: " . $tmp->get_error_message());
@@ -911,8 +929,8 @@ class WAAS_REST_API_V2 {
             return $attachment_id;
         }
 
-        // Save source URL as meta
-        update_post_meta($attachment_id, '_waas_source_url', $image_url);
+        // Save source URL as meta (normalized form so future lookups hit)
+        update_post_meta($attachment_id, '_waas_source_url', $normalized_url ? $normalized_url : $image_url);
 
         // Set as featured image
         set_post_thumbnail($product_id, $attachment_id);
@@ -933,6 +951,24 @@ class WAAS_REST_API_V2 {
         if (!is_array($image_urls) || count($image_urls) === 0) {
             return;
         }
+
+        // Defense in depth: normalize + dedupe input URLs in case the caller
+        // already deduped only by string-equality (different Amazon size
+        // variants of the same physical image would slip through that check).
+        $seen = array();
+        $deduped = array();
+        foreach ($image_urls as $u) {
+            if (empty($u)) continue;
+            $n = $this->normalize_amazon_image_url($u);
+            if (!isset($seen[$n])) {
+                $seen[$n] = true;
+                $deduped[] = $n;
+            }
+        }
+        if (count($deduped) !== count($image_urls)) {
+            error_log("WAAS: Gallery deduped: " . count($image_urls) . " -> " . count($deduped) . " unique");
+        }
+        $image_urls = $deduped;
 
         $gallery_ids = array();
         $featured_id = null;
@@ -1103,5 +1139,66 @@ class WAAS_REST_API_V2 {
      */
     public function check_read_permission() {
         return current_user_can('read');
+    }
+
+    /**
+     * Normalize an Amazon image URL by stripping size/quality variant tokens
+     * (e.g. ._SX300_, ._AC_UL900_, ._SS300_QL70_FMwebp_) so that multiple
+     * URLs that represent different rendered sizes of the same physical
+     * image collapse to one canonical URL.
+     *
+     * Only acts on Amazon image CDN hosts; other URLs pass through unchanged.
+     *
+     * @param string $url
+     * @return string
+     */
+    private function normalize_amazon_image_url($url) {
+        if (empty($url) || !is_string($url)) {
+            return $url;
+        }
+        $url = trim($url);
+        if ($url === '') {
+            return $url;
+        }
+        if (!preg_match('#(media-amazon|images-amazon|ssl-images-amazon)\.com/images/#i', $url)) {
+            return $url;
+        }
+        // Strip "._VARIANT_" right before extension; variant may chain (e.g. _AC_SX450_QL70_)
+        $normalized = preg_replace('/\._[A-Za-z0-9_,]+_(?=\.[A-Za-z0-9]+(?:\?|$))/', '', $url);
+        return $normalized ? $normalized : $url;
+    }
+
+    /**
+     * Find an existing attachment whose _waas_source_url meta equals $url.
+     * Used to avoid re-downloading the same image when it's already been
+     * pulled into the media library by a previous product import.
+     *
+     * @param string $url Normalized source URL
+     * @return int|null Attachment ID or null if not found
+     */
+    private function find_existing_attachment_by_source_url($url) {
+        if (empty($url)) {
+            return null;
+        }
+
+        $query = new WP_Query(array(
+            'post_type'      => 'attachment',
+            'post_status'    => 'inherit',
+            'posts_per_page' => 1,
+            'fields'         => 'ids',
+            'no_found_rows'  => true,
+            'meta_query'     => array(
+                array(
+                    'key'     => '_waas_source_url',
+                    'value'   => $url,
+                    'compare' => '=',
+                ),
+            ),
+        ));
+
+        if (!empty($query->posts)) {
+            return (int) $query->posts[0];
+        }
+        return null;
     }
 }

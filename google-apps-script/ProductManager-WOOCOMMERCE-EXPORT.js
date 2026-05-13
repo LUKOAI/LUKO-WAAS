@@ -705,6 +705,64 @@ function getSiteByDomain_(domain) {
  * @param {Object} product - Dane produktu
  * @returns {number|null} WordPress Post ID lub null
  */
+
+/**
+ * Normalize Amazon image URL: strip size/quality variant tokens like
+ * "._SX300_", "._AC_UL900_", "._SS300_QL70_FMwebp_" so different size
+ * variants of the same physical image map to the same canonical URL.
+ *
+ * Only acts on Amazon image CDNs; other URLs pass through unchanged.
+ * Example:
+ *   .../images/I/61abc._SX300_.jpg  ->  .../images/I/61abc.jpg
+ *   .../images/I/61abc.jpg          ->  .../images/I/61abc.jpg (no-op)
+ *   https://example.com/foo.jpg     ->  https://example.com/foo.jpg
+ */
+function _normalizeAmazonImageUrl(url) {
+  if (!url || typeof url !== 'string') return url;
+  const trimmed = url.trim();
+  if (!trimmed) return trimmed;
+  if (!/(media-amazon|images-amazon|ssl-images-amazon)\.com\/images\//i.test(trimmed)) {
+    return trimmed;
+  }
+  // strip "._VARIANT_" right before the extension; variant can chain (e.g. ._AC_SX450_QL70_)
+  return trimmed.replace(/\._[A-Za-z0-9_,]+_(?=\.[A-Za-z0-9]+(?:\?|$))/g, '');
+}
+
+/**
+ * Collect image URLs from a product row, normalize and deduplicate.
+ * Preserves order; first occurrence wins. FeaturedImage is anchored as
+ * the first entry when provided so it stays as the WP featured image.
+ *
+ * @returns {string[]} deduplicated, normalized image URLs (canonical Amazon)
+ */
+function _collectDedupedProductImages(product) {
+  const seen = new Set();
+  const out = [];
+  const push = (raw) => {
+    const n = _normalizeAmazonImageUrl(raw);
+    if (n && !seen.has(n)) { seen.add(n); out.push(n); }
+  };
+
+  push(product.featuredimagesource || product['featuredimagesource'] ||
+       product.featured_image_source || product['featured_image_source'] ||
+       product.FeaturedImageSource || product['FeaturedImageSource']);
+
+  for (let i = 0; i <= 9; i++) {
+    push(product['image' + i + 'source'] ||
+         product['image_' + i + '_source'] ||
+         product['Image' + i + 'Source']);
+  }
+
+  const imagesSources = product.images_sources || product['images_sources'];
+  if (imagesSources && typeof imagesSources === 'string') {
+    imagesSources.split(',').forEach(u => push(u.trim()));
+  }
+
+  push(product.image_url || product.imageurl || product['Image URL']);
+
+  return out;
+}
+
 function createWooCommerceProduct_(site, product) {
   try {
     // WAŻNE: Pobierz Amazon Partner Tag (tracking ID) z Sites sheet!
@@ -731,44 +789,21 @@ function createWooCommerceProduct_(site, product) {
       description: product.description
     };
 
-    // CRITICAL FIX: Dodaj FeaturedImageSource PIERWSZY!
-    // getSelectedProducts() konwertuje nagłówki na małe litery, więc szukamy 'featuredimagesource'
-    const featuredImage = product.featuredimagesource || product['featuredimagesource'] ||
-                          product.featured_image_source || product['featured_image_source'] ||
-                          product.FeaturedImageSource || product['FeaturedImageSource'];
-    if (featuredImage) {
-      productData.FeaturedImageSource = featuredImage;
-      logInfo('WooCommerce', `Adding FeaturedImageSource: ${featuredImage}`);
-    }
-
-    // CRITICAL FIX: Dodaj wszystkie obrazy Image0Source...Image9Source!
-    // WordPress plugin potrzebuje tych danych do galerii
-    // Nagłówki są konwertowane na małe litery: 'image0source', 'image1source', etc.
-    for (let i = 0; i <= 9; i++) {
-      // Szukaj w różnych formatach (wszystkie możliwe konwersje nagłówków)
-      const lowerKey = 'image' + i + 'source';
-      const underscoreKey = 'image_' + i + '_source';
-      const mixedKey = 'Image' + i + 'Source';
-
-      const imageValue = product[lowerKey] || product[underscoreKey] || product[mixedKey];
-      if (imageValue && imageValue.trim() !== '') {
-        productData['Image' + i + 'Source'] = imageValue;
-        logInfo('WooCommerce', `Adding Image${i}Source: ${imageValue}`);
+    // Zbierz unikalne, znormalizowane URL-e obrazkow (FeaturedImage + Image0..9 +
+    // images_sources CSV). Normalizacja zdejmuje warianty rozmiarow Amazona
+    // (._SX300_, ._AC_UL900_, itp.) zeby plugin nie pobieral tej samej fotki
+    // 2-3 razy pod roznymi rozmiarami.
+    const dedupedImages = _collectDedupedProductImages(product);
+    if (dedupedImages.length > 0) {
+      productData.FeaturedImageSource = dedupedImages[0];
+      logInfo('WooCommerce', `Featured (deduped): ${dedupedImages[0]}`);
+      for (let i = 1; i < dedupedImages.length && i <= 9; i++) {
+        productData['Image' + (i - 1) + 'Source'] = dedupedImages[i];
       }
-    }
-
-    // CRITICAL FIX: Obsłuż też kolumnę 'images_sources' (lista rozdzielona przecinkami)
-    const imagesSources = product.images_sources || product['images_sources'];
-    if (imagesSources && typeof imagesSources === 'string') {
-      const urls = imagesSources.split(',').map(url => url.trim()).filter(url => url);
-      urls.forEach((url, idx) => {
-        // Dodaj jako ImageXSource jeśli nie ma jeszcze
-        const key = 'Image' + idx + 'Source';
-        if (!productData[key]) {
-          productData[key] = url;
-          logInfo('WooCommerce', `Adding ${key} from images_sources: ${url}`);
-        }
-      });
+      productData.images_sources = dedupedImages.join(',');
+      logInfo('WooCommerce', `Total unique images sent: ${dedupedImages.length} (was up to ${1 + 10 + (product.images_sources ? product.images_sources.split(',').length : 0)} raw URLs)`);
+    } else {
+      logInfo('WooCommerce', `WARN: No image URLs found for ${product.asin}`);
     }
 
     // Auto Update flag (from "Auto Update" column in Google Sheets)
