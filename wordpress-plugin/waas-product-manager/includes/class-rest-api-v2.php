@@ -1005,6 +1005,17 @@ class WAAS_REST_API_V2 {
             }
         }
 
+        // BUG FIX: set_product_image_from_url() always calls set_post_thumbnail
+        // at the end, so during the loop the featured image kept being
+        // overwritten by each successive gallery entry. After the loop the
+        // featured was actually the LAST image, which also lives in the
+        // gallery -> visual duplicate (featured + last gallery thumbnail are
+        // the same file). Force the featured back to the first attachment.
+        if ($featured_id) {
+            set_post_thumbnail($product_id, $featured_id);
+            error_log("WAAS: ✓ Restored featured image to first entry (ID: {$featured_id})");
+        }
+
         error_log("WAAS: ✓ Total images processed: " . count($image_urls) . " (1 featured + " . count($gallery_ids) . " gallery)");
     }
 
