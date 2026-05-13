@@ -449,6 +449,19 @@ function _exportSelectedInternal(opts) {
     return;
   }
 
+  // Recover orphaned IN_PROGRESS rows from a prior run that was killed
+  // by Apps Script's 6-min hard limit before it could mark them DONE
+  // or restore them to TRUE. Since we hold the script lock now, nothing
+  // else is processing them, so they are stale.
+  try {
+    const recovered = _wcExportRecoverInProgressRows();
+    if (recovered > 0) {
+      Logger.log('[WC Export] Recovered ' + recovered + ' orphaned IN_PROGRESS rows (-> TRUE).');
+    }
+  } catch (e) {
+    Logger.log('[WC Export] In-progress recovery skipped: ' + e.message);
+  }
+
   try {
     const selectedProducts = getSelectedProducts();
 
@@ -598,6 +611,39 @@ function resumeExportNow() {
 }
 
 /**
+ * Scan Products for rows stuck at Select="IN_PROGRESS" and reset them to TRUE.
+ * Caller must already hold LockService so we know nothing else is mid-export.
+ * @returns {number} number of rows reset
+ */
+function _wcExportRecoverInProgressRows() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('Products');
+  if (!sheet) return 0;
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 0;
+
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const selectColIdx = headers.indexOf('Select');
+  if (selectColIdx === -1) return 0;
+
+  const range = sheet.getRange(2, selectColIdx + 1, lastRow - 1, 1);
+  const values = range.getValues();
+  let recovered = 0;
+  for (let i = 0; i < values.length; i++) {
+    if (values[i][0] === 'IN_PROGRESS') {
+      values[i][0] = true;
+      recovered++;
+    }
+  }
+  if (recovered > 0) {
+    range.setValues(values);
+    SpreadsheetApp.flush();
+  }
+  return recovered;
+}
+
+/**
  * Usuwa wszystkie triggery kontynuacji eksportu WC.
  */
 function _exportSelectedCleanupTriggers() {
@@ -717,6 +763,22 @@ function exportProductsToSite_(domain, products, deadline) {
       logInfo('WooCommerce', `Soft timeout reached during ${domain}, exiting gracefully.`);
       break;
     }
+
+    // CRITICAL: flip Select to "IN_PROGRESS" BEFORE the API call. If Apps
+    // Script gets killed mid-request (6-min hard limit) we must NOT leave
+    // the row marked TRUE, otherwise the next continuation grabs it again
+    // and WP re-processes the product (wasted work + possible duplicate
+    // image downloads). The catch block below restores TRUE only on
+    // explicit failure.
+    if (selectColIdx >= 0) {
+      try {
+        sheet.getRange(product.rowIndex, selectColIdx + 1).setValue('IN_PROGRESS');
+        SpreadsheetApp.flush();
+      } catch (e) {
+        Logger.log('Failed to mark IN_PROGRESS for ' + product.asin + ': ' + e.message);
+      }
+    }
+
     try {
       // Eksportuj produkt do WordPress/WooCommerce
       const result = createWooCommerceProduct_(siteData, product);
@@ -751,7 +813,12 @@ function exportProductsToSite_(domain, products, deadline) {
         logSuccess('WooCommerce', `Product exported: ${product.asin} -> ${domain} (WP: ${wpPostId}, WC: ${wcProductId || 'N/A'})`);
       }
     } catch (error) {
-      // Oznacz jako failed
+      // Restore Select=TRUE so the operator can retry this row consciously
+      // (or the next continuation picks it up). IN_PROGRESS would otherwise
+      // leave it stuck.
+      if (selectColIdx >= 0) {
+        try { sheet.getRange(product.rowIndex, selectColIdx + 1).setValue(true); } catch (_) {}
+      }
       if (exportStatusColIdx >= 0) {
         sheet.getRange(product.rowIndex, exportStatusColIdx + 1).setValue('Failed: ' + error.message);
       }
