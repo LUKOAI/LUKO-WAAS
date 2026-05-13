@@ -11,6 +11,12 @@ function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('⚡ WAAS')
     .addSubMenu(ui.createMenu('🌐 Sites')
+      .addItem('🚀 Build Patron Site (selected row)', 'buildSiteFromActiveRow_PATRON')
+      .addItem('🌐 Build MultiBrand Site (selected row)', 'buildSiteFromActiveRow_MULTIBRAND')
+      .addSeparator()
+      .addItem('🔄 Convert MultiBrand → Patron (selected row)', 'convertMultiBrandToPatron')
+      .addItem('🔄 Convert Patron → MultiBrand (selected row)', 'convertPatronToMultiBrand')
+      .addSeparator()
       .addItem('➕ Add New Site', 'showAddSiteDialog')
       .addItem('✅ Check Site Status', 'showCheckSiteDialog')
       .addItem('🎨 Install Divi on Site', 'showInstallDiviDialog')
@@ -18,6 +24,8 @@ function onOpen() {
       .addItem('🧹 Cleanup Cloned Site', 'siteCleanupDialog')
       .addItem('ℹ️ Site Full Info', 'siteInfoDialog')
       .addItem('🎨 Update Branding', 'siteBrandingDialog')
+      .addItem('📄 Import Markenprofil Pages (selected row)', 'importMarkenprofilFromActiveRow')
+      .addItem('🔄 Regenerate Markenprofil Content (selected row)', 'regenerateMarkenprofilFromActiveRow')
       .addSeparator()
       .addItem('🔄 Refresh All Sites', 'refreshAllSites'))
     .addSubMenu(ui.createMenu('📦 Products')
@@ -59,6 +67,73 @@ function onOpen() {
       .addItem('📋 View Content Queue', 'focusContentQueue')
       .addSeparator()
       .addItem('🗑️ Clear Failed Content', 'clearFailedContent'))
+    .addSubMenu(ui.createMenu('📋 Content Pipeline')
+      .addItem('⚙️ Setup Pipeline Columns', 'cpSetupPipelineColumns')
+      .addItem('⚙️ Setup v4.3 Additions', 'cpSetupV43Additions')
+      .addSeparator()
+      .addItem('📝 Generate TEXT Prompt', 'cpGenerateTextPrompts')
+      .addItem('📝 Parse TEXT Response', 'cpParseTextResponses')
+      .addSeparator()
+      .addItem('🚀 Auto Generate Content', 'cpAutoGenerate')
+      .addItem('⚙️ Setup Auto Columns', 'cpSetupAutoColumns')
+      .addItem('🔑 Setup AI Keys', 'cpSetupAPIKeys')
+      .addItem('🧪 Test AI Connection', 'cpTestAI')
+      .addSeparator()
+      .addItem('🖼️ Generate IMAGE Prompt', 'cpGenerateImagePrompts')
+      .addItem('🖼️ Parse IMAGE Response', 'cpParseImageResponses')
+      .addSeparator()
+      .addItem('🎬 Generate VIDEO Prompt', 'cpGenerateVideoPrompts')
+      .addItem('🎬 Parse VIDEO Response', 'cpParseVideoResponses')
+      .addSeparator()
+      .addItem('👁️ Preview Article', 'cpPreviewArticle')
+      .addItem('📤 Export to WordPress', 'cpExportToWordPress')
+      .addSeparator()
+      .addItem('📋 Update Legal Pages', 'cpExportLegalPages')
+      .addItem('📁 Export Categories', 'cpExportCategories')
+      .addSeparator()
+      .addItem('⚙️ Setup Phase 2', 'cpSetupPhase2')
+      .addItem('🎨 Set Branding', 'cpSetBranding')
+      .addItem('🔍 Verify Site', 'cpVerifySite')
+      .addItem('📄 Generate Site Pages', 'cpGenerateSitePages')
+      .addItem('✏️ Rewrite Page Texts', 'cpRewritePageTexts')
+      .addSeparator()
+      .addItem('🧭 Setup Menu Sheet', 'cpSetupMenuSheet')
+      .addItem('📥 Import Menu from WP', 'cpImportMenu')
+      .addItem('🧭 Deploy Menu', 'cpDeployMenu'))
+    .addSubMenu(ui.createMenu('🔄 Transition')
+      .addItem('🔄 Full Site Transition (Auto)', 'cpSiteTransition')
+      .addItem('📋 Transition Status', 'cpTransitionStatus')
+      .addItem('❌ Cancel Transition', 'cpTransitionCancel')
+      .addSeparator()
+      .addItem('📊 Inventory', 'cpTransitionInventory')
+      .addItem('🗑️ Delete Old Posts', 'cpTransitionDeleteOldPosts')
+      .addItem('🗑️ Delete Old Products', 'cpTransitionDeleteOldProducts')
+      .addItem('🗑️ Delete Old Categories & Tags', 'cpTransitionDeleteOldTaxonomies')
+      .addSeparator()
+      .addItem('✏️ Rewrite All Pages', 'cpTransitionRewritePages')
+      .addItem('🔎 Scan Remnants', 'cpTransitionScanRemnants')
+      .addItem('🧽 Clean Remnants', 'cpTransitionCleanRemnants')
+      .addSeparator()
+      .addItem('📋 Setup Transition Map', 'cpSetupTransitionMapSheet')
+      .addItem('📋 Populate Map for Domain', 'cpPopulateTransitionMap'))
+    .addSubMenu(ui.createMenu('🖼️ Images')
+      .addItem('📝 Generate Image Prompts', 'cpGenerateImagePromptsAI')
+      .addItem('🎨 Generate Images (API)', 'cpGenerateImages')
+      .addItem('📤 Upload to WordPress', 'cpUploadImagesToWP')
+      .addSeparator()
+      .addItem('🖼️ Assign ALL to Posts', 'cpAssignImagesToPosts')
+      .addItem('🏷️ Featured Images Only', 'cpMenuAssignFeaturedImages')
+      .addItem('📸 Illustrations Only', 'cpMenuInsertIllustrations')
+      .addSeparator()
+      .addItem('🎨 Generate Logo', 'cpGenerateLogo')
+      .addItem('🚀 Deploy Branding', 'cpDeployBranding')
+      .addSeparator()
+      .addItem('🧪 Test Image Generation', 'cpTestImageGeneration'))
+    .addSubMenu(ui.createMenu('🎬 Video')
+      .addItem('⚙️ Setup Video Queue', 'cpSetupVideoQueue')
+      .addSeparator()
+      .addItem('📋 Process Thumbnails', 'cpProcessVideoThumbnails')
+      .addItem('📤 Embed in Posts', 'cpEmbedVideosInPosts'))
     .addSubMenu(ui.createMenu('🔍 SEO')
       .addItem('📝 Generate Product Meta (Site)', 'seoMenuProductMeta')
       .addItem('📊 SEO Health Check (Site)', 'seoMenuHealthCheck')
@@ -114,6 +189,9 @@ function onOpen() {
     .addSeparator()
     .addItem('📖 Documentation', 'showDocumentation')
     .addItem('ℹ️ About WAAS', 'showAbout')
+    .addItem('🎨 Reorganize Sheet', 'cpReorganizeSheet')
+    .addItem('📋 Compact View', 'cpCompactView')
+    .addItem('👁️ Show All Columns', 'cpShowAllColumns')
     .addToUi();
 
   // Self-healing for WC export auto-resume:
@@ -131,7 +209,6 @@ function _wcExportSelfHealOnOpen() {
   try { pending = getSelectedProducts().length; } catch (e) { return; }
   if (pending === 0) return;
 
-  // Check if a continuation trigger is already scheduled
   var triggers = ScriptApp.getProjectTriggers();
   var hasTrigger = false;
   for (var i = 0; i < triggers.length; i++) {
@@ -361,7 +438,7 @@ B09G9FPHY6"></textarea>
         }
 
         const asinList = asins.split(/[\\n,]+/).map(a => a.trim()).filter(a => a.length > 0);
-        
+
         google.script.run
           .withSuccessHandler(function(result) {
             alert('Import complete! ' + (result || asinList.length + ' ASINs processed.') + ' Check the Products sheet.');
@@ -375,7 +452,7 @@ B09G9FPHY6"></textarea>
             category: category,
             keywords: ''
           });
-          
+
         alert('Import started for ' + asinList.length + ' ASINs. Check the Logs sheet for progress.');
       }
     </script>
@@ -889,11 +966,50 @@ function showSetupAuthDialog() {
     ui.ButtonSet.OK_CANCEL
   );
 
-  if (result.getSelectedButton() === ui.Button.OK) {
-    const siteId = parseInt(result.getResponseText());
-    if (siteId) {
-      migrateAuthForSite(siteId);
-    }
+  if (result.getSelectedButton() !== ui.Button.OK) return;
+
+  const siteId = parseInt(result.getResponseText());
+  if (!siteId) {
+    ui.alert('Invalid Site ID', 'Wpisz prawidłowy numer Site ID.', ui.ButtonSet.OK);
+    return;
+  }
+
+  const site = getSiteById(siteId);
+  if (!site) {
+    ui.alert('Site not found', 'Nie ma strony o ID = ' + siteId, ui.ButtonSet.OK);
+    return;
+  }
+
+  ui.alert('🔧 Setup Auth — start',
+    'Konfiguruję autoryzację dla:\n' +
+    '  ' + site.name + '\n' +
+    '  ' + site.domain + '\n\n' +
+    'Próbuję najpierw Application Password (WP >= 5.6),\n' +
+    'fallback na cookie-based auth dla starszych WP.\n\n' +
+    'Logi: View → Executions',
+    ui.ButtonSet.OK);
+
+  let authResult;
+  try {
+    authResult = setupWordPressAuth(site);
+  } catch (e) {
+    ui.alert('❌ Auth setup failed', 'Wyjątek:\n' + e.message, ui.ButtonSet.OK);
+    return;
+  }
+
+  if (authResult && authResult.success) {
+    ui.alert('✅ Auth setup OK',
+      'Auth Type:  ' + (authResult.authType || 'unknown') + '\n' +
+      'Message:    ' + (authResult.message || '-') + '\n\n' +
+      (authResult.authType === 'application_password'
+        ? 'App Password został zapisany w arkuszu Sites (kolumna App Password).'
+        : 'Cookie auth aktywne (App Password niedostępne na tej stronie).'),
+      ui.ButtonSet.OK);
+  } else {
+    ui.alert('❌ Auth setup failed',
+      'Error: ' + ((authResult && authResult.error) || 'Unknown') +
+      '\n\nSprawdź View → Executions po szczegóły.',
+      ui.ButtonSet.OK);
   }
 }
 
