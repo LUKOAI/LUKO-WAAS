@@ -47,6 +47,7 @@ function onOpen() {
       .addSeparator()
       .addItem('📤 Export Selected Products', 'showExportToWooCommerceDialog')
       .addItem('📤 Export All Products', 'exportAllToWooCommerce')
+      .addItem('▶️ Resume Export Now', 'resumeExportNow')
       .addSeparator()
       .addItem('🔄 Sync from WordPress', 'syncProductsFromWordPress')
       .addSeparator()
@@ -114,6 +115,37 @@ function onOpen() {
     .addItem('📖 Documentation', 'showDocumentation')
     .addItem('ℹ️ About WAAS', 'showAbout')
     .addToUi();
+
+  // Self-healing for WC export auto-resume:
+  // If there are products still queued (Select=TRUE) but no continuation
+  // trigger is scheduled (e.g. previous trigger ran out of daily quota or
+  // was canceled), reinstall the trigger so the chain resumes when the
+  // user opens the sheet.
+  try { _wcExportSelfHealOnOpen(); } catch (e) { Logger.log('[onOpen] self-heal skipped: ' + e.message); }
+}
+
+function _wcExportSelfHealOnOpen() {
+  if (typeof getSelectedProducts !== 'function' || typeof _exportSelectedScheduleContinuation !== 'function') return;
+
+  var pending = 0;
+  try { pending = getSelectedProducts().length; } catch (e) { return; }
+  if (pending === 0) return;
+
+  // Check if a continuation trigger is already scheduled
+  var triggers = ScriptApp.getProjectTriggers();
+  var hasTrigger = false;
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'exportSelectedToWooCommerceContinuation') {
+      hasTrigger = true; break;
+    }
+  }
+
+  if (!hasTrigger) {
+    _exportSelectedScheduleContinuation();
+    SpreadsheetApp.getActiveSpreadsheet().toast(
+      pending + ' produktow oczekuje na eksport - wznawiam za ~30s. (Lub: WAAS > WooCommerce Export > Resume Export Now)',
+      'WC Export auto-resume', 15);
+  }
 }
 
 // =============================================================================

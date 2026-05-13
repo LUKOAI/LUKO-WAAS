@@ -487,48 +487,73 @@ function _exportSelectedInternal(opts) {
     let exported = 0;
     let failed = 0;
     let timedOut = false;
+    let fatalError = null;
 
-    for (const domain of domains) {
-      if (Date.now() >= deadline) { timedOut = true; break; }
+    try {
+      for (const domain of domains) {
+        if (Date.now() >= deadline) { timedOut = true; break; }
 
-      const products = productsByDomain[domain];
-      logInfo('WooCommerce', `Exporting ${products.length} products to ${domain}`);
+        const products = productsByDomain[domain];
+        logInfo('WooCommerce', `Exporting ${products.length} products to ${domain}`);
 
-      try {
-        const exportResult = exportProductsToSite_(domain, products, deadline);
-        exported += exportResult.exported;
-        failed += exportResult.failed;
-        if (exportResult.timedOut) { timedOut = true; break; }
-      } catch (error) {
-        logError('WooCommerce', `Export to ${domain} failed: ${error.message}`);
-        failed += products.length;
+        try {
+          const exportResult = exportProductsToSite_(domain, products, deadline);
+          exported += exportResult.exported;
+          failed += exportResult.failed;
+          if (exportResult.timedOut) { timedOut = true; break; }
+        } catch (error) {
+          logError('WooCommerce', `Export to ${domain} failed: ${error.message}`);
+          failed += products.length;
+        }
       }
+    } catch (error) {
+      fatalError = error;
+      logError('WooCommerce', `Fatal export error: ${error.message}`);
     }
 
-    // Sprawdz ile zostalo do zrobienia (Select=TRUE)
-    const remaining = timedOut ? getSelectedProducts().length : 0;
+    // ALWAYS check if there are pending rows and (re)schedule continuation.
+    // Run in its own try/catch so trigger management never throws away the
+    // summary report.
+    let remaining = 0;
+    try {
+      remaining = getSelectedProducts().length;
+    } catch (e) {
+      logError('WooCommerce', `Failed to count remaining rows: ${e.message}`);
+    }
 
     let suffix = '';
-    if (remaining > 0) {
-      _exportSelectedScheduleContinuation();
-      suffix = `\n\nPozostalo ${remaining} produktow z Select=TRUE - auto-wznowienie za ~1.5 min.`;
-    } else {
-      _exportSelectedCleanupTriggers();
+    try {
+      if (remaining > 0) {
+        _exportSelectedScheduleContinuation();
+        suffix = `\n\nPozostalo ${remaining} produktow z Select=TRUE - auto-wznowienie za ~30s.`;
+      } else {
+        _exportSelectedCleanupTriggers();
+      }
+    } catch (e) {
+      logError('WooCommerce', `Trigger management failed: ${e.message}`);
+      suffix = `\n\nUWAGA: nie udalo sie zainstalowac auto-wznowienia (${e.message}). Uzyj WAAS > WooCommerce Export > Resume Export Now.`;
     }
 
-    const summary = `Exported: ${exported} products\nFailed: ${failed} products\n\nCheck the Export Status column for details.` + suffix;
+    const summary = `Exported: ${exported} products\nFailed: ${failed} products` +
+      (fatalError ? `\nFatal error: ${fatalError.message}` : '') +
+      `\n\nCheck the Export Status column for details.` + suffix;
 
     if (ui && !fromTrigger) {
       ui.alert('Export Complete', summary, ui.ButtonSet.OK);
     } else {
       SpreadsheetApp.getActiveSpreadsheet().toast(
-        `Exported=${exported}, Failed=${failed}` + (remaining > 0 ? `, Remaining=${remaining} (auto-resume ~1.5 min)` : ''),
+        `Exported=${exported}, Failed=${failed}` + (remaining > 0 ? `, Remaining=${remaining} (auto-resume ~30s)` : ''),
         'WC Export', 20);
     }
 
-    logSuccess('WooCommerce', `Export completed: ${exported} exported, ${failed} failed` + (remaining > 0 ? `, ${remaining} remaining` : ''));
+    logSuccess('WooCommerce', `Export run done: ${exported} exported, ${failed} failed` + (remaining > 0 ? `, ${remaining} remaining` : ''));
 
   } catch (error) {
+    // Last-resort safety net: try to schedule continuation if there's still work.
+    try {
+      const stillPending = getSelectedProducts().length;
+      if (stillPending > 0) _exportSelectedScheduleContinuation();
+    } catch (_) {}
     if (ui && !fromTrigger) ui.alert('Error', `Export failed: ${error.message}`, ui.ButtonSet.OK);
     logError('WooCommerce', `Export error: ${error.message}`);
   }
@@ -541,9 +566,17 @@ function _exportSelectedScheduleContinuation() {
   _exportSelectedCleanupTriggers();
   ScriptApp.newTrigger(WC_EXPORT_CONTINUATION_TRIGGER)
     .timeBased()
-    .after(90 * 1000)
+    .after(30 * 1000)
     .create();
-  Logger.log('[WC Export] Continuation trigger installed (+90s)');
+  Logger.log('[WC Export] Continuation trigger installed (+30s)');
+}
+
+/**
+ * Manual resume: same as menu Export Selected, but skips confirm dialog.
+ * Use when auto-resume trigger fails or was canceled.
+ */
+function resumeExportNow() {
+  _exportSelectedInternal({ skipConfirm: true, fromTrigger: false });
 }
 
 /**
