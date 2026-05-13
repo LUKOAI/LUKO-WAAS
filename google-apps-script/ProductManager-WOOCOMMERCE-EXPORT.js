@@ -1851,3 +1851,92 @@ function productsBulkUnmarkByAsins() {
       : ''),
     ui.ButtonSet.OK);
 }
+
+// =============================================================================
+// MEDIA LIBRARY DEDUPLICATION (one-shot cleanup of historical duplicates)
+// =============================================================================
+
+/**
+ * Menu: ask the WP plugin to scan its media library, group attachments by
+ * canonical _waas_source_url, keep one per group and remove the rest
+ * (rewires product featured + gallery references first).
+ *
+ * Run repeatedly until "duplicates_found" returns 0 - each call processes
+ * up to 500 attachments so for thousands of dupes expect to click 5-10 times.
+ *
+ * First click prompts dry_run=true so you see what WILL be deleted; second
+ * click does it for real.
+ */
+function wcDedupeMediaLibrary() {
+  const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // Pick the target site
+  const sitesSheet = ss.getSheetByName('Sites');
+  if (!sitesSheet) {
+    ui.alert('Brak Sites', 'Karta "Sites" nie istnieje.', ui.ButtonSet.OK);
+    return;
+  }
+
+  const sitesData = sitesSheet.getDataRange().getValues();
+  const domains = [];
+  for (let i = 1; i < sitesData.length; i++) {
+    const d = (sitesData[i][2] || '').toString().trim();
+    if (d) domains.push(d);
+  }
+  if (domains.length === 0) {
+    ui.alert('Brak domen', 'Brak domen w karcie Sites.', ui.ButtonSet.OK);
+    return;
+  }
+
+  const domainResp = ui.prompt('Media Library Dedup - wybor domeny',
+    'Wpisz domene gdzie wyczyscic duplikaty:\n\n' + domains.join('\n'),
+    ui.ButtonSet.OK_CANCEL);
+  if (domainResp.getSelectedButton() !== ui.Button.OK) return;
+  const domain = domainResp.getResponseText().trim();
+  if (!domain) return;
+
+  const site = getSiteByDomain_(domain);
+  if (!site) {
+    ui.alert('Brak strony', `Nie znaleziono strony dla ${domain}`, ui.ButtonSet.OK);
+    return;
+  }
+
+  // First: dry run
+  const askDry = ui.alert('Dry run czy realne usuniecie?',
+    'TAK = symulacja (pokaze co bedzie usuniete, ale nic nie usunie)\n' +
+    'NIE = realne usuniecie (BEZPOWROTNE)\n\n' +
+    'Zalecam najpierw TAK dla sprawdzenia.',
+    ui.ButtonSet.YES_NO);
+  const dryRun = (askDry === ui.Button.YES);
+
+  ss.toast('Wywoluje dedup media library na ' + domain + (dryRun ? ' (dry run)' : ' (REALNE USUWANIE)') + '...', 'Media Dedup', 30);
+
+  try {
+    const result = makeAuthenticatedRequest(site, 'waas/v1/media/dedupe', {
+      method: 'post',
+      payload: {
+        limit: 500,
+        dry_run: dryRun
+      }
+    });
+
+    if (result.success && result.data) {
+      const d = result.data;
+      const msg =
+        (dryRun ? 'DRY RUN (nic nie usunieto):\n\n' : 'WYKONANO:\n\n') +
+        `Przeskanowano: ${d.scanned} attachmentow\n` +
+        `Grup canonical URL: ${d.groups}\n` +
+        `Znaleziono duplikatow: ${d.duplicates_found}\n` +
+        `Usunieto: ${d.removed}\n` +
+        `Naprawiono referencji produktow: ${d.product_refs_rewired}\n` +
+        (d.errors && d.errors.length ? `\nBledy: ${d.errors.slice(0, 5).join('\n')}` : '') +
+        '\n\nFunkcja przetwarza max 500 attachmentow naraz. Odpalaj wielokrotnie az "Znaleziono duplikatow" = 0.';
+      ui.alert('Media Dedup - wynik', msg, ui.ButtonSet.OK);
+    } else {
+      ui.alert('Blad', `Plugin zwrocil blad:\n${JSON.stringify(result.data).substring(0, 500)}`, ui.ButtonSet.OK);
+    }
+  } catch (e) {
+    ui.alert('Wyjatek', e.message, ui.ButtonSet.OK);
+  }
+}

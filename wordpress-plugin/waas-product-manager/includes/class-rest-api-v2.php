@@ -101,6 +101,25 @@ class WAAS_REST_API_V2 {
                 ),
             ),
         ));
+
+        // One-shot media library deduplication
+        register_rest_route($this->namespace, '/media/dedupe', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'dedupe_media_library'),
+            'permission_callback' => array($this, 'check_admin_permission'),
+            'args' => array(
+                'limit' => array(
+                    'type' => 'integer',
+                    'default' => 500,
+                    'description' => __('Max attachments to process in one batch', 'waas-pm'),
+                ),
+                'dry_run' => array(
+                    'type' => 'boolean',
+                    'default' => false,
+                    'description' => __('Report what would be deleted without deleting', 'waas-pm'),
+                ),
+            ),
+        ));
     }
 
     /**
@@ -1177,6 +1196,168 @@ class WAAS_REST_API_V2 {
         // Strip "._VARIANT_" right before extension; variant may chain (e.g. _AC_SX450_QL70_)
         $normalized = preg_replace('/\._[A-Za-z0-9_,]+_(?=\.[A-Za-z0-9]+(?:\?|$))/', '', $url);
         return $normalized ? $normalized : $url;
+    }
+
+    /**
+     * One-shot dedup of WAAS-imported attachments by canonical source URL.
+     *
+     * Scans all attachments that carry _waas_source_url meta, normalizes each
+     * URL (strips Amazon size variants), groups by canonical URL, keeps the
+     * oldest attachment per group, and removes the rest. Updates any product
+     * that referenced a removed attachment (featured image + gallery) to
+     * point at the kept attachment instead.
+     *
+     * Safe to re-run; pages through up to $limit attachments per call.
+     *
+     * POST /waas/v1/media/dedupe?limit=500&dry_run=false
+     */
+    public function dedupe_media_library($request) {
+        $limit = max(50, min(2000, (int) $request->get_param('limit')));
+        $dry_run = (bool) $request->get_param('dry_run');
+
+        @set_time_limit(180);
+
+        // Page through attachments that carry _waas_source_url
+        $attachments = get_posts(array(
+            'post_type'      => 'attachment',
+            'post_status'    => 'inherit',
+            'posts_per_page' => $limit,
+            'orderby'        => 'ID',
+            'order'          => 'ASC',
+            'fields'         => 'ids',
+            'meta_query'     => array(
+                array(
+                    'key'     => '_waas_source_url',
+                    'compare' => 'EXISTS',
+                ),
+            ),
+        ));
+
+        $groups = array(); // normalized_url => [attachment_id, ...]
+        foreach ($attachments as $att_id) {
+            $url = get_post_meta($att_id, '_waas_source_url', true);
+            if (empty($url)) continue;
+            $canonical = $this->normalize_amazon_image_url($url);
+            if (!isset($groups[$canonical])) $groups[$canonical] = array();
+            $groups[$canonical][] = (int) $att_id;
+        }
+
+        $stats = array(
+            'scanned' => count($attachments),
+            'groups' => count($groups),
+            'duplicates_found' => 0,
+            'removed' => 0,
+            'product_refs_rewired' => 0,
+            'errors' => array(),
+            'dry_run' => $dry_run,
+        );
+
+        // Build a global map: attachment_id => canonical's keeper id
+        // so we can rewire product featured/gallery in one pass.
+        $remap = array();
+        foreach ($groups as $canonical => $ids) {
+            if (count($ids) < 2) continue;
+            sort($ids, SORT_NUMERIC);
+            $keeper = (int) $ids[0];
+            // Backfill _waas_source_url on keeper with canonical form so
+            // future find_existing_attachment_by_source_url lookups hit.
+            if (!$dry_run) {
+                update_post_meta($keeper, '_waas_source_url', $canonical);
+            }
+            for ($i = 1; $i < count($ids); $i++) {
+                $remap[$ids[$i]] = $keeper;
+            }
+            $stats['duplicates_found'] += count($ids) - 1;
+        }
+
+        if (empty($remap)) {
+            return new WP_REST_Response($stats, 200);
+        }
+
+        // Rewire product featured + gallery references
+        $duplicate_ids = array_keys($remap);
+        $referencing_products = get_posts(array(
+            'post_type'      => 'product',
+            'post_status'    => 'any',
+            'posts_per_page' => -1,
+            'fields'         => 'ids',
+            'meta_query'     => array(
+                'relation' => 'OR',
+                array(
+                    'key'     => '_thumbnail_id',
+                    'value'   => $duplicate_ids,
+                    'compare' => 'IN',
+                ),
+                array(
+                    'key'     => '_product_image_gallery',
+                    'compare' => 'EXISTS',
+                ),
+            ),
+        ));
+
+        foreach ($referencing_products as $product_id) {
+            try {
+                $changed = false;
+
+                // Featured
+                $thumb_id = (int) get_post_meta($product_id, '_thumbnail_id', true);
+                if ($thumb_id && isset($remap[$thumb_id])) {
+                    if (!$dry_run) {
+                        set_post_thumbnail($product_id, $remap[$thumb_id]);
+                    }
+                    $changed = true;
+                }
+
+                // Gallery
+                $gallery_meta = get_post_meta($product_id, '_product_image_gallery', true);
+                if ($gallery_meta) {
+                    $gallery_ids = array_filter(array_map('intval', explode(',', $gallery_meta)));
+                    $new_gallery = array();
+                    $gallery_changed = false;
+                    foreach ($gallery_ids as $gid) {
+                        if (isset($remap[$gid])) {
+                            $new_gallery[] = $remap[$gid];
+                            $gallery_changed = true;
+                        } else {
+                            $new_gallery[] = $gid;
+                        }
+                    }
+                    if ($gallery_changed) {
+                        // Dedup gallery_ids and exclude featured
+                        $featured = (int) get_post_meta($product_id, '_thumbnail_id', true);
+                        $new_gallery = array_values(array_unique(array_filter($new_gallery, function($id) use ($featured) {
+                            return $id && $id !== $featured;
+                        })));
+                        if (!$dry_run) {
+                            update_post_meta($product_id, '_product_image_gallery', implode(',', $new_gallery));
+                        }
+                        $changed = true;
+                    }
+                }
+
+                if ($changed) $stats['product_refs_rewired']++;
+            } catch (Exception $e) {
+                $stats['errors'][] = 'product ' . $product_id . ': ' . $e->getMessage();
+            }
+        }
+
+        // Finally delete the duplicate attachments (also removes physical files)
+        foreach ($duplicate_ids as $att_id) {
+            if ($dry_run) {
+                $stats['removed']++;
+                continue;
+            }
+            try {
+                $deleted = wp_delete_attachment($att_id, true);
+                if ($deleted) $stats['removed']++;
+            } catch (Exception $e) {
+                $stats['errors'][] = 'attachment ' . $att_id . ': ' . $e->getMessage();
+            }
+        }
+
+        error_log("WAAS Dedup: scanned={$stats['scanned']}, groups={$stats['groups']}, dups={$stats['duplicates_found']}, removed={$stats['removed']}, rewired={$stats['product_refs_rewired']}, dry_run=" . ($dry_run ? '1' : '0'));
+
+        return new WP_REST_Response($stats, 200);
     }
 
     /**

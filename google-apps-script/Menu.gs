@@ -57,6 +57,7 @@ function onOpen() {
       .addItem('📤 Export All Products', 'exportAllToWooCommerce')
       .addItem('▶️ Resume Export Now', 'resumeExportNow')
       .addItem('🧹 Clean Up Stuck Export Triggers', 'wcExportCleanupAllTriggers')
+      .addItem('🗑️ Dedupe Media Library', 'wcDedupeMediaLibrary')
       .addSeparator()
       .addItem('🔄 Sync from WordPress', 'syncProductsFromWordPress')
       .addSeparator()
