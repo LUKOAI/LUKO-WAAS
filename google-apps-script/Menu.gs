@@ -56,6 +56,7 @@ function onOpen() {
       .addItem('📤 Export Selected Products', 'showExportToWooCommerceDialog')
       .addItem('📤 Export All Products', 'exportAllToWooCommerce')
       .addItem('▶️ Resume Export Now', 'resumeExportNow')
+      .addItem('🧹 Clean Up Stuck Export Triggers', 'wcExportCleanupAllTriggers')
       .addSeparator()
       .addItem('🔄 Sync from WordPress', 'syncProductsFromWordPress')
       .addSeparator()
@@ -194,35 +195,24 @@ function onOpen() {
     .addItem('👁️ Show All Columns', 'cpShowAllColumns')
     .addToUi();
 
-  // Self-healing for WC export auto-resume:
-  // If there are products still queued (Select=TRUE) but no continuation
-  // trigger is scheduled (e.g. previous trigger ran out of daily quota or
-  // was canceled), reinstall the trigger so the chain resumes when the
-  // user opens the sheet.
+  // Self-healing notice for WC export:
+  // If there are products still queued (Select=TRUE), just notify the user
+  // via toast. We can't install triggers from a simple onOpen trigger
+  // (ScriptApp scope is unavailable to simple triggers), so the operator
+  // resumes manually via menu > Resume Export Now.
   try { _wcExportSelfHealOnOpen(); } catch (e) { Logger.log('[onOpen] self-heal skipped: ' + e.message); }
 }
 
 function _wcExportSelfHealOnOpen() {
-  if (typeof getSelectedProducts !== 'function' || typeof _exportSelectedScheduleContinuation !== 'function') return;
+  if (typeof getSelectedProducts !== 'function') return;
 
   var pending = 0;
   try { pending = getSelectedProducts().length; } catch (e) { return; }
   if (pending === 0) return;
 
-  var triggers = ScriptApp.getProjectTriggers();
-  var hasTrigger = false;
-  for (var i = 0; i < triggers.length; i++) {
-    if (triggers[i].getHandlerFunction() === 'exportSelectedToWooCommerceContinuation') {
-      hasTrigger = true; break;
-    }
-  }
-
-  if (!hasTrigger) {
-    _exportSelectedScheduleContinuation();
-    SpreadsheetApp.getActiveSpreadsheet().toast(
-      pending + ' produktow oczekuje na eksport - wznawiam za ~30s. (Lub: WAAS > WooCommerce Export > Resume Export Now)',
-      'WC Export auto-resume', 15);
-  }
+  SpreadsheetApp.getActiveSpreadsheet().toast(
+    pending + ' produktow czeka z Select=TRUE. Klik: WAAS > WooCommerce Export > Resume Export Now.',
+    'WC Export - pending', 15);
 }
 
 // =============================================================================

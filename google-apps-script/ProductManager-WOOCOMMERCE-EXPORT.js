@@ -613,6 +613,56 @@ function _exportSelectedCleanupTriggers() {
 }
 
 /**
+ * Menu: ręczne sprzątanie wszystkich aktywnych triggerów eksportu + reset LockService.
+ *
+ * Uzywaj kiedy:
+ *  - W Apps Script > Executions widac jakas dawna "Running" pozycje ktora
+ *    sie nie konczy (Apps Script ma tam czasem zombie zapisy)
+ *  - Eksport mowil "juz trwa" mimo ze nic nie chodzi (lock zlapany przez
+ *    martwy proces)
+ *  - Chcesz zatrzymac auto-resume bo robisz cos innego
+ */
+function wcExportCleanupAllTriggers() {
+  const ui = SpreadsheetApp.getUi();
+
+  const triggers = ScriptApp.getProjectTriggers();
+  const wcTriggers = triggers.filter(t => t.getHandlerFunction() === WC_EXPORT_CONTINUATION_TRIGGER);
+
+  const confirmMsg =
+    `Znaleziono ${wcTriggers.length} aktywnych triggerow eksportu (${WC_EXPORT_CONTINUATION_TRIGGER}).\n\n` +
+    `Usunac wszystkie? To zatrzyma auto-resume.\n` +
+    `Mozesz potem recznie wznowic przez "Resume Export Now".\n\n` +
+    `Sprobujemy tez wymusic zwolnienie LockService gdyby byl zajety przez martwy proces.`;
+
+  const confirm = ui.alert('Clean Up Export Triggers', confirmMsg, ui.ButtonSet.YES_NO);
+  if (confirm !== ui.Button.YES) return;
+
+  let removed = 0;
+  for (const t of wcTriggers) {
+    try { ScriptApp.deleteTrigger(t); removed++; } catch (e) { Logger.log('Failed to delete trigger: ' + e.message); }
+  }
+
+  // Probuj zlapac i od razu zwolnic lock, zeby zresetowac stan.
+  // Jezeli zaden proces nie ma lock-a, tryLock dostanie go i zaraz zwolnimy.
+  let lockReleased = false;
+  try {
+    const lock = LockService.getScriptLock();
+    if (lock.tryLock(500)) {
+      lock.releaseLock();
+      lockReleased = true;
+    }
+  } catch (e) {
+    Logger.log('Lock probe failed: ' + e.message);
+  }
+
+  ui.alert('Cleanup done',
+    `Usunieto ${removed} triggerow.\n` +
+    `LockService: ${lockReleased ? 'czysty (brak aktywnego locka)' : 'zajety przez inny proces (poczekaj 5-10 min, Apps Script zwolni go automatycznie)'}.\n\n` +
+    `Aby wznowic eksport: WAAS > WooCommerce Export > Resume Export Now.`,
+    ui.ButtonSet.OK);
+}
+
+/**
  * Eksportuj wszystkie produkty do WooCommerce
  */
 function exportAllToWooCommerce() {
