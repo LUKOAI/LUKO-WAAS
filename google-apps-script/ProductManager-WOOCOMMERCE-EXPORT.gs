@@ -408,13 +408,37 @@ function getSelectedProducts() {
  * Eksportuj zaznaczone produkty do WooCommerce
  */
 function exportSelectedToWooCommerce() {
-  const ui = SpreadsheetApp.getUi();
+  _exportSelectedInternal({ skipConfirm: false, fromTrigger: false });
+}
+
+/**
+ * Trigger entry: auto-wznowienie eksportu po timeoucie Apps Script.
+ * Kasuje wlasny trigger na starcie, leci dalej bez UI.
+ */
+function exportSelectedToWooCommerceContinuation() {
+  _exportSelectedCleanupTriggers();
+  _exportSelectedInternal({ skipConfirm: true, fromTrigger: true });
+}
+
+const WC_EXPORT_CONTINUATION_TRIGGER = 'exportSelectedToWooCommerceContinuation';
+
+function _exportSelectedInternal(opts) {
+  opts = opts || {};
+  const fromTrigger = !!opts.fromTrigger;
+  let ui = null;
+  try { ui = SpreadsheetApp.getUi(); } catch (e) { ui = null; }
+
+  function notify(title, msg) {
+    if (ui) ui.alert(title, msg, ui.ButtonSet.OK);
+    else Logger.log(`[WC Export] ${title}: ${msg}`);
+  }
 
   try {
     const selectedProducts = getSelectedProducts();
 
     if (selectedProducts.length === 0) {
-      ui.alert('No Selection', 'Please select at least one product to export.\nUse the checkbox in the "Select" column.', ui.ButtonSet.OK);
+      _exportSelectedCleanupTriggers();
+      if (!fromTrigger) notify('No Selection', 'Please select at least one product to export.\nUse the checkbox in the "Select" column.');
       return;
     }
 
@@ -436,53 +460,105 @@ function exportSelectedToWooCommerce() {
     // Sprawdź czy są produkty z przypisanymi domenami
     const domains = Object.keys(productsByDomain);
     if (domains.length === 0) {
-      ui.alert('No Target Domain', 'Selected products have no Target Domain set.\nPlease set the Target Domain column for products you want to export.', ui.ButtonSet.OK);
+      _exportSelectedCleanupTriggers();
+      if (!fromTrigger) notify('No Target Domain', 'Selected products have no Target Domain set.\nPlease set the Target Domain column for products you want to export.');
       return;
     }
 
-    // Potwierdzenie
+    // Potwierdzenie (pomijane w trybie trigger)
     const totalProducts = selectedProducts.length;
-    const result = ui.alert(
-      'Export Confirmation',
-      `Export ${totalProducts} products to WooCommerce?\n\nDomains:\n${domains.map(d => `- ${d}: ${productsByDomain[d].length} products`).join('\n')}`,
-      ui.ButtonSet.YES_NO
-    );
+    if (!opts.skipConfirm && ui) {
+      const result = ui.alert(
+        'Export Confirmation',
+        `Export ${totalProducts} products to WooCommerce?\n\nDomains:\n${domains.map(d => `- ${d}: ${productsByDomain[d].length} products`).join('\n')}\n\n` +
+        `Jezeli batch trafi w timeout Apps Script, pozostale wiersze (Select=TRUE) zostana automatycznie wznowione za ~1.5 min.`,
+        ui.ButtonSet.YES_NO
+      );
 
-    if (result !== ui.Button.YES) {
-      return;
+      if (result !== ui.Button.YES) {
+        return;
+      }
     }
 
-    // Eksportuj do każdej domeny
+    // Eksportuj do każdej domeny z soft-timeoutem
+    const startTime = Date.now();
+    const deadline = startTime + (5 * 60 * 1000); // 5 min - rezerwa do limitu 6 min
+
     let exported = 0;
     let failed = 0;
+    let timedOut = false;
 
     for (const domain of domains) {
+      if (Date.now() >= deadline) { timedOut = true; break; }
+
       const products = productsByDomain[domain];
       logInfo('WooCommerce', `Exporting ${products.length} products to ${domain}`);
 
       try {
-        const exportResult = exportProductsToSite_(domain, products);
+        const exportResult = exportProductsToSite_(domain, products, deadline);
         exported += exportResult.exported;
         failed += exportResult.failed;
+        if (exportResult.timedOut) { timedOut = true; break; }
       } catch (error) {
         logError('WooCommerce', `Export to ${domain} failed: ${error.message}`);
         failed += products.length;
       }
     }
 
-    // Podsumowanie
-    ui.alert(
-      'Export Complete',
-      `Exported: ${exported} products\nFailed: ${failed} products\n\nCheck the Export Status column for details.`,
-      ui.ButtonSet.OK
-    );
+    // Sprawdz ile zostalo do zrobienia (Select=TRUE)
+    const remaining = timedOut ? getSelectedProducts().length : 0;
 
-    logSuccess('WooCommerce', `Export completed: ${exported} exported, ${failed} failed`);
+    let suffix = '';
+    if (remaining > 0) {
+      _exportSelectedScheduleContinuation();
+      suffix = `\n\nPozostalo ${remaining} produktow z Select=TRUE - auto-wznowienie za ~1.5 min.`;
+    } else {
+      _exportSelectedCleanupTriggers();
+    }
+
+    const summary = `Exported: ${exported} products\nFailed: ${failed} products\n\nCheck the Export Status column for details.` + suffix;
+
+    if (ui && !fromTrigger) {
+      ui.alert('Export Complete', summary, ui.ButtonSet.OK);
+    } else {
+      SpreadsheetApp.getActiveSpreadsheet().toast(
+        `Exported=${exported}, Failed=${failed}` + (remaining > 0 ? `, Remaining=${remaining} (auto-resume ~1.5 min)` : ''),
+        'WC Export', 20);
+    }
+
+    logSuccess('WooCommerce', `Export completed: ${exported} exported, ${failed} failed` + (remaining > 0 ? `, ${remaining} remaining` : ''));
 
   } catch (error) {
-    ui.alert('Error', `Export failed: ${error.message}`, ui.ButtonSet.OK);
+    if (ui && !fromTrigger) ui.alert('Error', `Export failed: ${error.message}`, ui.ButtonSet.OK);
     logError('WooCommerce', `Export error: ${error.message}`);
   }
+}
+
+/**
+ * Instaluje jednorazowy trigger kontynuacji eksportu (+~1.5 min).
+ */
+function _exportSelectedScheduleContinuation() {
+  _exportSelectedCleanupTriggers();
+  ScriptApp.newTrigger(WC_EXPORT_CONTINUATION_TRIGGER)
+    .timeBased()
+    .after(90 * 1000)
+    .create();
+  Logger.log('[WC Export] Continuation trigger installed (+90s)');
+}
+
+/**
+ * Usuwa wszystkie triggery kontynuacji eksportu WC.
+ */
+function _exportSelectedCleanupTriggers() {
+  const triggers = ScriptApp.getProjectTriggers();
+  let removed = 0;
+  for (const t of triggers) {
+    if (t.getHandlerFunction() === WC_EXPORT_CONTINUATION_TRIGGER) {
+      ScriptApp.deleteTrigger(t);
+      removed++;
+    }
+  }
+  if (removed) Logger.log(`[WC Export] Removed ${removed} continuation trigger(s).`);
 }
 
 /**
@@ -513,7 +589,7 @@ function exportAllToWooCommerce() {
  * @param {Array} products - Lista produktów do eksportu
  * @returns {Object} { exported: number, failed: number }
  */
-function exportProductsToSite_(domain, products) {
+function exportProductsToSite_(domain, products, deadline) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName('Products');
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
@@ -532,8 +608,14 @@ function exportProductsToSite_(domain, products) {
 
   let exported = 0;
   let failed = 0;
+  let timedOut = false;
 
   for (const product of products) {
+    if (deadline && Date.now() >= deadline) {
+      timedOut = true;
+      logInfo('WooCommerce', `Soft timeout reached during ${domain}, exiting gracefully.`);
+      break;
+    }
     try {
       // Eksportuj produkt do WordPress/WooCommerce
       const result = createWooCommerceProduct_(siteData, product);
@@ -581,7 +663,7 @@ function exportProductsToSite_(domain, products) {
     Utilities.sleep(500);
   }
 
-  return { exported, failed };
+  return { exported, failed, timedOut };
 }
 
 /**
