@@ -433,6 +433,22 @@ function _exportSelectedInternal(opts) {
     else Logger.log(`[WC Export] ${title}: ${msg}`);
   }
 
+  // CRITICAL: prevent concurrent runs (menu click + auto-resume trigger
+  // would otherwise both grab the same Select=TRUE rows before the first
+  // run flips them to DONE, causing each product to be exported twice
+  // and every image downloaded twice on the WordPress side).
+  const lock = LockService.getScriptLock();
+  const gotLock = lock.tryLock(2000); // wait up to 2s, then bail
+  if (!gotLock) {
+    Logger.log('[WC Export] Another export run is already active, bailing out (' + (fromTrigger ? 'trigger' : 'menu') + ').');
+    if (!fromTrigger && ui) {
+      ui.alert('Export juz trwa',
+        'Inny eksport jest aktualnie aktywny (menu lub auto-resume). Poczekaj az sie skonczy i sprobuj ponownie.',
+        ui.ButtonSet.OK);
+    }
+    return;
+  }
+
   try {
     const selectedProducts = getSelectedProducts();
 
@@ -556,6 +572,8 @@ function _exportSelectedInternal(opts) {
     } catch (_) {}
     if (ui && !fromTrigger) ui.alert('Error', `Export failed: ${error.message}`, ui.ButtonSet.OK);
     logError('WooCommerce', `Export error: ${error.message}`);
+  } finally {
+    try { lock.releaseLock(); } catch (_) {}
   }
 }
 
