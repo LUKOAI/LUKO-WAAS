@@ -875,73 +875,42 @@ function getSiteByDomain_(domain) {
  */
 
 /**
- * Max images shipped to WooCommerce per product (featured + gallery combined).
- * Amazon SP-API can return 10+ image hashes, some of which are visually near-
- * identical extra angles. Cap keeps galleries tidy and shrinks media library
- * footprint. Adjust if you want more or fewer.
- */
-const WAAS_MAX_IMAGES_PER_PRODUCT = 5;
-
-/**
- * Normalize Amazon image URL: strip size/quality variant tokens like
- * "._SX300_", "._AC_UL900_", "._SS300_QL70_FMwebp_" so different size
- * variants of the same physical image map to the same canonical URL.
+ * Pick images from a fixed set of Products-sheet columns. Operator's call
+ * after inspecting the actual SP-API data layout:
  *
- * Only acts on Amazon image CDNs; other URLs pass through unchanged.
- * Example:
- *   .../images/I/61abc._SX300_.jpg  ->  .../images/I/61abc.jpg
- *   .../images/I/61abc.jpg          ->  .../images/I/61abc.jpg (no-op)
- *   https://example.com/foo.jpg     ->  https://example.com/foo.jpg
- */
-function _normalizeAmazonImageUrl(url) {
-  if (!url || typeof url !== 'string') return url;
-  const trimmed = url.trim();
-  if (!trimmed) return trimmed;
-  if (!/(media-amazon|images-amazon|ssl-images-amazon)\.com\/images\//i.test(trimmed)) {
-    return trimmed;
-  }
-  // strip "._VARIANT_" right before the extension; variant can chain (e.g. ._AC_SX450_QL70_)
-  return trimmed.replace(/\._[A-Za-z0-9_,]+_(?=\.[A-Za-z0-9]+(?:\?|$))/g, '');
-}
-
-/**
- * Collect image URLs from a product row, normalize and deduplicate.
- * Preserves order; first occurrence wins. FeaturedImage is anchored as
- * the first entry when provided so it stays as the WP featured image.
+ *   Image0Source  -> main product photo (= FeaturedImageSource)
+ *   Image1Source  -> 2nd unique photo
+ *   Image4Source  -> next unique photo (slots 2-3 are full+_SL75_ thumb pair,
+ *                    we skip the full as well to keep the count at 4)
+ *   Image7Source  -> next unique photo (same reasoning around slots 5-6)
  *
- * @returns {string[]} deduplicated, normalized image URLs (canonical Amazon)
+ * Slots 3, 6, 9 are SP-API thumbnail copies (._SL75_) of the preceding slot
+ * and are skipped. images_sources column is intentionally ignored - 4 photos
+ * per product page is the desired result.
+ *
+ * If a slot is empty, it's skipped (so a product with fewer Amazon images
+ * just gets fewer here). FeaturedImageSource is used as a fallback for
+ * slot 0 in the rare case Image0Source is empty.
+ *
+ * @returns {string[]} up to 4 image URLs in display order
  */
-function _collectDedupedProductImages(product) {
-  const seen = new Set();
+function _collectProductImagesFromColumns(product) {
+  const slots = ['image0source', 'image1source', 'image4source', 'image7source'];
   const out = [];
-  const push = (raw) => {
-    const n = _normalizeAmazonImageUrl(raw);
-    if (n && !seen.has(n)) { seen.add(n); out.push(n); }
-  };
 
-  push(product.featuredimagesource || product['featuredimagesource'] ||
-       product.featured_image_source || product['featured_image_source'] ||
-       product.FeaturedImageSource || product['FeaturedImageSource']);
+  for (let i = 0; i < slots.length; i++) {
+    const slot = slots[i];
+    let url = (product[slot] || product[slot.replace('source', '_source')] || '').toString().trim();
 
-  for (let i = 0; i <= 9; i++) {
-    push(product['image' + i + 'source'] ||
-         product['image_' + i + '_source'] ||
-         product['Image' + i + 'Source']);
+    // For slot 0 (main), fall back to FeaturedImageSource if column was empty
+    if (!url && i === 0) {
+      url = (product.featuredimagesource || product.featured_image_source ||
+             product['FeaturedImageSource'] || '').toString().trim();
+    }
+
+    if (url) out.push(url);
   }
 
-  const imagesSources = product.images_sources || product['images_sources'];
-  if (imagesSources && typeof imagesSources === 'string') {
-    imagesSources.split(',').forEach(u => push(u.trim()));
-  }
-
-  push(product.image_url || product.imageurl || product['Image URL']);
-
-  // Hard cap: keep at most N images per product (featured + gallery combined).
-  // Amazon SP-API often returns 10-18 image hashes, including extra angles
-  // that look near-identical. Cap trims to a clean count.
-  if (out.length > WAAS_MAX_IMAGES_PER_PRODUCT) {
-    return out.slice(0, WAAS_MAX_IMAGES_PER_PRODUCT);
-  }
   return out;
 }
 
@@ -971,19 +940,20 @@ function createWooCommerceProduct_(site, product) {
       description: product.description
     };
 
-    // Zbierz unikalne, znormalizowane URL-e obrazkow (FeaturedImage + Image0..9 +
-    // images_sources CSV). Normalizacja zdejmuje warianty rozmiarow Amazona
-    // (._SX300_, ._AC_UL900_, itp.) zeby plugin nie pobieral tej samej fotki
-    // 2-3 razy pod roznymi rozmiarami.
-    const dedupedImages = _collectDedupedProductImages(product);
-    if (dedupedImages.length > 0) {
-      productData.FeaturedImageSource = dedupedImages[0];
-      logInfo('WooCommerce', `Featured (deduped): ${dedupedImages[0]}`);
-      for (let i = 1; i < dedupedImages.length && i <= 9; i++) {
-        productData['Image' + (i - 1) + 'Source'] = dedupedImages[i];
+    // Bierz zdjecia z 4 sztywnych kolumn arkusza: Image0Source, Image1Source,
+    // Image4Source, Image7Source. Wybor operatora po analizie ukladu SP-API:
+    // sloty 3, 6, 9 to thumbnaile (._SL75_) - pomijane. Slot 0 to glowne
+    // zdjecie. images_sources celowo pominiete - 4 zdjecia na karte produktu
+    // wystarczy.
+    const productImages = _collectProductImagesFromColumns(product);
+    if (productImages.length > 0) {
+      productData.FeaturedImageSource = productImages[0];
+      logInfo('WooCommerce', `Featured: ${productImages[0]}`);
+      for (let i = 1; i < productImages.length; i++) {
+        productData['Image' + (i - 1) + 'Source'] = productImages[i];
       }
-      productData.images_sources = dedupedImages.join(',');
-      logInfo('WooCommerce', `Total unique images sent: ${dedupedImages.length} (was up to ${1 + 10 + (product.images_sources ? product.images_sources.split(',').length : 0)} raw URLs)`);
+      // Pomocniczy log: pokaze ktore sloty zostaly wyslane
+      logInfo('WooCommerce', `Sent ${productImages.length} images from fixed columns (Image0/1/4/7).`);
     } else {
       logInfo('WooCommerce', `WARN: No image URLs found for ${product.asin}`);
     }

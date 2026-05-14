@@ -948,23 +948,6 @@ class WAAS_REST_API_V2 {
             return $attachment_id;
         }
 
-        // FILTER: discard tiny images. Amazon SP-API sometimes returns the
-        // SAME physical image under TWO different hashes - one for the main
-        // 2000x2000 version and one for a 500x500 thumbnail (different hashes
-        // so URL-based dedup can't see they're the same). The thumbnail version
-        // is essentially useless on a product page next to its full-size
-        // sibling. Discard anything smaller than 600px on the shorter side.
-        $min_side = 600;
-        $metadata = wp_get_attachment_metadata($attachment_id);
-        if ($metadata && isset($metadata['width']) && isset($metadata['height'])) {
-            $shorter = min((int) $metadata['width'], (int) $metadata['height']);
-            if ($shorter > 0 && $shorter < $min_side) {
-                error_log("WAAS: Discarding undersized attachment #{$attachment_id} ({$metadata['width']}x{$metadata['height']}, threshold {$min_side}px): {$image_url}");
-                wp_delete_attachment($attachment_id, true);
-                return new WP_Error('too_small', "Image below {$min_side}px threshold (was {$metadata['width']}x{$metadata['height']})");
-            }
-        }
-
         // Save source URL as meta (normalized form so future lookups hit)
         update_post_meta($attachment_id, '_waas_source_url', $normalized_url ? $normalized_url : $image_url);
 
