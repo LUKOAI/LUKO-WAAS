@@ -1927,11 +1927,13 @@ function wcDedupeMediaLibrary() {
         (dryRun ? 'DRY RUN (nic nie usunieto):\n\n' : 'WYKONANO:\n\n') +
         `Przeskanowano: ${d.scanned} attachmentow\n` +
         `Grup canonical URL: ${d.groups}\n` +
-        `Znaleziono duplikatow: ${d.duplicates_found}\n` +
+        `Duplikaty URL: ${d.duplicates_found}\n` +
+        `Male thumbnaile (<600px): ${d.tiny_found || 0}\n` +
         `Usunieto: ${d.removed}\n` +
-        `Naprawiono referencji produktow: ${d.product_refs_rewired}\n` +
+        `Naprawiono referencji (rewire): ${d.product_refs_rewired}\n` +
+        `Usunieto referencji (tiny): ${d.product_refs_unset || 0}\n` +
         (d.errors && d.errors.length ? `\nBledy: ${d.errors.slice(0, 5).join('\n')}` : '') +
-        '\n\nFunkcja przetwarza max 500 attachmentow naraz. Odpalaj wielokrotnie az "Znaleziono duplikatow" = 0.';
+        '\n\nFunkcja przetwarza max 500 attachmentow naraz. Odpalaj wielokrotnie az suma duplikatow+tiny = 0.';
       ui.alert('Media Dedup - wynik', msg, ui.ButtonSet.OK);
     } else {
       ui.alert('Blad', `Plugin zwrocil blad:\n${JSON.stringify(result.data).substring(0, 500)}`, ui.ButtonSet.OK);

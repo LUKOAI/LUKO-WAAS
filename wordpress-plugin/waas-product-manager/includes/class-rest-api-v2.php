@@ -948,6 +948,23 @@ class WAAS_REST_API_V2 {
             return $attachment_id;
         }
 
+        // FILTER: discard tiny images. Amazon SP-API sometimes returns the
+        // SAME physical image under TWO different hashes - one for the main
+        // 2000x2000 version and one for a 500x500 thumbnail (different hashes
+        // so URL-based dedup can't see they're the same). The thumbnail version
+        // is essentially useless on a product page next to its full-size
+        // sibling. Discard anything smaller than 600px on the shorter side.
+        $min_side = 600;
+        $metadata = wp_get_attachment_metadata($attachment_id);
+        if ($metadata && isset($metadata['width']) && isset($metadata['height'])) {
+            $shorter = min((int) $metadata['width'], (int) $metadata['height']);
+            if ($shorter > 0 && $shorter < $min_side) {
+                error_log("WAAS: Discarding undersized attachment #{$attachment_id} ({$metadata['width']}x{$metadata['height']}, threshold {$min_side}px): {$image_url}");
+                wp_delete_attachment($attachment_id, true);
+                return new WP_Error('too_small', "Image below {$min_side}px threshold (was {$metadata['width']}x{$metadata['height']})");
+            }
+        }
+
         // Save source URL as meta (normalized form so future lookups hit)
         update_post_meta($attachment_id, '_waas_source_url', $normalized_url ? $normalized_url : $image_url);
 
@@ -1246,36 +1263,82 @@ class WAAS_REST_API_V2 {
             'scanned' => count($attachments),
             'groups' => count($groups),
             'duplicates_found' => 0,
+            'tiny_found' => 0,
             'removed' => 0,
             'product_refs_rewired' => 0,
+            'product_refs_unset' => 0,
             'errors' => array(),
             'dry_run' => $dry_run,
         );
 
         // Build a global map: attachment_id => canonical's keeper id
         // so we can rewire product featured/gallery in one pass.
-        $remap = array();
+        // For each canonical group, prefer the LARGEST file (by width*height)
+        // as keeper so we don't accidentally promote a 500x500 thumbnail
+        // over its 2000x2000 sibling.
+        $min_side = 600;
+        $remap = array();      // small attachment id -> replacement (large keeper) id
+        $tiny_kill = array();  // attachments with dimensions < threshold, no replacement
         foreach ($groups as $canonical => $ids) {
-            if (count($ids) < 2) continue;
-            sort($ids, SORT_NUMERIC);
-            $keeper = (int) $ids[0];
+            // Pick keeper = the one with the largest pixel area (then oldest).
+            $keeper = null;
+            $keeper_area = -1;
+            foreach ($ids as $id) {
+                $meta = wp_get_attachment_metadata($id);
+                $area = 0;
+                if ($meta && isset($meta['width']) && isset($meta['height'])) {
+                    $area = (int) $meta['width'] * (int) $meta['height'];
+                }
+                if ($area > $keeper_area || ($area === $keeper_area && ($keeper === null || $id < $keeper))) {
+                    $keeper = (int) $id;
+                    $keeper_area = $area;
+                }
+            }
+            // Mark non-keepers in this group for replacement with keeper.
+            foreach ($ids as $id) {
+                if ((int) $id !== $keeper) {
+                    $remap[(int) $id] = $keeper;
+                    $stats['duplicates_found']++;
+                }
+            }
             // Backfill _waas_source_url on keeper with canonical form so
             // future find_existing_attachment_by_source_url lookups hit.
-            if (!$dry_run) {
+            if ($keeper && !$dry_run) {
                 update_post_meta($keeper, '_waas_source_url', $canonical);
             }
-            for ($i = 1; $i < count($ids); $i++) {
-                $remap[$ids[$i]] = $keeper;
-            }
-            $stats['duplicates_found'] += count($ids) - 1;
         }
 
-        if (empty($remap)) {
+        // SECOND PASS: tiny attachments (e.g. Amazon thumbnail-hash images
+        // < 600px on shorter side). Amazon sometimes ships the same physical
+        // image under a separate hash at a smaller resolution. URL-based dedup
+        // can't see they're the same. If they end up alone in their canonical
+        // group (no larger sibling to rewire to), just kill them.
+        foreach ($attachments as $att_id) {
+            $att_id = (int) $att_id;
+            if (isset($remap[$att_id])) continue; // already handled by URL dedup
+
+            $meta = wp_get_attachment_metadata($att_id);
+            if (!$meta || !isset($meta['width']) || !isset($meta['height'])) continue;
+            $shorter = min((int) $meta['width'], (int) $meta['height']);
+            if ($shorter > 0 && $shorter < $min_side) {
+                $tiny_kill[$att_id] = true;
+                $stats['tiny_found']++;
+            }
+        }
+
+        if (empty($remap) && empty($tiny_kill)) {
             return new WP_REST_Response($stats, 200);
         }
 
         // Rewire product featured + gallery references
         $duplicate_ids = array_keys($remap);
+        $tiny_ids = array_keys($tiny_kill);
+        $all_targets = array_unique(array_merge($duplicate_ids, $tiny_ids));
+
+        if (empty($all_targets)) {
+            return new WP_REST_Response($stats, 200);
+        }
+
         $referencing_products = get_posts(array(
             'post_type'      => 'product',
             'post_status'    => 'any',
@@ -1285,7 +1348,7 @@ class WAAS_REST_API_V2 {
                 'relation' => 'OR',
                 array(
                     'key'     => '_thumbnail_id',
-                    'value'   => $duplicate_ids,
+                    'value'   => $all_targets,
                     'compare' => 'IN',
                 ),
                 array(
@@ -1301,11 +1364,22 @@ class WAAS_REST_API_V2 {
 
                 // Featured
                 $thumb_id = (int) get_post_meta($product_id, '_thumbnail_id', true);
-                if ($thumb_id && isset($remap[$thumb_id])) {
-                    if (!$dry_run) {
-                        set_post_thumbnail($product_id, $remap[$thumb_id]);
+                if ($thumb_id) {
+                    if (isset($remap[$thumb_id])) {
+                        if (!$dry_run) {
+                            set_post_thumbnail($product_id, $remap[$thumb_id]);
+                        }
+                        $changed = true;
+                        $stats['product_refs_rewired']++;
+                    } elseif (isset($tiny_kill[$thumb_id])) {
+                        // Featured was a tiny image with no larger sibling.
+                        // Unset; product will fall back to gallery's first item.
+                        if (!$dry_run) {
+                            delete_post_thumbnail($product_id);
+                        }
+                        $changed = true;
+                        $stats['product_refs_unset']++;
                     }
-                    $changed = true;
                 }
 
                 // Gallery
@@ -1317,6 +1391,9 @@ class WAAS_REST_API_V2 {
                     foreach ($gallery_ids as $gid) {
                         if (isset($remap[$gid])) {
                             $new_gallery[] = $remap[$gid];
+                            $gallery_changed = true;
+                        } elseif (isset($tiny_kill[$gid])) {
+                            // Drop tiny image from gallery entirely
                             $gallery_changed = true;
                         } else {
                             $new_gallery[] = $gid;
@@ -1334,15 +1411,13 @@ class WAAS_REST_API_V2 {
                         $changed = true;
                     }
                 }
-
-                if ($changed) $stats['product_refs_rewired']++;
             } catch (Exception $e) {
                 $stats['errors'][] = 'product ' . $product_id . ': ' . $e->getMessage();
             }
         }
 
-        // Finally delete the duplicate attachments (also removes physical files)
-        foreach ($duplicate_ids as $att_id) {
+        // Finally delete the duplicate AND tiny attachments
+        foreach ($all_targets as $att_id) {
             if ($dry_run) {
                 $stats['removed']++;
                 continue;
@@ -1355,7 +1430,7 @@ class WAAS_REST_API_V2 {
             }
         }
 
-        error_log("WAAS Dedup: scanned={$stats['scanned']}, groups={$stats['groups']}, dups={$stats['duplicates_found']}, removed={$stats['removed']}, rewired={$stats['product_refs_rewired']}, dry_run=" . ($dry_run ? '1' : '0'));
+        error_log("WAAS Dedup: scanned={$stats['scanned']}, groups={$stats['groups']}, dups={$stats['duplicates_found']}, tiny={$stats['tiny_found']}, removed={$stats['removed']}, rewired={$stats['product_refs_rewired']}, unset={$stats['product_refs_unset']}, dry_run=" . ($dry_run ? '1' : '0'));
 
         return new WP_REST_Response($stats, 200);
     }
