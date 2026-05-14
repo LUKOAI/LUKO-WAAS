@@ -948,6 +948,31 @@ class WAAS_REST_API_V2 {
             return $attachment_id;
         }
 
+        // FORCE thumbnail regeneration. media_handle_sideload calls
+        // wp_generate_attachment_metadata internally, but for large source
+        // images (Amazon often serves 2000x2000+) it can fail silently when
+        // the server runs out of memory, leaving WordPress with only the
+        // original file and no intermediate sizes (thumbnail/medium/large/
+        // shop_single). WooCommerce then falls back to displaying the
+        // raw 2000x2000 file in a 600px container, which the theme crops
+        // ugly. Calling it explicitly here gives us a second chance.
+        try {
+            $file = get_attached_file($attachment_id);
+            if ($file && file_exists($file)) {
+                require_once(ABSPATH . 'wp-admin/includes/image.php');
+                @set_time_limit(60);
+                $metadata = wp_generate_attachment_metadata($attachment_id, $file);
+                if (!empty($metadata)) {
+                    wp_update_attachment_metadata($attachment_id, $metadata);
+                    if (!empty($metadata['sizes'])) {
+                        error_log("WAAS: Regenerated " . count($metadata['sizes']) . " intermediate sizes for attachment #{$attachment_id}");
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            error_log("WAAS: Thumbnail regen failed for #{$attachment_id}: " . $e->getMessage());
+        }
+
         // Save source URL as meta (normalized form so future lookups hit)
         update_post_meta($attachment_id, '_waas_source_url', $normalized_url ? $normalized_url : $image_url);
 
