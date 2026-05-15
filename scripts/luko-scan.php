@@ -103,6 +103,40 @@ function luko_kw_anlass() {
 	);
 }
 
+function luko_kw_literatur() {
+	return array(
+		// Bibel
+		'Erstkommunionbibel' => 'Bibel',
+		'Familienbibel'      => 'Bibel',
+		'Jugendbibel'        => 'Bibel',
+		'Kinderbibel'        => 'Bibel',
+		'Bibel'              => 'Bibel',
+		// Katechismus
+		'Jugendkatechismus'  => 'Katechismus',
+		'Katechismus'        => 'Katechismus',
+		'YOUCAT'             => 'YOUCAT',
+		'Youcat'             => 'YOUCAT',
+		// Gesangbuch / Liederbuch
+		'Gotteslob'          => 'Gotteslob',
+		'Kantorenbuch'       => 'Gotteslob',
+		'Chorbuch'           => 'Gotteslob',
+		'Gesangbuch'         => 'Gesangbuch',
+		'Liederbuch'         => 'Gesangbuch',
+		// Gebetbuch
+		'Gebetbuch'          => 'Gebetbuch',
+		'Stundenbuch'        => 'Stundenbuch',
+		'Brevier'            => 'Stundenbuch',
+		'Andachtsbuch'       => 'Andachtsbuch',
+		// Theologie
+		'Theologie'          => 'Theologie',
+		'Apologetik'         => 'Theologie',
+		// Pilgerführer
+		'Pilgerführer'       => 'Wallfahrtsführer',
+		'Wallfahrtsführer'   => 'Wallfahrtsführer',
+		'Jakobsweg'          => 'Wallfahrtsführer',
+	);
+}
+
 function luko_kw_empfaenger() {
 	return array(
 		'Jugendliche' => 'Jugendliche',
@@ -218,16 +252,18 @@ $fp = fopen( $csv_path, 'w' );
 if ( ! $fp ) {
 	exit( 'Cannot write to ' . esc_html( $csv_path ) );
 }
-fputcsv( $fp, array( 'post_id', 'asin', 'title', 'brand', 'material_kw', 'material_explicit', 'anlass', 'empfaenger', 'content_length' ) );
+fputcsv( $fp, array( 'post_id', 'asin', 'title', 'brand', 'material_kw', 'material_explicit', 'anlass', 'empfaenger', 'literatur', 'content_length' ) );
 
 $kw_mat = luko_kw_material();
 $kw_anl = luko_kw_anlass();
 $kw_emp = luko_kw_empfaenger();
+$kw_lit = luko_kw_literatur();
 
 $freq_brand    = array();
 $freq_material = array();
 $freq_anlass   = array();
 $freq_empf     = array();
+$freq_lit      = array();
 $zero_match    = array();
 $noisy         = array();
 
@@ -249,17 +285,20 @@ foreach ( $ids as $pid ) {
 	$mat_xpl   = luko_match_explicit_material( $haystack );
 	$anlass    = luko_match_keywords( $haystack, $kw_anl );
 	$empf      = luko_match_keywords( $haystack, $kw_emp );
+	$lit       = luko_match_keywords( $haystack, $kw_lit );
 
-	// Frequency tracking — blacklist Amazon's locale-specific "unknown brand" placeholders.
-	$brand_blacklist = array( 'generisch', 'generic', 'generico', 'generique', 'générique' );
-	if ( $brand !== '' && ! in_array( mb_strtolower( $brand ), $brand_blacklist, true ) ) {
-		$freq_brand[ $brand ] = ( $freq_brand[ $brand ] ?? 0 ) + 1;
+	// Frequency tracking — blacklist locale-specific "unknown brand" placeholders.
+	$brand_blacklist = array( 'generisch', 'generic', 'generico', 'generique', 'générique', 'unbekannt', 'unknown' );
+	$brand_for_freq  = ( $brand !== '' && ! in_array( mb_strtolower( $brand ), $brand_blacklist, true ) ) ? $brand : '';
+	if ( $brand_for_freq !== '' ) {
+		$freq_brand[ $brand_for_freq ] = ( $freq_brand[ $brand_for_freq ] ?? 0 ) + 1;
 	}
 	foreach ( $mat_kw as $m ) { $freq_material[ $m ] = ( $freq_material[ $m ] ?? 0 ) + 1; }
 	foreach ( $anlass as $a ) { $freq_anlass[ $a ]   = ( $freq_anlass[ $a ] ?? 0 ) + 1; }
 	foreach ( $empf as $e )   { $freq_empf[ $e ]     = ( $freq_empf[ $e ] ?? 0 ) + 1; }
+	foreach ( $lit as $l )    { $freq_lit[ $l ]      = ( $freq_lit[ $l ] ?? 0 ) + 1; }
 
-	if ( ! $brand && ! $mat_kw && ! $anlass && ! $empf ) {
+	if ( ! $brand_for_freq && ! $mat_kw && ! $anlass && ! $empf && ! $lit ) {
 		$zero_match[] = array( $pid, $asin, $post->post_title );
 	}
 	if ( count( $mat_kw ) > 5 || count( $anlass ) > 5 || count( $empf ) > 5 ) {
@@ -275,6 +314,7 @@ foreach ( $ids as $pid ) {
 		implode( '|', $mat_xpl ),
 		implode( '|', $anlass ),
 		implode( '|', $empf ),
+		implode( '|', $lit ),
 		mb_strlen( $haystack ),
 	) );
 }
@@ -321,13 +361,14 @@ echo '<br><strong>Download:</strong> <a href="?download=csv' . ( $offset ? '&off
 echo '</div>';
 
 echo '<h2>Frequency distributions</h2>';
-luko_render_freq( 'Brand (Marke) — from _waas_brand meta, excluding "Generisch"', $freq_brand );
+luko_render_freq( 'Brand (Marke) — from _waas_brand meta, excluding placeholder values', $freq_brand );
 luko_render_freq( 'Material — keyword matches', $freq_material );
 luko_render_freq( 'Anlass — keyword matches', $freq_anlass );
 luko_render_freq( 'Empfänger — keyword matches', $freq_empf );
+luko_render_freq( 'Literatur — religious literature category', $freq_lit );
 
 echo '<h2>Quality flags</h2>';
-echo '<div class="box"><strong>Products with ZERO matches across all 4 facets:</strong> ' . count( $zero_match ) . ' of ' . $processed . ' (' . ( $processed ? round( 100 * count( $zero_match ) / $processed, 1 ) : 0 ) . '%)</div>';
+echo '<div class="box"><strong>Products with ZERO matches across all 5 facets:</strong> ' . count( $zero_match ) . ' of ' . $processed . ' (' . ( $processed ? round( 100 * count( $zero_match ) / $processed, 1 ) : 0 ) . '%)</div>';
 if ( $zero_match ) {
 	echo '<details><summary>Show first 30 zero-match products (review titles for missed keywords)</summary><ul style="font-size:12px">';
 	foreach ( array_slice( $zero_match, 0, 30 ) as $row ) {
