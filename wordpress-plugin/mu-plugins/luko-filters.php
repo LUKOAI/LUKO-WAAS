@@ -1,9 +1,9 @@
 <?php
 /**
  * Plugin Name: LUKO Filters — taxonomies
- * Description: Registers the three custom taxonomies (Material, Anlass, Empfänger) that power the front-end product filters. Marke uses the existing WooCommerce `product_brand` taxonomy and is not registered here.
+ * Description: Registers the four custom taxonomies (Material, Anlass, Empfänger, Literatur) that power the front-end product filters. Marke uses the existing WooCommerce `product_brand` taxonomy and is not registered here.
  * Author: LUKO
- * Version: 1.0.0
+ * Version: 1.1.0
  *
  * Phase 1 of the LUKO filter project. This file ONLY registers structure.
  * It does NOT assign terms, does NOT parse content, and does NOT touch
@@ -43,6 +43,11 @@ function luko_filters_taxonomy_defs() {
 			'singular' => 'Empfänger',
 			'plural'   => 'Empfänger',
 			'rewrite'  => 'empfaenger',
+		),
+		'literatur' => array(
+			'singular' => 'Literatur',
+			'plural'   => 'Literatur',
+			'rewrite'  => 'literatur',
 		),
 	);
 }

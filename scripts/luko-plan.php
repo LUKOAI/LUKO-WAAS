@@ -203,12 +203,15 @@ function lp_cap_top_n( $matches, $global_freq, $n = 3 ) {
 // =============================================================================
 // PRE-FLIGHT — taxonomy targets
 // =============================================================================
+// Taxonomy slugs are aligned with mu-plugins/luko-filters.php.
+// Brand uses WooCommerce-native `product_brand`; the rest are LUKO custom
+// taxonomies registered by the MU-plugin without a `product_` prefix.
 $tax_targets = array(
-	'product_brand'      => 'Marke (Brand)',
-	'product_material'   => 'Material',
-	'product_anlass'     => 'Anlass',
-	'product_empfaenger' => 'Empfänger',
-	'product_literatur'  => 'Literatur',
+	'product_brand' => 'Marke (Brand)',
+	'material'      => 'Material',
+	'anlass'        => 'Anlass',
+	'empfaenger'    => 'Empfänger',
+	'literatur'     => 'Literatur',
 );
 $tax_status = array();
 foreach ( $tax_targets as $slug => $label ) {
@@ -334,10 +337,22 @@ foreach ( $raw as $pid => $r ) {
 	$products_with_n_facets[ $facets_used ]++;
 }
 
+// Map taxonomy slug -> internal facet key used in $plan
+function lp_slug_to_facet( $slug ) {
+	$map = array(
+		'product_brand' => 'brand',
+		'material'      => 'material',
+		'anlass'        => 'anlass',
+		'empfaenger'    => 'empfaenger',
+		'literatur'     => 'literatur',
+	);
+	return $map[ $slug ] ?? $slug;
+}
+
 // Unique terms per taxonomy (the "would create" set)
 $unique_terms = array();
 foreach ( $tax_targets as $slug => $_ ) {
-	$facet = str_replace( 'product_', '', $slug );
+	$facet = lp_slug_to_facet( $slug );
 	$set   = array();
 	foreach ( $plan as $p ) {
 		foreach ( $p[ $facet ] as $t ) {
@@ -423,7 +438,7 @@ if ( $any_missing ) {
 
 echo '<h2>Assignment plan summary</h2>';
 echo '<table><tr><th>facet</th><th>unique terms to ensure</th><th>total assignments</th><th>avg per product</th></tr>';
-foreach ( array( 'brand' => 'product_brand', 'material' => 'product_material', 'anlass' => 'product_anlass', 'empfaenger' => 'product_empfaenger', 'literatur' => 'product_literatur' ) as $facet => $slug ) {
+foreach ( array( 'brand' => 'product_brand', 'material' => 'material', 'anlass' => 'anlass', 'empfaenger' => 'empfaenger', 'literatur' => 'literatur' ) as $facet => $slug ) {
 	printf(
 		'<tr><td>%s</td><td>%d</td><td>%d</td><td>%.2f</td></tr>',
 		esc_html( $facet ),
@@ -459,7 +474,7 @@ foreach ( $dropped_brands as $b => $n ) {
 echo '</table></details>';
 
 foreach ( $tax_targets as $slug => $label ) {
-	$facet = str_replace( 'product_', '', $slug );
+	$facet = lp_slug_to_facet( $slug );
 	$terms = $unique_terms[ $slug ];
 	echo '<h3>' . esc_html( $label ) . ' &mdash; <code>' . esc_html( $slug ) . '</code> &mdash; ' . count( $terms ) . ' terms</h3>';
 	echo '<table><tr><th>term</th><th>products tagged</th></tr>';
