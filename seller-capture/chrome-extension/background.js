@@ -86,7 +86,7 @@ async function postToEndpoint(endpoint, payload, sharedSecret) {
   let json;
   try { json = JSON.parse(text); } catch { json = { ok: false, error: `non-JSON response: ${text.slice(0, 200)}` }; }
   if (!res.ok && json.ok !== false) json = { ok: false, error: `HTTP ${res.status}: ${text.slice(0, 200)}` };
-  console.log('[HMAC DEBUG] server response:', json);
+  console.log('[HMAC DEBUG] server response:', JSON.stringify(json, null, 2));
   return json;
 }
 
