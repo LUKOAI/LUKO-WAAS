@@ -174,6 +174,35 @@ function _appendToInbox(ss, flat) {
   return sh.getLastRow();
 }
 
+/**
+ * One-off helper: if Capture inbox tab was created without headers (or headers
+ * got deleted), inject them as row 1. Safe to re-run: detects existing header
+ * by checking if cell A1 equals 'captured_at'.
+ *
+ * Run from Apps Script editor: dropdown "doGet" -> "repairInboxHeaders" -> Run.
+ */
+function repairInboxHeaders() {
+  const sheetId = PropertiesService.getScriptProperties().getProperty('CAPTURE_SHEET_ID');
+  if (!sheetId) throw new Error('CAPTURE_SHEET_ID not set in Script Properties');
+  const ss = SpreadsheetApp.openById(sheetId);
+  const sh = ss.getSheetByName(CAPTURE_TAB);
+  if (!sh) {
+    Logger.log('No "Capture inbox" tab found — will be created on next capture.');
+    return;
+  }
+  const firstCell = sh.getRange(1, 1).getValue();
+  if (firstCell === 'captured_at') {
+    Logger.log('Headers already present.');
+    return;
+  }
+  sh.insertRowBefore(1);
+  sh.getRange(1, 1, 1, INBOX_HEADERS.length).setValues([INBOX_HEADERS])
+    .setFontWeight('bold').setBackground('#f3f3f3');
+  sh.setFrozenRows(1);
+  sh.autoResizeColumns(1, INBOX_HEADERS.length);
+  Logger.log('Headers injected into "Capture inbox".');
+}
+
 function _countFilled(flat) {
   const keys = ['business_name', 'business_address', 'phone', 'email', 'vat_number', 'trade_register_number', 'country', 'customer_service_address'];
   const filled = keys.filter(k => flat[k] && String(flat[k]).trim()).length;
