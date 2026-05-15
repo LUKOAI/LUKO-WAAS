@@ -5,7 +5,8 @@
  *
  * Web App deployment: Execute as = me, Access = Anyone with the link.
  * Required Script Properties:
- *   CAPTURE_SHEET_ID        - Spreadsheet ID with tabs "Capture inbox" and "_config"
+ *   CAPTURE_SHEET_ID        - Spreadsheet ID with tab "agency_blacklist"
+ *   CAPTURE_SHARED_SECRET   - HMAC-SHA256 hex string (openssl rand -hex 32)
  *   BQ_PROJECT_ID
  *   BQ_DATASET              - e.g. luko_sellers
  *   AGENCY_BLACKLIST_SHEET  - tab name in CAPTURE_SHEET_ID with blacklist (default: agency_blacklist)
@@ -25,13 +26,7 @@ function doGet(e) {
 function doPost(e) {
   try {
     const auth = _verifySignature_(e);
-    if (!auth.ok) {
-      return _json({
-        ok: false,
-        error: 'unauthorized: ' + auth.reason,
-        debug: auth.debug || null
-      });
-    }
+    if (!auth.ok) return _json({ ok: false, error: 'unauthorized: ' + auth.reason });
     const payload = JSON.parse(e.postData.contents);
     if (!payload.seller_id) return _json({ ok: false, error: 'seller_id missing' });
 
@@ -80,13 +75,14 @@ function _json(obj) {
 }
 
 /**
- * HMAC-SHA256 signature check. Extension sends:
- *   ts and sig as URL query parameters
+ * HMAC-SHA256 signature check. Extension sends ts + sig as URL query params:
  *   sig = hex(HMAC_SHA256(ts + "." + body, secret))
  * Timestamp must be within ±5 minutes to prevent replay.
  *
- * On bad_signature, returns full debug payload in `debug` to help diagnose mismatches
- * between client and server (secret typo, body transformation, etc.).
+ * IMPORTANT: must use 3-arg variant with explicit UTF-8 charset. The 2-arg
+ * overload `computeHmacSha256Signature(value, key)` claims UTF-8 in docs but
+ * empirically produces different output than web crypto for non-ASCII chars
+ * (German ß, umlauts, Polish diacritics) that appear in seller addresses.
  */
 function _verifySignature_(e) {
   const props = PropertiesService.getScriptProperties();
@@ -99,65 +95,18 @@ function _verifySignature_(e) {
   if (!ts || !sig) return { ok: false, reason: 'missing_signature_headers' };
 
   const now = Math.floor(Date.now() / 1000);
-  if (Math.abs(now - parseInt(ts, 10)) > 300) {
-    return {
-      ok: false,
-      reason: 'timestamp_skew',
-      debug: { server_now: now, client_ts: parseInt(ts, 10), skew_sec: now - parseInt(ts, 10) }
-    };
-  }
+  if (Math.abs(now - parseInt(ts, 10)) > 300) return { ok: false, reason: 'timestamp_skew' };
 
   const body = (e && e.postData && e.postData.contents) || '';
-  // Use 3-arg version with explicit UTF-8. The 2-arg overload claims UTF-8 in docs
-  // but empirically produces different output than web crypto for non-ASCII chars
-  // (German ß, umlauts, Polish diacritics, etc. that appear in seller addresses).
   const expectedBytes = Utilities.computeHmacSha256Signature(
     ts + '.' + body, secret, Utilities.Charset.UTF_8
   );
   const expected = expectedBytes.map(b => (b < 0 ? b + 256 : b).toString(16).padStart(2, '0')).join('');
 
-  // SHA-256 of body alone — for byte-identity check against client
-  const bodyHashBytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, body, Utilities.Charset.UTF_8);
-  const bodyHash = bodyHashBytes.map(b => (b < 0 ? b + 256 : b).toString(16).padStart(2, '0')).join('');
-
-  // SHA-256 of secret — for byte-identity check (catches hidden Unicode in copy-paste)
-  const secretHashBytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, secret, Utilities.Charset.UTF_8);
-  const secretHash = secretHashBytes.map(b => (b < 0 ? b + 256 : b).toString(16).padStart(2, '0')).join('');
-
-  // Test HMAC over a constant string — to verify HMAC algorithm + secret produce same output
-  const testHmacBytes = Utilities.computeHmacSha256Signature('hello', secret);
-  const testHmac = testHmacBytes.map(b => (b < 0 ? b + 256 : b).toString(16).padStart(2, '0')).join('');
-
+  if (expected.length !== sig.length) return { ok: false, reason: 'bad_signature' };
   let diff = 0;
-  if (expected.length !== sig.length) {
-    diff = 1;
-  } else {
-    for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
-  }
-  if (diff === 0) return { ok: true };
-
-  return {
-    ok: false,
-    reason: 'bad_signature',
-    debug: {
-      secret_len: secret.length,
-      secret_first6: secret.substring(0, 6),
-      secret_last6: secret.substring(secret.length - 6),
-      secret_is_hex: /^[0-9a-fA-F]+$/.test(secret),
-      ts_received: ts,
-      ts_len: ts.length,
-      sig_received: sig,
-      sig_len: sig.length,
-      sig_expected: expected,
-      sig_expected_len: expected.length,
-      body_len: body.length,
-      body_sha256: bodyHash,
-      body_first120: body.substring(0, 120),
-      body_last60: body.substring(Math.max(0, body.length - 60)),
-      secret_sha256: secretHash,
-      test_hmac_hello: testHmac
-    }
-  };
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
+  return diff === 0 ? { ok: true } : { ok: false, reason: 'bad_signature' };
 }
 
 function _flattenParsed(p) {
@@ -176,12 +125,23 @@ function _flattenParsed(p) {
     trade_register_number: x.trade_register_number || '',
     vat_number: x.vat_number || '',
     business_type: x.business_type || '',
-    country: x.country || '',
+    country: x.country || _inferCountryFromMarketplace(p.marketplace),
     gpsr_raw: p.gpsr_raw || '',
     screenshot_drive_id: p.screenshot && p.screenshot.drive_id || '',
     screenshot_link: p.screenshot && p.screenshot.link || '',
     raw_text: p.raw_text || ''
   };
+}
+
+function _inferCountryFromMarketplace(mp) {
+  if (!mp) return '';
+  const map = {
+    'amazon.com': 'US', 'amazon.de': 'DE', 'amazon.co.uk': 'UK',
+    'amazon.fr': 'FR', 'amazon.it': 'IT', 'amazon.es': 'ES',
+    'amazon.pl': 'PL', 'amazon.nl': 'NL', 'amazon.se': 'SE',
+    'amazon.com.be': 'BE'
+  };
+  return map[String(mp).toLowerCase()] || '';
 }
 
 const INBOX_HEADERS = [
@@ -190,6 +150,18 @@ const INBOX_HEADERS = [
   'trade_register_number', 'agency_flag', 'confidence_capture', 'screenshot_link', 'url'
 ];
 
+/**
+ * Prepend single-quote to values starting with formula triggers (`+`, `=`, `@`, `-`)
+ * so Sheets stores them as text. Without this, phone numbers like "+49 ..." get
+ * interpreted as broken formulas → #ERROR! display.
+ */
+function _sanitizeForSheet(v) {
+  if (v == null) return '';
+  const s = String(v);
+  if (/^[=+@\-]/.test(s)) return "'" + s;
+  return s;
+}
+
 function _appendToInbox(ss, flat) {
   let sh = ss.getSheetByName(CAPTURE_TAB);
   if (!sh) {
@@ -197,7 +169,7 @@ function _appendToInbox(ss, flat) {
     sh.appendRow(INBOX_HEADERS);
     sh.setFrozenRows(1);
   }
-  const row = INBOX_HEADERS.map(h => flat[h] != null ? flat[h] : '');
+  const row = INBOX_HEADERS.map(h => _sanitizeForSheet(flat[h]));
   sh.appendRow(row);
   return sh.getLastRow();
 }
@@ -289,6 +261,7 @@ function _bqUpsertEnriched(projectId, dataset, flat, existing) {
       marketplace = COALESCE(NULLIF(@marketplace,''), T.marketplace),
       business_name = COALESCE(NULLIF(@business_name,''), T.business_name),
       business_address = COALESCE(NULLIF(@business_address,''), T.business_address),
+      country = COALESCE(NULLIF(@country,''), T.country),
       phone_raw = COALESCE(NULLIF(@phone,''), T.phone_raw),
       email_raw = COALESCE(NULLIF(@email,''), T.email_raw),
       vat = COALESCE(NULLIF(@vat,''), T.vat),
@@ -296,11 +269,11 @@ function _bqUpsertEnriched(projectId, dataset, flat, existing) {
       agency_flag = NULLIF(@agency,''),
       last_captured_at = CURRENT_TIMESTAMP()
     WHEN NOT MATCHED THEN INSERT (
-      seller_id, marketplace, business_name, business_address, phone_raw, email_raw,
-      vat, registry_id, agency_flag, status, last_captured_at
+      seller_id, marketplace, business_name, business_address, country,
+      phone_raw, email_raw, vat, registry_id, agency_flag, status, last_captured_at
     ) VALUES (
-      @sid, @marketplace, @business_name, @business_address, @phone, @email,
-      @vat, @registry, NULLIF(@agency,''), 'captured_pending_enrich', CURRENT_TIMESTAMP()
+      @sid, @marketplace, @business_name, @business_address, @country,
+      @phone, @email, @vat, @registry, NULLIF(@agency,''), 'captured_pending_enrich', CURRENT_TIMESTAMP()
     )
   `;
   const params = [
@@ -308,6 +281,7 @@ function _bqUpsertEnriched(projectId, dataset, flat, existing) {
     { name: 'marketplace', type: 'STRING', value: flat.marketplace },
     { name: 'business_name', type: 'STRING', value: flat.business_name },
     { name: 'business_address', type: 'STRING', value: flat.business_address },
+    { name: 'country', type: 'STRING', value: flat.country },
     { name: 'phone', type: 'STRING', value: flat.phone },
     { name: 'email', type: 'STRING', value: flat.email },
     { name: 'vat', type: 'STRING', value: flat.vat_number },
