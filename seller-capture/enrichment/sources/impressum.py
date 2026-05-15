@@ -66,17 +66,17 @@ PHONE_RAW_RE = re.compile(r"(?:\+|00)\s?\d[\d\s().\-]{6,}\d")
 
 OFFICER_ROLE_PATTERNS = [
     # German
-    (re.compile(r"Vertreten\s+durch[^:\n]*:\s*(?P<role>(?:Gesch[äa]ftsf[üu]hrer(?:in)?|Inhaber(?:in)?|Vorstand))?\s*[:\-]?\s*(?P<name>[A-ZÄÖÜ][\w\s.,\-äöüÄÖÜß]{2,80}?)(?=\n|\s{2,}|<)", re.IGNORECASE), "Geschäftsführer"),
-    (re.compile(r"Gesch[äa]ftsf[üu]hrer(?:in)?\s*[:\-]\s*(?P<name>[A-ZÄÖÜ][\w\s.,\-äöüÄÖÜß]{2,80}?)(?=\n|\s{2,}|<)"), "Geschäftsführer"),
-    (re.compile(r"Inhaber(?:in)?\s*[:\-]\s*(?P<name>[A-ZÄÖÜ][\w\s.,\-äöüÄÖÜß]{2,80}?)(?=\n|\s{2,}|<)"), "Inhaber"),
-    (re.compile(r"Verantwortlich(?:e[rn])?\s+(?:i\.S\.d\.)?[^:\n]*:\s*(?P<name>[A-ZÄÖÜ][\w\s.,\-äöüÄÖÜß]{2,80}?)(?=\n|\s{2,}|<)"), "Verantwortlich"),
-    (re.compile(r"Vorstand\s*[:\-]\s*(?P<name>[A-ZÄÖÜ][\w\s.,\-äöüÄÖÜß]{2,80}?)(?=\n|\s{2,}|<)"), "Vorstand"),
+    (re.compile(r"Vertreten\s+durch[^:\n]*:\s*(?P<role>(?:Gesch[äa]ftsf[üu]hrer(?:in)?|Inhaber(?:in)?|Vorstand))?\s*[:\-]?\s*(?P<name>[A-ZÄÖÜ][\w\s.,\-äöüÄÖÜß]{2,80}?)(?=\n|\s{2,}|<|\.\s|\.$|,\s*\d|,\s+[A-Z]|$)", re.IGNORECASE), "Geschäftsführer"),
+    (re.compile(r"Gesch[äa]ftsf[üu]hrer(?:in)?\s*[:\-]?\s+(?P<name>[A-ZÄÖÜ][\w\s.,\-äöüÄÖÜß]{2,80}?)(?=\n|\s{2,}|<|\.\s|\.$|,\s*\d|,\s+[A-Z]|$)"), "Geschäftsführer"),
+    (re.compile(r"Inhaber(?:in)?\s*[:\-]?\s+(?P<name>[A-ZÄÖÜ][\w\s.,\-äöüÄÖÜß]{2,80}?)(?=\n|\s{2,}|<|\.\s|\.$|,\s*\d|,\s+[A-Z]|$)"), "Inhaber"),
+    (re.compile(r"Verantwortlich(?:e[rn])?\s+(?:i\.S\.d\.)?[^:\n]*:\s*(?P<name>[A-ZÄÖÜ][\w\s.,\-äöüÄÖÜß]{2,80}?)(?=\n|\s{2,}|<|\.\s|\.$|,\s*\d|,\s+[A-Z]|$)"), "Verantwortlich"),
+    (re.compile(r"Vorstand\s*[:\-]?\s+(?P<name>[A-ZÄÖÜ][\w\s.,\-äöüÄÖÜß]{2,80}?)(?=\n|\s{2,}|<|\.\s|\.$|,\s*\d|,\s+[A-Z]|$)"), "Vorstand"),
     # English
-    (re.compile(r"\b(?:CEO|Managing Director|Director|Owner|Founder)\s*[:\-]\s*(?P<name>[A-Z][\w\s.,\-]{2,80}?)(?=\n|\s{2,}|<)"), "Director"),
+    (re.compile(r"\b(?:CEO|Managing Director|Director|Owner|Founder)\s*[:\-]?\s+(?P<name>[A-Z][\w\s.,\-]{2,80}?)(?=\n|\s{2,}|<|\.\s|\.$|,\s*\d|,\s+[A-Z]|$)"), "Director"),
     # French
-    (re.compile(r"Directeur(?:\s+g[ée]n[ée]ral)?\s*[:\-]\s*(?P<name>[A-Z][\w\s.,\-éèàâêîôûïü]{2,80}?)(?=\n|\s{2,}|<)", re.IGNORECASE), "Directeur"),
+    (re.compile(r"Directeur(?:\s+g[ée]n[ée]ral)?\s*[:\-]?\s+(?P<name>[A-Z][\w\s.,\-éèàâêîôûïü]{2,80}?)(?=\n|\s{2,}|<|\.\s|\.$|,\s*\d|,\s+[A-Z]|$)", re.IGNORECASE), "Directeur"),
     # Italian
-    (re.compile(r"Amministratore(?:\s+unico|\s+delegato)?\s*[:\-]\s*(?P<name>[A-Z][\w\s.,\-]{2,80}?)(?=\n|\s{2,}|<)", re.IGNORECASE), "Amministratore"),
+    (re.compile(r"Amministratore(?:\s+unico|\s+delegato)?\s*[:\-]?\s+(?P<name>[A-Z][\w\s.,\-]{2,80}?)(?=\n|\s{2,}|<|\.\s|\.$|,\s*\d|,\s+[A-Z]|$)", re.IGNORECASE), "Amministratore"),
 ]
 
 
