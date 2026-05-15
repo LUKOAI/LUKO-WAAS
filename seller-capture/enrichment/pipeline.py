@@ -8,6 +8,7 @@ import logging
 from .models import SellerInput, EnrichmentResult
 from .sources import vies
 from .scoring import score_candidate, compute_overall
+from .segmentation import classify_jurisdiction, extract_de_signals, decide_outreach_priority
 
 log = logging.getLogger(__name__)
 
@@ -30,12 +31,23 @@ def enrich_one(s: SellerInput) -> EnrichmentResult:
     r.sources = {}
     r.confidence = {"company": 0, "email": 0, "phone": 0}
 
+    # Pre-segment: PL-resident sellers are out of scope (data already on file). Bail early.
+    pre_segment, pre_reason = classify_jurisdiction(s)
+    if pre_segment == "PL":
+        r.jurisdiction_segment = "PL"
+        r.jurisdiction_reason = pre_reason
+        r.outreach_priority = "skip"
+        r.status = "skipped_pl"
+        return r
+
     # 1) VIES — VAT-anchored truth
+    vies_country: str | None = None
     country, vat_body = _vat_country(s.vat)
     if country and vat_body:
         try:
             vies_res = vies.lookup(country, vat_body)
             if vies_res and vies_res.get("valid"):
+                vies_country = vies_res.get("country") or country
                 if vies_res.get("name"):
                     r.company_name = vies_res["name"]
                     r.confidence["company"] = max(r.confidence["company"], 95)
@@ -46,8 +58,8 @@ def enrich_one(s: SellerInput) -> EnrichmentResult:
         except Exception:
             log.exception("VIES lookup failed for %s", s.vat)
 
-    # 2-N) TODO: lucid, ear_de, bdo_pl, companies_house, krs, handelsregister, pappers,
-    #            impressum, ebay, kaufland, allegro, otto, llm_merge.
+    # 2-N) TODO: ear_de, lucid_de (DE registries — scrape), companies_house, krs, handelsregister,
+    #            pappers, impressum, ebay, kaufland, allegro, otto, llm_merge.
     #            Wire each source like above; each returns a dict + appends candidates to r.candidates.
 
     # Fallback: keep raw Amazon name if registries did not return anything.
@@ -55,6 +67,26 @@ def enrich_one(s: SellerInput) -> EnrichmentResult:
         r.company_name = s.business_name
         r.confidence["company"] = 50
         r.sources["company_name"] = "amazon_raw"
+
+    # Jurisdiction (with VIES-confirmed country if we have it)
+    segment, reason = classify_jurisdiction(s, vies_country=vies_country)
+    r.jurisdiction_segment = segment
+    r.jurisdiction_reason = reason
+    # PL can re-surface here only if VIES disagrees with pre-segment; respect skip in that case too.
+    if segment == "PL":
+        r.outreach_priority = "skip"
+        r.status = "skipped_pl"
+        return r
+
+    # DE-operating signals (raw_text / gpsr_raw harvested by extension)
+    signals, weee_number, lucid_id = extract_de_signals(s, r)
+    r.de_operating_signals = signals
+    if weee_number:
+        r.weee_number = weee_number
+        r.sources["weee_number"] = "amazon_raw"
+    if lucid_id:
+        r.lucid_id = lucid_id
+        r.sources["lucid_id"] = "amazon_raw"
 
     # Score remaining candidates
     for c in r.candidates:
@@ -84,6 +116,14 @@ def enrich_one(s: SellerInput) -> EnrichmentResult:
 
     overall = compute_overall(r)
     r.confidence["overall"] = overall
+
+    # Outreach priority (jurisdiction × DE signals × contact availability)
+    r.outreach_priority = decide_outreach_priority(
+        segment=r.jurisdiction_segment,
+        de_signals=r.de_operating_signals,
+        has_contact=bool(r.email or r.phone),
+    )
+
     if r.agency_flag and not r.email and not r.phone:
         r.status = "agency_only"
     elif overall >= 70:

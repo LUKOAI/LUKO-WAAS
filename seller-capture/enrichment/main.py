@@ -34,13 +34,32 @@ def _bq() -> bigquery.Client:
     return bigquery.Client(project=PROJECT)
 
 
+_SELECT_FIELDS = """
+  e.seller_id, e.marketplace, e.business_name, e.business_address, e.country,
+  e.vat, e.registry_id, e.phone_raw, e.email_raw,
+  latest.raw_text AS raw_text, latest.gpsr_raw AS gpsr_raw
+"""
+
+
+def _latest_raw_join() -> str:
+    return f"""
+    LEFT JOIN (
+      SELECT seller_id,
+             ARRAY_AGG(raw_text IGNORE NULLS ORDER BY captured_at DESC LIMIT 1)[SAFE_OFFSET(0)] AS raw_text,
+             ARRAY_AGG(gpsr_raw IGNORE NULLS ORDER BY captured_at DESC LIMIT 1)[SAFE_OFFSET(0)] AS gpsr_raw
+      FROM `{PROJECT}.{DATASET}.sellers_raw`
+      GROUP BY seller_id
+    ) latest USING (seller_id)
+    """
+
+
 def fetch_pending(limit: int) -> list[SellerInput]:
     sql = f"""
-    SELECT seller_id, marketplace, business_name, business_address, country,
-           vat, registry_id, phone_raw, email_raw
-    FROM `{PROJECT}.{DATASET}.sellers_enriched`
-    WHERE status = 'captured_pending_enrich'
-    ORDER BY last_captured_at DESC
+    SELECT {_SELECT_FIELDS}
+    FROM `{PROJECT}.{DATASET}.sellers_enriched` e
+    {_latest_raw_join()}
+    WHERE e.status = 'captured_pending_enrich'
+    ORDER BY e.last_captured_at DESC
     LIMIT @lim
     """
     job = _bq().query(sql, job_config=bigquery.QueryJobConfig(
@@ -51,10 +70,10 @@ def fetch_pending(limit: int) -> list[SellerInput]:
 
 def fetch_one(seller_id: str) -> SellerInput | None:
     sql = f"""
-    SELECT seller_id, marketplace, business_name, business_address, country,
-           vat, registry_id, phone_raw, email_raw
-    FROM `{PROJECT}.{DATASET}.sellers_enriched`
-    WHERE seller_id = @sid LIMIT 1
+    SELECT {_SELECT_FIELDS}
+    FROM `{PROJECT}.{DATASET}.sellers_enriched` e
+    {_latest_raw_join()}
+    WHERE e.seller_id = @sid LIMIT 1
     """
     job = _bq().query(sql, job_config=bigquery.QueryJobConfig(
         query_parameters=[bigquery.ScalarQueryParameter("sid", "STRING", seller_id)]
@@ -83,6 +102,12 @@ def write_back(result: EnrichmentResult) -> None:
         brands = @brands,
         agency_flag = NULLIF(@agency_flag,''),
         generic_contacts = @generic_contacts,
+        weee_number = NULLIF(@weee_number,''),
+        lucid_id = NULLIF(@lucid_id,''),
+        de_operating_signals = @de_signals,
+        jurisdiction_segment = @j_segment,
+        jurisdiction_reason = NULLIF(@j_reason,''),
+        outreach_priority = @outreach_priority,
         confidence_company = @c_company,
         confidence_email = @c_email,
         confidence_phone = @c_phone,
@@ -112,6 +137,12 @@ def write_back(result: EnrichmentResult) -> None:
         bigquery.ArrayQueryParameter("brands", "STRING", p.brands or []),
         bigquery.ScalarQueryParameter("agency_flag", "STRING", p.agency_flag or ""),
         bigquery.ScalarQueryParameter("generic_contacts", "STRING", json.dumps(p.generic_contacts or [])),
+        bigquery.ScalarQueryParameter("weee_number", "STRING", p.weee_number or ""),
+        bigquery.ScalarQueryParameter("lucid_id", "STRING", p.lucid_id or ""),
+        bigquery.ArrayQueryParameter("de_signals", "STRING", p.de_operating_signals or []),
+        bigquery.ScalarQueryParameter("j_segment", "STRING", p.jurisdiction_segment or "unknown"),
+        bigquery.ScalarQueryParameter("j_reason", "STRING", p.jurisdiction_reason or ""),
+        bigquery.ScalarQueryParameter("outreach_priority", "STRING", p.outreach_priority or "review"),
         bigquery.ScalarQueryParameter("c_company", "INT64", p.confidence.get("company", 0)),
         bigquery.ScalarQueryParameter("c_email", "INT64", p.confidence.get("email", 0)),
         bigquery.ScalarQueryParameter("c_phone", "INT64", p.confidence.get("phone", 0)),
@@ -128,7 +159,14 @@ def run_batch(sellers: Iterable[SellerInput]) -> None:
             log.info("enrich %s (%s)", s.seller_id, s.marketplace)
             result = enrich_one(s)
             write_back(result)
-            log.info("  -> status=%s overall=%s", result.status, result.confidence.get("overall"))
+            log.info(
+                "  -> status=%s segment=%s priority=%s signals=%s overall=%s",
+                result.status,
+                result.jurisdiction_segment,
+                result.outreach_priority,
+                ",".join(result.de_operating_signals) or "-",
+                result.confidence.get("overall"),
+            )
         except Exception:
             log.exception("enrichment failed for %s", s.seller_id)
 

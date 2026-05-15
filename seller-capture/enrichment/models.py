@@ -15,6 +15,9 @@ class SellerInput:
     registry_id: Optional[str] = None
     phone_raw: Optional[str] = None
     email_raw: Optional[str] = None
+    # Raw text harvested by the Chrome extension; carries WEEE / LUCID / Trader / GPSR data
+    raw_text: Optional[str] = None
+    gpsr_raw: Optional[str] = None
 
 
 @dataclass
@@ -56,6 +59,14 @@ class EnrichmentResult:
     generic_contacts: list[dict] = field(default_factory=list)
     # Negatives
     agency_flag: Optional[str] = None
+    # DE-operating signals (target audience = foreign sellers active on amazon.de)
+    weee_number: Optional[str] = None              # "WEEE-Reg.-Nr. DE 12345678" → digits only kept
+    lucid_id: Optional[str] = None                 # "DE\d{13}" from Verpackungsregister
+    de_operating_signals: list[str] = field(default_factory=list)  # subset of {'vat_de','weee','lucid','fba_de'}
+    # Jurisdiction & outreach targeting
+    jurisdiction_segment: str = "unknown"          # 'DE' | 'PL' | 'foreign' | 'unknown'
+    jurisdiction_reason: Optional[str] = None
+    outreach_priority: str = "review"              # 'high' | 'medium' | 'inactive' | 'skip' | 'review'
     # Scoring
     confidence: dict = field(default_factory=dict)
     sources: dict = field(default_factory=dict)

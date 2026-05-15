@@ -46,6 +46,14 @@ CREATE TABLE IF NOT EXISTS `${PROJECT}.${DATASET}.sellers_enriched` (
   -- Negatives
   agency_flag              STRING,
   generic_contacts         STRING,        -- JSON: support/info contacts kept aside
+  -- DE-operating signals (target audience = foreign sellers active on amazon.de)
+  weee_number              STRING,        -- 8 digits from "WEEE-Reg.-Nr. DE NNNNNNNN"
+  lucid_id                 STRING,        -- "DE\d{13}" Verpackungsregister id
+  de_operating_signals     ARRAY<STRING>, -- subset of {'vat_de','weee','lucid','fba_de'}
+  -- Jurisdiction / outreach targeting
+  jurisdiction_segment     STRING,        -- 'DE' | 'PL' | 'foreign' | 'unknown'
+  jurisdiction_reason      STRING,
+  outreach_priority        STRING,        -- 'high' | 'medium' | 'inactive' | 'skip' | 'review'
   -- Scoring
   confidence_company       INT64,
   confidence_email         INT64,
@@ -53,7 +61,7 @@ CREATE TABLE IF NOT EXISTS `${PROJECT}.${DATASET}.sellers_enriched` (
   confidence_overall       INT64,
   sources                  STRING,        -- JSON: per-field source list
   -- Lifecycle
-  status                   STRING,        -- captured_pending_enrich | enriched_ok | enriched_low_confidence | enriched_failed | agency_only | contacted | converted | dead
+  status                   STRING,        -- captured_pending_enrich | enriched_ok | enriched_low_confidence | enriched_failed | agency_only | skipped_pl | contacted | converted | dead
   last_captured_at         TIMESTAMP,
   last_enriched_at         TIMESTAMP,
   last_action_at           TIMESTAMP,
@@ -92,14 +100,44 @@ CREATE TABLE IF NOT EXISTS `${PROJECT}.${DATASET}.agency_blacklist` (
   updated_at    TIMESTAMP
 );
 
--- Materialized "worklist" — the only view operators see in their Sheet
+-- Worklist for active outreach — foreign sellers (non-DE, non-PL).
+-- DE sellers excluded (UWG / abmahnung risk). PL skipped (data already on file).
 CREATE OR REPLACE VIEW `${PROJECT}.${DATASET}.worklist_v` AS
 SELECT
-  seller_id, marketplace, company_name, country,
+  seller_id, marketplace, company_name, country, jurisdiction_segment,
   decision_maker_name, decision_maker_role, email, phone,
-  agency_flag, confidence_overall, status,
+  weee_number, lucid_id, de_operating_signals,
+  agency_flag, confidence_overall, status, outreach_priority,
   website, last_captured_at, last_enriched_at, last_action_at
 FROM `${PROJECT}.${DATASET}.sellers_enriched`
 WHERE status IN ('enriched_ok','enriched_low_confidence','captured_pending_enrich')
+  AND outreach_priority IN ('high','medium','review')
+  AND (agency_flag IS NULL OR agency_flag = '')
+ORDER BY
+  CASE outreach_priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'review' THEN 3 ELSE 9 END,
+  confidence_overall DESC NULLS LAST,
+  last_captured_at DESC;
+
+-- DE-resident sellers — enriched & warm, but outreach gated by OUTREACH_DE_ENABLED.
+-- Kept in a separate view so operators do NOT contact these by accident.
+CREATE OR REPLACE VIEW `${PROJECT}.${DATASET}.worklist_de_inactive_v` AS
+SELECT
+  seller_id, marketplace, company_name, country,
+  decision_maker_name, decision_maker_role, email, phone,
+  weee_number, lucid_id, de_operating_signals,
+  agency_flag, confidence_overall, status,
+  website, last_captured_at, last_enriched_at, last_action_at
+FROM `${PROJECT}.${DATASET}.sellers_enriched`
+WHERE jurisdiction_segment = 'DE'
+  AND outreach_priority = 'inactive'
   AND (agency_flag IS NULL OR agency_flag = '')
 ORDER BY confidence_overall DESC NULLS LAST, last_captured_at DESC;
+
+-- Migration helper for existing datasets: add columns one-by-one (idempotent via IF NOT EXISTS).
+-- Run once after applying this file to a pre-existing dataset.
+-- ALTER TABLE `${PROJECT}.${DATASET}.sellers_enriched` ADD COLUMN IF NOT EXISTS weee_number STRING;
+-- ALTER TABLE `${PROJECT}.${DATASET}.sellers_enriched` ADD COLUMN IF NOT EXISTS lucid_id STRING;
+-- ALTER TABLE `${PROJECT}.${DATASET}.sellers_enriched` ADD COLUMN IF NOT EXISTS de_operating_signals ARRAY<STRING>;
+-- ALTER TABLE `${PROJECT}.${DATASET}.sellers_enriched` ADD COLUMN IF NOT EXISTS jurisdiction_segment STRING;
+-- ALTER TABLE `${PROJECT}.${DATASET}.sellers_enriched` ADD COLUMN IF NOT EXISTS jurisdiction_reason STRING;
+-- ALTER TABLE `${PROJECT}.${DATASET}.sellers_enriched` ADD COLUMN IF NOT EXISTS outreach_priority STRING;
