@@ -1,0 +1,7 @@
+seller_id,country,vat,business_name,business_address,registry_id,raw_text
+TEST_UK_1,United Kingdom,GB123456789,ACME Trading Limited,"10 Downing St, London SW1A 2AA",12345678,"Contact us at https://acme-trading.co.uk for orders"
+TEST_DE_1,Germany,DE123456789,Müller Handels GmbH,"Hauptstraße 10, 80331 München",,
+TEST_PL_1,Poland,PL1234567890,Foo Polska Sp z o.o.,"ul. Marszałkowska 1, 00-001 Warszawa",,
+TEST_FR_1,France,FRXX123456789,Acme Distribution SARL,"10 Rue de la Paix, 75001 Paris",,"Voir https://acme-distribution.fr"
+TEST_CN_1,CN,DE999999999,Shenzhen Bright Trading Co Ltd,"Shenzhen, Guangdong, China",,"WEEE-Reg.-Nr. DE 12345678 / Versand durch Amazon / Vertreten durch: GPSR EU Representative GmbH"
+TEST_IT_1,Italy,IT12345678901,Pasta Roma SRL,"Via Roma 1, 00100 Roma",,"Vendita online di prodotti alimentari italiani. Sito: https://pasta-roma.it"
