@@ -16,7 +16,7 @@ Skala: **1-4 operatorów**, najczęściej 1. ~100 captures/dzień.
 ## Status
 
 - [x] **Krok 1** — projekt GCP `luko-sellers` utworzony (project number `697599784684`)
-- [ ] **Krok 2** — BigQuery API + billing
+- [x] **Krok 2** — BigQuery API enabled, billing `luko-amazon-content-manager` linked
 - [ ] **Krok 3** — service account + JSON key
 - [ ] **Krok 4** — dataset `luko_sellers` + schema + agency seed
 - [ ] **Krok 5** — enrichment worker (Cloud Run)
