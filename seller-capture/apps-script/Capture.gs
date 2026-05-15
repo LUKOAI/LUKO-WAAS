@@ -350,7 +350,7 @@ function _bqUpsertEnriched(projectId, dataset, flat, existing) {
       phone_alt            = COALESCE(NULLIF(@phone_alt,''),            T.phone_alt),
       email_raw            = COALESCE(NULLIF(@email,''),                T.email_raw),
       email_alt            = COALESCE(NULLIF(@email_alt,''),            T.email_alt),
-      vat                  = COALESCE(NULLIF(@vat,''),                  T.vat),
+      vat_number           = COALESCE(NULLIF(@vat,''),                  T.vat_number),
       weee_number          = COALESCE(NULLIF(@weee,''),                 T.weee_number),
       epr_id               = COALESCE(NULLIF(@epr,''),                  T.epr_id),
       registry_id          = COALESCE(NULLIF(@registry,''),             T.registry_id),
@@ -363,7 +363,7 @@ function _bqUpsertEnriched(projectId, dataset, flat, existing) {
       street, address_line_2, region, postal_code, city, country, business_address,
       cs_street, cs_postal_code, cs_city, cs_region, cs_country, cs_differs,
       phone_raw, phone_alt, email_raw, email_alt,
-      vat, weee_number, epr_id, registry_id, other_id,
+      vat_number, weee_number, epr_id, registry_id, other_id,
       agency_flag, status, last_captured_at
     ) VALUES (
       @sid, @marketplace, @asin, @brand,

@@ -282,24 +282,35 @@
     return out;
   }
 
-  // "Gesetzliche Anbieterkennung" / "Impressum" — free-text legal notice
+  // "Gesetzliche Anbieterkennung" / "Impressum" — free-text legal notice.
+  // CRITICAL: validate the block actually looks like an impressum (has Geschäftsführer
+  // / USt-IdNr / Telefon: / E-Mail: / WEEE labels) before parsing address from it.
+  // Without this validation, Amazon's site nav footer text (Geld verdienen mit Amazon,
+  // Verkaufen bei Amazon Handmade, etc.) gets mistaken for an address — a real bug we
+  // hit on first US/CN seller captures.
   function parseLegalBlock(text) {
     const out = {};
     if (!text) return out;
+
+    const looksLikeImpressum = /\b(Gesch[äa]ftsf[üu]hrer|USt[-\s]*Id[-\s]*Nr|UStID|Telefon\s*[:.]|Telefax\s*[:.]|E[-\s]*Mail\s*[:.]|WEEE[-\s]*Reg|Handelsregister(?:nummer)?\s*[:.]?|vertr\.?\s*d\.?\s*d\.?)/i.test(text);
+
+    // Always safe: regex extraction of IDs and contact (only matches if labels present).
     Object.assign(out, extractIds(text), extractContact(text));
+
+    if (!looksLikeImpressum) return out;
+
     // First non-empty line is usually the company name (if not already set)
     const lines = tidyMultiline(text).split(/\n/).map(s => s.trim()).filter(Boolean);
     if (lines.length && !/^(diese|vertr|gesch[äa]ftsf|tel|fax|e-?mail|ust|umsatz|weee|handelsreg|eingetragen|alternative|plattform)/i.test(lines[0])) {
       out.business_name = lines[0];
     }
-    // Address heuristic: take consecutive 2-4 lines after representative or company line,
-    // until first labeled line (Tel/Fax/Email/USt/WEEE...)
+    // Address heuristic: take 2-4 consecutive non-labeled lines after representative
+    // line (or after company name), until first labeled line.
     const stopLabel = /^(tel\.|telefon|telefax|fax|e-?mail|ust|usti|umsatz|weee|handelsreg|eingetragen|alternative|plattform|diese\s+vertr|vertr\.|gesch[äa]ftsf)/i;
     let addrStart = -1;
     for (let i = 0; i < lines.length; i++) {
       if (i === 0) continue;
       if (stopLabel.test(lines[i])) continue;
-      // Use first non-labeled, non-rep line as address start
       if (!/^(diese|vertr)/i.test(lines[i])) { addrStart = i; break; }
     }
     if (addrStart > 0) {
@@ -350,6 +361,39 @@
 
       const fromLegal = parseLegalBlock(legalBlock || "");
       const fromBV = parseBusinessVerkauferBlock(bvBlock || "");
+
+      // Address fallback: if BV block parsing missed Geschäftsadresse / Kundendienstadresse
+      // (e.g. block extraction got truncated by an aggressive stop pattern), re-scan
+      // the FULL seller-info section. These labels are unique enough to search globally.
+      if (!fromBV.street) {
+        const addr = extractAddressAfterLabel(rawText, [
+          /\n\s*Gesch[äa]ftsadresse\s*:?\s*\n/i,
+          /\n\s*Business\s+address\s*:?\s*\n/i,
+        ]);
+        if (addr.street) Object.assign(fromBV, addr);
+      }
+      if (!fromBV.cs_street) {
+        const cs = extractAddressAfterLabel(rawText, [
+          /\n\s*Kundendienst[-\s]?adresse\s*:?\s*\n/i,
+          /\n\s*Customer\s+service\s+address\s*:?\s*\n/i,
+        ]);
+        if (cs.street) {
+          fromBV.cs_street = cs.street;
+          fromBV.cs_postal_code = cs.postal_code || "";
+          fromBV.cs_city = cs.city || "";
+          fromBV.cs_region = cs.region || "";
+          fromBV.cs_country = cs.country || "";
+        }
+      }
+      // If we have CS but no Geschäftsadresse, copy CS as fallback (better than empty;
+      // they're identical for ~80% of sellers anyway).
+      if (!fromBV.street && fromBV.cs_street) {
+        fromBV.street = fromBV.cs_street;
+        fromBV.postal_code = fromBV.cs_postal_code;
+        fromBV.city = fromBV.cs_city;
+        fromBV.region = fromBV.cs_region;
+        fromBV.country = fromBV.cs_country;
+      }
 
       // Merge: Business-Verkäufer wins for structured fields (street/postal/city/region),
       // Legal block wins for unique-to-legal fields (representative_name, WEEE, fax).
