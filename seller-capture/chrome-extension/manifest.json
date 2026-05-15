@@ -21,7 +21,9 @@
     "https://www.amazon.nl/*",
     "https://www.amazon.se/*",
     "https://www.amazon.com.be/*",
-    "https://www.googleapis.com/*"
+    "https://www.googleapis.com/*",
+    "https://script.google.com/*",
+    "https://script.googleusercontent.com/*"
   ],
   "background": { "service_worker": "background.js" },
   "action": {

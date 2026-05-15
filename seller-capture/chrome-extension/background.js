@@ -56,7 +56,7 @@ async function postToEndpoint(endpoint, payload, sharedSecret) {
   }
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
     body
   });
   const text = await res.text();
