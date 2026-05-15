@@ -17,9 +17,11 @@ Skala: **1-4 operatorów**, najczęściej 1. ~100 captures/dzień.
 
 - [x] **Krok 1** — projekt GCP `luko-sellers` utworzony (project number `697599784684`)
 - [x] **Krok 2** — BigQuery API enabled, billing `luko-amazon-content-manager` linked
-- [ ] **Krok 3** — service account + JSON key
-- [ ] **Krok 4** — dataset `luko_sellers` + schema + agency seed
+- [x] **Krok 3** — service account `luko-sellers-worker` + JSON key w `~/.config/luko-sellers/key.json` (Windows: `C:\Users\user\.config\luko-sellers\key.json`)
+- [x] **Krok 4** — dataset `luko_sellers` + 4 tabele + 3 widoki + 44 agencji w blacklist (via Cloud Shell)
 - [ ] **Krok 5** — enrichment worker (Cloud Run)
+
+> **Lesson learned z Kroku 4**: lokalny `bq` z gcloud SDK 519 na Windows ma bug w bundled Python (`absl.flags has no attribute 'FLAGS'`). `gcloud components update` wymaga Admin (gcloud zainstalowane w `Program Files (x86)`). `curl` na Windows blokuje pobieranie po HTTPS przez cert revocation check (`CRYPT_E_NO_REVOCATION_CHECK`). **Wniosek**: dla operacji BQ/gcloud na Windows używaj **Cloud Shell** (browser-based, działa od ręki). Lokalny gcloud da się naprawić tylko reinstalacją jako User zamiast Admin, ale w dalszych krokach tego nie potrzebujemy.
 - [ ] **Krok 6** — Apps Script + arkusz "Sellers Worklist" + Chrome extension
 - [ ] **Krok 7** — backfill legacy danych z istniejących arkuszy
 

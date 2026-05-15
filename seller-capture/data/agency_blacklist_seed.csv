@@ -1,45 +1,45 @@
-name,kind,domain,email,phone,address,country,source
-Avask Group,vat,avaskgroup.com,,,,UK,seed
-Hellotax,vat,hellotax.com,,,,DE,seed
-Taxdoo,vat,taxdoo.com,,,,DE,seed
-Amavat,vat,amavat.eu,,,,PL,seed
-KMLZ,vat,kmlz.de,,,,DE,seed
-Easytax,vat,easytax.co,,,,FR,seed
-Eurora,vat,eurora.com,,,,EE,seed
-EAS Project,vat,easproject.com,,,,EE,seed
-SimplyVAT,vat,simplyvat.com,,,,UK,seed
-J&P Accountants,vat,jpaccountant.com,,,,UK,seed
-Lovat Compliance,vat,vatcompliance.co,,,,UK,seed
-Staxxer,vat,staxxer.com,,,,NL,seed
-Countx,vat,countx.com,,,,DE,seed
-Lemonade Compliance,gpsr,lemonadecompliance.com,,,,DE,seed
-Authorised Rep Compliance,gpsr,arcuk.eu,,,,UK,seed
-EU Representative,gpsr,eu-rep.eu,,,,DE,seed
-ProductIP,gpsr,productip.com,,,,NL,seed
-EcoMundo,gpsr,ecomundo.eu,,,,FR,seed
-Obelis,gpsr,obelis.net,,,,BE,seed
-CE Partner,gpsr,cepartner4you.com,,,,NL,seed
-MDSS,gpsr,mdss.com,,,,DE,seed
-Stiftung Zentrale Stelle,epr,verpackungsregister.org,,,,DE,seed
-Lizenzero,epr,lizenzero.de,,,,DE,seed
-Activate by Reclay,epr,activate-online.de,,,,DE,seed
-Landbell Group,epr,landbell.de,,,,DE,seed
-Take-e-way,weee,take-e-way.de,,,,DE,seed
-ERA,weee,era.eu,,,,UK,seed
-Recupel,weee,recupel.be,,,,BE,seed
-Ecologic,weee,ecologic-france.com,,,,FR,seed
-Erion WEEE,weee,erion.it,,,,IT,seed
-Citeo,epr,citeo.com,,,,FR,seed
-Ecoembes,epr,ecoembes.com,,,,ES,seed
-CONAI,epr,conai.org,,,,IT,seed
-Rekopol,epr,rekopol.pl,,,,PL,seed
-Interzero,epr,interzero.de,,,,DE,seed
-Reclay Group,epr,reclay-group.com,,,,DE,seed
-J5 Tax,vat,j5tax.com,,,,DE,seed
-Taxually,vat,taxually.com,,,,UK,seed
-VATGlobal,vat,vatglobal.com,,,,UK,seed
-Marosa,vat,marosavat.com,,,,ES,seed
-Fiscalsolutions,vat,fiscalsolutions.co.uk,,,,UK,seed
-Source by Vertu,gpsr,sourcebyvertu.com,,,,UK,seed
-Maven Trade,gpsr,maventrade.eu,,,,DE,seed
-EasyEU CE,gpsr,easyeu-ce.com,,,,DE,seed
+name,kind,domain,email,phone,address,country,source,hits,created_at,updated_at
+Avask Group,vat,avaskgroup.com,,,,UK,seed,0,,
+Hellotax,vat,hellotax.com,,,,DE,seed,0,,
+Taxdoo,vat,taxdoo.com,,,,DE,seed,0,,
+Amavat,vat,amavat.eu,,,,PL,seed,0,,
+KMLZ,vat,kmlz.de,,,,DE,seed,0,,
+Easytax,vat,easytax.co,,,,FR,seed,0,,
+Eurora,vat,eurora.com,,,,EE,seed,0,,
+EAS Project,vat,easproject.com,,,,EE,seed,0,,
+SimplyVAT,vat,simplyvat.com,,,,UK,seed,0,,
+J&P Accountants,vat,jpaccountant.com,,,,UK,seed,0,,
+Lovat Compliance,vat,vatcompliance.co,,,,UK,seed,0,,
+Staxxer,vat,staxxer.com,,,,NL,seed,0,,
+Countx,vat,countx.com,,,,DE,seed,0,,
+Lemonade Compliance,gpsr,lemonadecompliance.com,,,,DE,seed,0,,
+Authorised Rep Compliance,gpsr,arcuk.eu,,,,UK,seed,0,,
+EU Representative,gpsr,eu-rep.eu,,,,DE,seed,0,,
+ProductIP,gpsr,productip.com,,,,NL,seed,0,,
+EcoMundo,gpsr,ecomundo.eu,,,,FR,seed,0,,
+Obelis,gpsr,obelis.net,,,,BE,seed,0,,
+CE Partner,gpsr,cepartner4you.com,,,,NL,seed,0,,
+MDSS,gpsr,mdss.com,,,,DE,seed,0,,
+Stiftung Zentrale Stelle,epr,verpackungsregister.org,,,,DE,seed,0,,
+Lizenzero,epr,lizenzero.de,,,,DE,seed,0,,
+Activate by Reclay,epr,activate-online.de,,,,DE,seed,0,,
+Landbell Group,epr,landbell.de,,,,DE,seed,0,,
+Take-e-way,weee,take-e-way.de,,,,DE,seed,0,,
+ERA,weee,era.eu,,,,UK,seed,0,,
+Recupel,weee,recupel.be,,,,BE,seed,0,,
+Ecologic,weee,ecologic-france.com,,,,FR,seed,0,,
+Erion WEEE,weee,erion.it,,,,IT,seed,0,,
+Citeo,epr,citeo.com,,,,FR,seed,0,,
+Ecoembes,epr,ecoembes.com,,,,ES,seed,0,,
+CONAI,epr,conai.org,,,,IT,seed,0,,
+Rekopol,epr,rekopol.pl,,,,PL,seed,0,,
+Interzero,epr,interzero.de,,,,DE,seed,0,,
+Reclay Group,epr,reclay-group.com,,,,DE,seed,0,,
+J5 Tax,vat,j5tax.com,,,,DE,seed,0,,
+Taxually,vat,taxually.com,,,,UK,seed,0,,
+VATGlobal,vat,vatglobal.com,,,,UK,seed,0,,
+Marosa,vat,marosavat.com,,,,ES,seed,0,,
+Fiscalsolutions,vat,fiscalsolutions.co.uk,,,,UK,seed,0,,
+Source by Vertu,gpsr,sourcebyvertu.com,,,,UK,seed,0,,
+Maven Trade,gpsr,maventrade.eu,,,,DE,seed,0,,
+EasyEU CE,gpsr,easyeu-ce.com,,,,DE,seed,0,,
