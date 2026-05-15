@@ -250,8 +250,9 @@ foreach ( $ids as $pid ) {
 	$anlass    = luko_match_keywords( $haystack, $kw_anl );
 	$empf      = luko_match_keywords( $haystack, $kw_emp );
 
-	// Frequency tracking
-	if ( $brand !== '' && strcasecmp( $brand, 'Generisch' ) !== 0 ) {
+	// Frequency tracking — blacklist Amazon's locale-specific "unknown brand" placeholders.
+	$brand_blacklist = array( 'generisch', 'generic', 'generico', 'generique', 'générique' );
+	if ( $brand !== '' && ! in_array( mb_strtolower( $brand ), $brand_blacklist, true ) ) {
 		$freq_brand[ $brand ] = ( $freq_brand[ $brand ] ?? 0 ) + 1;
 	}
 	foreach ( $mat_kw as $m ) { $freq_material[ $m ] = ( $freq_material[ $m ] ?? 0 ) + 1; }
