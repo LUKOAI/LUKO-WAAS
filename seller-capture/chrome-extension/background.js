@@ -46,12 +46,18 @@ async function uploadToDrive(dataUrl, filename, folderId) {
   return await res.json();
 }
 
+async function sha256Hex(s) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
 async function postToEndpoint(endpoint, payload, sharedSecret) {
   const body = JSON.stringify(payload);
   const ts = String(Math.floor(Date.now() / 1000));
 
   // [HMAC DEBUG] Print everything client side computes BEFORE sending.
   // Compare these values with the `debug` object in server response.
+  const bodyHash = await sha256Hex(body);
   console.log('[HMAC DEBUG] === client side ===');
   console.log('[HMAC DEBUG] secret_len:', sharedSecret ? sharedSecret.length : 0);
   console.log('[HMAC DEBUG] secret_first6:', sharedSecret ? sharedSecret.substring(0, 6) : '(empty)');
@@ -59,6 +65,7 @@ async function postToEndpoint(endpoint, payload, sharedSecret) {
   console.log('[HMAC DEBUG] secret_is_hex:', sharedSecret ? /^[0-9a-fA-F]+$/.test(sharedSecret) : false);
   console.log('[HMAC DEBUG] ts:', ts);
   console.log('[HMAC DEBUG] body_len:', body.length);
+  console.log('[HMAC DEBUG] body_sha256:', bodyHash);
   console.log('[HMAC DEBUG] body_first120:', body.substring(0, 120));
   console.log('[HMAC DEBUG] body_last60:', body.substring(Math.max(0, body.length - 60)));
 

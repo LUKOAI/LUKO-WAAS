@@ -111,6 +111,10 @@ function _verifySignature_(e) {
   const expectedBytes = Utilities.computeHmacSha256Signature(ts + '.' + body, secret);
   const expected = expectedBytes.map(b => (b < 0 ? b + 256 : b).toString(16).padStart(2, '0')).join('');
 
+  // SHA-256 of body alone — for byte-identity check against client
+  const bodyHashBytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, body, Utilities.Charset.UTF_8);
+  const bodyHash = bodyHashBytes.map(b => (b < 0 ? b + 256 : b).toString(16).padStart(2, '0')).join('');
+
   let diff = 0;
   if (expected.length !== sig.length) {
     diff = 1;
@@ -134,6 +138,7 @@ function _verifySignature_(e) {
       sig_expected: expected,
       sig_expected_len: expected.length,
       body_len: body.length,
+      body_sha256: bodyHash,
       body_first120: body.substring(0, 120),
       body_last60: body.substring(Math.max(0, body.length - 60))
     }
