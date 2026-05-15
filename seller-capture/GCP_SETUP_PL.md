@@ -20,13 +20,13 @@ Skala: **1-4 operatorów**, najczęściej 1. ~100 captures/dzień.
 - [x] **Krok 3** — service account `luko-sellers-worker` + JSON key w `~/.config/luko-sellers/key.json` (Windows: `C:\Users\user\.config\luko-sellers\key.json`)
 - [x] **Krok 4** — dataset `luko_sellers` + 4 tabele + 3 widoki + 44 agencji w blacklist (via Cloud Shell)
 - [x] **Krok 4.5** — end-to-end validation OK (6 testowych sprzedawców, agency detection na TEST_CN_1 zadziałała, prompt caching aktywne, koszt ~$0.004)
-- [ ] **Krok 6** — Apps Script + Sheet "Sellers Worklist" + Chrome extension (operatorski UI)
-- [ ] **Krok 5** — Cloud Run enrichment worker (przesuniete nizej — sensowne gdy juz mamy ciagly ruch capturow; do tego czasu `python -m enrichment.main pending` z Cloud Shell wystarcza)
+- [x] **Krok 6** — Apps Script + Sheet "Sellers Worklist" + Chrome extension OK. Pierwsza prawdziwa captura: A3O1SPPVFKO786 (Gusti Leder) + A1K54PLD9Q8BM9 (Bugelo Trading) zapisane do Sheet + BQ via HMAC-signed POST.
+- [ ] **Krok 5** — Cloud Run enrichment worker (sensowne gdy juz mamy ciagly ruch capturow; do tego czasu `python -m enrichment.main pending` z Cloud Shell wystarcza)
 - [ ] **Krok 7** — backfill legacy danych z istniejacych arkuszy
 
 > **Lesson learned z Kroku 4**: lokalny `bq` z gcloud SDK 519 na Windows ma bug w bundled Python (`absl.flags has no attribute 'FLAGS'`). `gcloud components update` wymaga Admin (gcloud zainstalowane w `Program Files (x86)`). `curl` na Windows blokuje pobieranie po HTTPS przez cert revocation check (`CRYPT_E_NO_REVOCATION_CHECK`). **Wniosek**: dla operacji BQ/gcloud na Windows używaj **Cloud Shell** (browser-based, działa od ręki). Lokalny gcloud da się naprawić tylko reinstalacją jako User zamiast Admin, ale w dalszych krokach tego nie potrzebujemy.
-- [ ] **Krok 6** — Apps Script + arkusz "Sellers Worklist" + Chrome extension
-- [ ] **Krok 7** — backfill legacy danych z istniejących arkuszy
+
+> **Lesson learned z Kroku 6**: (1) `Utilities.computeHmacSha256Signature(value, key)` 2-arg NIE używa UTF-8 mimo deklaracji w docs — dla non-ASCII chars (German ß, umlauty) wynik się rozjeżdża z web crypto. **Fix**: zawsze 3-arg z explicit `Utilities.Charset.UTF_8`. (2) Apps Script Web App z `Content-Type: application/json` triggeruje CORS preflight (OPTIONS), którego nie obsługuje — używać `text/plain;charset=utf-8`. (3) Manifest Chrome extension wymaga `script.google.com` i `script.googleusercontent.com` w `host_permissions`. (4) Po reload extension, content script na istniejących kartach umiera — wymaga F5 na stronie Amazon przed pierwszym Alt+S.
 
 ---
 
