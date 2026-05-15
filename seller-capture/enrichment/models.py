@@ -67,6 +67,8 @@ class EnrichmentResult:
     jurisdiction_segment: str = "unknown"          # 'DE' | 'PL' | 'foreign' | 'unknown'
     jurisdiction_reason: Optional[str] = None
     outreach_priority: str = "review"              # 'high' | 'medium' | 'inactive' | 'skip' | 'review'
+    # Operator-facing notes from LLM merge + any other freeform observations
+    notes: list[str] = field(default_factory=list)
     # Scoring
     confidence: dict = field(default_factory=dict)
     sources: dict = field(default_factory=dict)

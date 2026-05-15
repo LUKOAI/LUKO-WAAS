@@ -9,7 +9,7 @@ import re
 from urllib.parse import urlparse
 
 from .models import SellerInput, EnrichmentResult, Contact
-from .sources import vies, companies_house, pappers, impressum, google_cse
+from .sources import vies, companies_house, pappers, impressum, google_cse, llm_merge
 from .scoring import score_candidate, compute_overall, classify_email
 from .segmentation import classify_jurisdiction, extract_de_signals, decide_outreach_priority
 
@@ -103,6 +103,68 @@ def _person_from_email(email: str) -> str | None:
     if len(parts) == 2 and all(p.isalpha() and len(p) >= 2 for p in parts):
         return f"{parts[0].capitalize()} {parts[1].capitalize()}"
     return None
+
+
+def _build_llm_sources(s: SellerInput, r: EnrichmentResult, vies_res: dict | None,
+                       ch_res: dict | None, pap_res: dict | None,
+                       imp_res: dict | None) -> dict:
+    """Collect everything we know about this seller into the JSON bundle
+    we send to the LLM consolidator."""
+    raw_excerpt = (s.raw_text or "")[:4000] if s.raw_text else None
+    return {
+        "seller_id": s.seller_id,
+        "country": r.country or s.country,
+        "vat": r.vat or s.vat,
+        "business_name": s.business_name,
+        "business_address": r.business_address or s.business_address,
+        "vies": vies_res,
+        "companies_house": ch_res,
+        "pappers": pap_res,
+        "impressum": imp_res,
+        "officers_current": r.officers or None,  # whatever registries already filled
+        "candidates_current": [
+            {"kind": c.kind, "value": c.value, "label": c.label,
+             "person_name": c.person_name, "source": c.source}
+            for c in r.candidates
+        ] or None,
+        "raw_text_excerpt": raw_excerpt,
+    }
+
+
+def _ingest_llm_merge(merge: dict, r: EnrichmentResult) -> None:
+    """Apply LLM merge result. Authoritative for decision-maker pick when
+    confidence >= 50; agency flag and notes are always applied."""
+    dm = merge.get("consolidated_decision_maker") or {}
+    agency = merge.get("agency_flag") or {}
+    notes = [str(n) for n in (merge.get("notes") or []) if n]
+
+    if agency.get("is_agency"):
+        flag = "agency_llm"
+        existing = r.agency_flag or ""
+        if flag not in existing:
+            r.agency_flag = (existing + "|" + flag) if existing else flag
+        if agency.get("reason"):
+            notes = [f"agency: {agency['reason']}"] + notes
+
+    confidence = dm.get("confidence") or 0
+    if confidence >= 50 and not agency.get("is_agency"):
+        if dm.get("name"):
+            r.decision_maker_name = dm["name"]
+            r.sources["decision_maker_name"] = "llm_merge"
+        if dm.get("role"):
+            r.decision_maker_role = dm["role"]
+            r.sources["decision_maker_role"] = "llm_merge"
+        if dm.get("email") and dm["email"] != r.email:
+            r.email = dm["email"]
+            r.sources["email"] = "llm_merge"
+            r.confidence["email"] = max(r.confidence.get("email", 0), confidence)
+        if dm.get("phone") and dm["phone"] != r.phone:
+            r.phone = dm["phone"]
+            r.sources["phone"] = "llm_merge"
+            r.confidence["phone"] = max(r.confidence.get("phone", 0), confidence)
+
+    if notes:
+        r.notes = (r.notes or []) + notes
 
 
 def _ingest_impressum(imp: dict, r: EnrichmentResult) -> None:
@@ -250,6 +312,7 @@ def enrich_one(s: SellerInput) -> EnrichmentResult:
 
     # 1) VIES — VAT-anchored truth
     vies_country: str | None = None
+    vies_res: dict | None = None
     country, vat_body = _vat_country(s.vat)
     if country and vat_body:
         try:
@@ -280,6 +343,8 @@ def enrich_one(s: SellerInput) -> EnrichmentResult:
 
     # 2) Country-specific official registries — dispatched by VIES-confirmed country / VAT prefix.
     #    UK and FR are the two highest-density foreign segments on amazon.de.
+    ch_data: dict | None = None
+    fr_data: dict | None = None
     eff_country = vies_country or s.country
     if _is_uk(eff_country, s.vat):
         ch_data = _companies_house_lookup(s, r)
@@ -311,6 +376,7 @@ def enrich_one(s: SellerInput) -> EnrichmentResult:
             r.sources["website"] = "google_cse"
 
     # 4) Impressum / legal-notice scraper — best-effort, fills candidates + officers.
+    imp: dict | None = None
     if r.website:
         try:
             imp = impressum.lookup(r.website, country_hint=r.country)
@@ -321,7 +387,7 @@ def enrich_one(s: SellerInput) -> EnrichmentResult:
             _ingest_impressum(imp, r)
 
     # 5-N) TODO: ear_de + lucid_de (verify foreign DE-operating signals), handelsregister + krs
-    #            (only if DE/PL ever re-enabled), ebay, kaufland, allegro, otto, llm_merge.
+    #            (only if DE/PL ever re-enabled), ebay, kaufland, allegro, otto.
 
     # Fallback: keep raw Amazon name if registries did not return anything.
     if not r.company_name and s.business_name:
@@ -383,15 +449,31 @@ def enrich_one(s: SellerInput) -> EnrichmentResult:
         for c in r.candidates if c.score < 60
     ]
 
+    # LLM merge (last step) — Claude Haiku 4.5 consolidates every signal,
+    # resolves cross-source conflicts, and detects agency patterns the
+    # heuristics miss (GPSR / fiscal / EPR / WEEE representatives).
+    # No-op when ANTHROPIC_API_KEY is unset.
+    try:
+        bundle = _build_llm_sources(s, r, vies_res, ch_data, fr_data, imp)
+        merge = llm_merge.consolidate(bundle)
+    except Exception:
+        log.exception("llm_merge.consolidate failed for %s", s.seller_id)
+        merge = None
+    if merge:
+        _ingest_llm_merge(merge, r)
+
     overall = compute_overall(r)
     r.confidence["overall"] = overall
 
-    # Outreach priority (jurisdiction × DE signals × contact availability)
+    # Outreach priority (jurisdiction × DE signals × contact availability).
+    # LLM-flagged agencies always end up at 'skip', overriding the heuristic.
     r.outreach_priority = decide_outreach_priority(
         segment=r.jurisdiction_segment,
         de_signals=r.de_operating_signals,
         has_contact=bool(r.email or r.phone),
     )
+    if r.agency_flag and "agency_llm" in r.agency_flag:
+        r.outreach_priority = "skip"
 
     if r.agency_flag and not r.email and not r.phone:
         r.status = "agency_only"

@@ -45,6 +45,8 @@ CREATE TABLE IF NOT EXISTS `${PROJECT}.${DATASET}.sellers_enriched` (
   brands                   ARRAY<STRING>,
   -- Officers / directors (from Companies House, KRS, etc.) — JSON list of {name,role,...}
   officers                 STRING,
+  -- Operator-facing notes (mostly from LLM merge) — JSON list of short strings
+  notes                    STRING,
   -- Negatives
   agency_flag              STRING,
   generic_contacts         STRING,        -- JSON: support/info contacts kept aside
@@ -154,3 +156,4 @@ ORDER BY last_captured_at DESC;
 -- ALTER TABLE `${PROJECT}.${DATASET}.sellers_enriched` ADD COLUMN IF NOT EXISTS jurisdiction_reason STRING;
 -- ALTER TABLE `${PROJECT}.${DATASET}.sellers_enriched` ADD COLUMN IF NOT EXISTS outreach_priority STRING;
 -- ALTER TABLE `${PROJECT}.${DATASET}.sellers_enriched` ADD COLUMN IF NOT EXISTS officers STRING;
+-- ALTER TABLE `${PROJECT}.${DATASET}.sellers_enriched` ADD COLUMN IF NOT EXISTS notes STRING;
