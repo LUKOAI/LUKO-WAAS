@@ -58,11 +58,15 @@ async function postToEndpoint(endpoint, payload, sharedSecret) {
   // [HMAC DEBUG] Print everything client side computes BEFORE sending.
   // Compare these values with the `debug` object in server response.
   const bodyHash = await sha256Hex(body);
+  const secretHash = sharedSecret ? await sha256Hex(sharedSecret) : '(no secret)';
+  const testHmac = sharedSecret ? await hmacSha256Hex(sharedSecret, 'hello') : '(no secret)';
   console.log('[HMAC DEBUG] === client side ===');
   console.log('[HMAC DEBUG] secret_len:', sharedSecret ? sharedSecret.length : 0);
   console.log('[HMAC DEBUG] secret_first6:', sharedSecret ? sharedSecret.substring(0, 6) : '(empty)');
   console.log('[HMAC DEBUG] secret_last6:', sharedSecret ? sharedSecret.substring(sharedSecret.length - 6) : '(empty)');
   console.log('[HMAC DEBUG] secret_is_hex:', sharedSecret ? /^[0-9a-fA-F]+$/.test(sharedSecret) : false);
+  console.log('[HMAC DEBUG] secret_sha256:', secretHash);
+  console.log('[HMAC DEBUG] test_hmac_hello:', testHmac);
   console.log('[HMAC DEBUG] ts:', ts);
   console.log('[HMAC DEBUG] body_len:', body.length);
   console.log('[HMAC DEBUG] body_sha256:', bodyHash);

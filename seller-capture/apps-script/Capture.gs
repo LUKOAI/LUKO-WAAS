@@ -115,6 +115,14 @@ function _verifySignature_(e) {
   const bodyHashBytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, body, Utilities.Charset.UTF_8);
   const bodyHash = bodyHashBytes.map(b => (b < 0 ? b + 256 : b).toString(16).padStart(2, '0')).join('');
 
+  // SHA-256 of secret — for byte-identity check (catches hidden Unicode in copy-paste)
+  const secretHashBytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, secret, Utilities.Charset.UTF_8);
+  const secretHash = secretHashBytes.map(b => (b < 0 ? b + 256 : b).toString(16).padStart(2, '0')).join('');
+
+  // Test HMAC over a constant string — to verify HMAC algorithm + secret produce same output
+  const testHmacBytes = Utilities.computeHmacSha256Signature('hello', secret);
+  const testHmac = testHmacBytes.map(b => (b < 0 ? b + 256 : b).toString(16).padStart(2, '0')).join('');
+
   let diff = 0;
   if (expected.length !== sig.length) {
     diff = 1;
@@ -140,7 +148,9 @@ function _verifySignature_(e) {
       body_len: body.length,
       body_sha256: bodyHash,
       body_first120: body.substring(0, 120),
-      body_last60: body.substring(Math.max(0, body.length - 60))
+      body_last60: body.substring(Math.max(0, body.length - 60)),
+      secret_sha256: secretHash,
+      test_hmac_hello: testHmac
     }
   };
 }
