@@ -229,19 +229,30 @@
   // From a structured block (Business-Verkäufer), pull the sub-section after a label
   // such as "Geschäftsadresse" / "Kundendienstadresse" — read lines until blank line
   // or the next labeled section starts.
-  function extractAddressAfterLabel(blockText, labelRegexes) {
-    const text = tidyMultiline(blockText);
-    for (const re of labelRegexes) {
+  //
+  // Tolerates 3 layouts:
+  //   "Geschäftsadresse:\n<line1>\n<line2>..."         — clean newline after colon
+  //   "Geschäftsadresse: <line1>\n<line2>..."          — content on same line
+  //   "<prev>\nGeschäftsadresse:<line1 immediately>"   — no whitespace after colon
+  function extractAddressAfterLabel(blockText, labels) {
+    const text = tidyMultiline(blockText || "");
+    for (const labelRe of labels) {
+      // labelRe is a string identifying the label (e.g. "Geschäftsadresse" or "Geschaeftsadresse")
+      // We build a tolerant regex around it.
+      const re = new RegExp("(^|\\n)\\s*" + labelRe + "\\s*:?\\s*", "i");
       const m = re.exec(text);
       if (!m) continue;
       const start = m.index + m[0].length;
       const tail = text.slice(start);
-      // Stop on blank line or next address-style header
-      const stopRe = /\n\s*\n|\n\s*(Gesch[äa]ftsadresse|Kundendienst[-\s]?adresse|Customer\s+service\s+address|Business\s+address|Impressum|Datenschutz|Versand|Telefonnummer|E-?Mail|UStID|USt-?IdNr|WEEE|Handelsregister|Geschäftsart|Geschäftsname|Brand)[:\s]/i;
+      // Stop at: blank line, OR next labeled section header
+      const stopRe = /\n\s*\n|\n\s*(?:Gesch[äa]ftsadresse|Kundendienst[-\s]?adresse|Customer\s+service\s+address|Business\s+address|Impressum|Datenschutz(?:erkl[äa]rung)?|Versandinformationen|Telefonnummer|Telefon|Telefax|Fax|E-?Mail|UStID|USt-?IdNr|WEEE|Handelsregister|Gesch[äa]ftsart|Gesch[äa]ftsname|Brand|Marke|Alternative\s+Streitbeilegung|Plattform\s+der\s+EU)\s*[:.]/i;
       const stop = stopRe.exec(tail);
       const chunk = stop ? tail.slice(0, stop.index) : tail;
       const lines = chunk.split(/\n/).map(s => s.trim()).filter(Boolean).slice(0, 6);
-      return parseAddressLines(lines);
+      if (lines.length === 0) continue;
+      const parsed = parseAddressLines(lines);
+      // Sanity check: address must have at least one of postal_code OR country to count
+      if (parsed.postal_code || parsed.country) return parsed;
     }
     return {};
   }
@@ -262,14 +273,12 @@
       if (m) out[key] = clean(m[1]);
     }
     Object.assign(out, extractIds(text), extractContact(text));
-    // Address sections
+    // Address sections — labels passed as plain strings (function builds tolerant regex)
     const business = extractAddressAfterLabel(text, [
-      /\n\s*Gesch[äa]ftsadresse\s*:?\s*\n/i,
-      /\n\s*Business\s+address\s*:?\s*\n/i,
+      "Gesch[äa]ftsadresse", "Business\\s+address",
     ]);
     const cs = extractAddressAfterLabel(text, [
-      /\n\s*Kundendienst[-\s]?adresse\s*:?\s*\n/i,
-      /\n\s*Customer\s+service\s+address\s*:?\s*\n/i,
+      "Kundendienst[-\\s]?adresse", "Customer\\s+service\\s+address",
     ]);
     Object.assign(out, business);
     if (cs.street) {
@@ -367,15 +376,13 @@
       // the FULL seller-info section. These labels are unique enough to search globally.
       if (!fromBV.street) {
         const addr = extractAddressAfterLabel(rawText, [
-          /\n\s*Gesch[äa]ftsadresse\s*:?\s*\n/i,
-          /\n\s*Business\s+address\s*:?\s*\n/i,
+          "Gesch[äa]ftsadresse", "Business\\s+address",
         ]);
         if (addr.street) Object.assign(fromBV, addr);
       }
       if (!fromBV.cs_street) {
         const cs = extractAddressAfterLabel(rawText, [
-          /\n\s*Kundendienst[-\s]?adresse\s*:?\s*\n/i,
-          /\n\s*Customer\s+service\s+address\s*:?\s*\n/i,
+          "Kundendienst[-\\s]?adresse", "Customer\\s+service\\s+address",
         ]);
         if (cs.street) {
           fromBV.cs_street = cs.street;
@@ -384,6 +391,13 @@
           fromBV.cs_region = cs.region || "";
           fromBV.cs_country = cs.country || "";
         }
+      }
+      // If still no address but we have BV signals, do a last-ditch search on pageText
+      if (!fromBV.street) {
+        const addr = extractAddressAfterLabel(pageText, [
+          "Gesch[äa]ftsadresse", "Business\\s+address",
+        ]);
+        if (addr.street) Object.assign(fromBV, addr);
       }
       // If we have CS but no Geschäftsadresse, copy CS as fallback (better than empty;
       // they're identical for ~80% of sellers anyway).
