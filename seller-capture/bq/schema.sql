@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS `${PROJECT}.${DATASET}.sellers_enriched` (
   confidence_overall       INT64,
   sources                  STRING,        -- JSON: per-field source list
   -- Lifecycle
-  status                   STRING,        -- captured_pending_enrich | enriched_ok | enriched_low_confidence | enriched_failed | agency_only | skipped_pl | contacted | converted | dead
+  status                   STRING,        -- captured_pending_enrich | enriched_ok | enriched_low_confidence | enriched_failed | agency_only | skipped_pl | skipped_de | contacted | converted | dead
   last_captured_at         TIMESTAMP,
   last_enriched_at         TIMESTAMP,
   last_action_at           TIMESTAMP,
@@ -118,20 +118,30 @@ ORDER BY
   confidence_overall DESC NULLS LAST,
   last_captured_at DESC;
 
--- DE-resident sellers — enriched & warm, but outreach gated by OUTREACH_DE_ENABLED.
--- Kept in a separate view so operators do NOT contact these by accident.
+-- DE-resident sellers — kept for search / future outreach, NOT enriched (no VIES, no scrapers).
+-- Carries only what the Chrome extension captured from Amazon. Gated by OUTREACH_DE_ENABLED
+-- whenever we decide to activate Germany.
 CREATE OR REPLACE VIEW `${PROJECT}.${DATASET}.worklist_de_inactive_v` AS
 SELECT
-  seller_id, marketplace, company_name, country,
-  decision_maker_name, decision_maker_role, email, phone,
-  weee_number, lucid_id, de_operating_signals,
-  agency_flag, confidence_overall, status,
-  website, last_captured_at, last_enriched_at, last_action_at
+  seller_id, marketplace, business_name, business_address, country,
+  vat, registry_id, phone_raw, email_raw,
+  status, jurisdiction_reason,
+  last_captured_at, last_enriched_at
 FROM `${PROJECT}.${DATASET}.sellers_enriched`
 WHERE jurisdiction_segment = 'DE'
-  AND outreach_priority = 'inactive'
-  AND (agency_flag IS NULL OR agency_flag = '')
-ORDER BY confidence_overall DESC NULLS LAST, last_captured_at DESC;
+ORDER BY last_captured_at DESC;
+
+-- PL-resident sellers — same posture as DE (warehouse only, no enrichment). View kept symmetric
+-- so operators / analysts can browse them.
+CREATE OR REPLACE VIEW `${PROJECT}.${DATASET}.warehouse_pl_v` AS
+SELECT
+  seller_id, marketplace, business_name, business_address, country,
+  vat, registry_id, phone_raw, email_raw,
+  status, jurisdiction_reason,
+  last_captured_at, last_enriched_at
+FROM `${PROJECT}.${DATASET}.sellers_enriched`
+WHERE jurisdiction_segment = 'PL'
+ORDER BY last_captured_at DESC;
 
 -- Migration helper for existing datasets: add columns one-by-one (idempotent via IF NOT EXISTS).
 -- Run once after applying this file to a pre-existing dataset.

@@ -22,6 +22,21 @@ def _vat_country(vat: str | None) -> tuple[str | None, str | None]:
     return None, v
 
 
+def _skip_resident(r: EnrichmentResult, segment: str, reason: str) -> EnrichmentResult:
+    """DE/PL sellers: keep them in the warehouse with raw Amazon fields for future search,
+    but do NOT run further enrichment (no VIES, no scrapers, no LLM merge). Out of outreach scope.
+    """
+    r.jurisdiction_segment = segment
+    r.jurisdiction_reason = reason
+    if segment == "PL":
+        r.outreach_priority = "skip"
+        r.status = "skipped_pl"
+    else:  # DE
+        r.outreach_priority = "inactive"
+        r.status = "skipped_de"
+    return r
+
+
 def enrich_one(s: SellerInput) -> EnrichmentResult:
     r = EnrichmentResult(seller_id=s.seller_id)
     r.country = s.country or None
@@ -31,14 +46,11 @@ def enrich_one(s: SellerInput) -> EnrichmentResult:
     r.sources = {}
     r.confidence = {"company": 0, "email": 0, "phone": 0}
 
-    # Pre-segment: PL-resident sellers are out of scope (data already on file). Bail early.
+    # Pre-segment: PL/DE residents stay in the warehouse with raw Amazon fields,
+    # but skip every external lookup. Foreign + unknown fall through to enrichment.
     pre_segment, pre_reason = classify_jurisdiction(s)
-    if pre_segment == "PL":
-        r.jurisdiction_segment = "PL"
-        r.jurisdiction_reason = pre_reason
-        r.outreach_priority = "skip"
-        r.status = "skipped_pl"
-        return r
+    if pre_segment in ("PL", "DE"):
+        return _skip_resident(r, pre_segment, pre_reason)
 
     # 1) VIES — VAT-anchored truth
     vies_country: str | None = None
@@ -58,8 +70,20 @@ def enrich_one(s: SellerInput) -> EnrichmentResult:
         except Exception:
             log.exception("VIES lookup failed for %s", s.vat)
 
-    # 2-N) TODO: ear_de, lucid_de (DE registries — scrape), companies_house, krs, handelsregister,
-    #            pappers, impressum, ebay, kaufland, allegro, otto, llm_merge.
+    # Jurisdiction (with VIES-confirmed country if we have it).
+    # VIES may reveal that a seller with empty/foreign Amazon country is actually DE/PL
+    # (e.g. CN seller with DE fiscal-rep VAT — that's still 'foreign', country wins;
+    # but an empty-country seller whose VIES name resolves to a German GmbH is DE).
+    segment, reason = classify_jurisdiction(s, vies_country=vies_country)
+    if segment in ("PL", "DE"):
+        # discard any contacts we accidentally collected pre-classification
+        r.candidates = []
+        return _skip_resident(r, segment, reason)
+    r.jurisdiction_segment = segment
+    r.jurisdiction_reason = reason
+
+    # 2-N) TODO: companies_house, krs (PL — only if we ever re-enable), handelsregister (idem),
+    #            pappers, ear_de, lucid_de, impressum, ebay, kaufland, allegro, otto, llm_merge.
     #            Wire each source like above; each returns a dict + appends candidates to r.candidates.
 
     # Fallback: keep raw Amazon name if registries did not return anything.
@@ -67,16 +91,6 @@ def enrich_one(s: SellerInput) -> EnrichmentResult:
         r.company_name = s.business_name
         r.confidence["company"] = 50
         r.sources["company_name"] = "amazon_raw"
-
-    # Jurisdiction (with VIES-confirmed country if we have it)
-    segment, reason = classify_jurisdiction(s, vies_country=vies_country)
-    r.jurisdiction_segment = segment
-    r.jurisdiction_reason = reason
-    # PL can re-surface here only if VIES disagrees with pre-segment; respect skip in that case too.
-    if segment == "PL":
-        r.outreach_priority = "skip"
-        r.status = "skipped_pl"
-        return r
 
     # DE-operating signals (raw_text / gpsr_raw harvested by extension)
     signals, weee_number, lucid_id = extract_de_signals(s, r)
