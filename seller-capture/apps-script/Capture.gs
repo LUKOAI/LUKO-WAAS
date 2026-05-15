@@ -108,7 +108,12 @@ function _verifySignature_(e) {
   }
 
   const body = (e && e.postData && e.postData.contents) || '';
-  const expectedBytes = Utilities.computeHmacSha256Signature(ts + '.' + body, secret);
+  // Use 3-arg version with explicit UTF-8. The 2-arg overload claims UTF-8 in docs
+  // but empirically produces different output than web crypto for non-ASCII chars
+  // (German ß, umlauts, Polish diacritics, etc. that appear in seller addresses).
+  const expectedBytes = Utilities.computeHmacSha256Signature(
+    ts + '.' + body, secret, Utilities.Charset.UTF_8
+  );
   const expected = expectedBytes.map(b => (b < 0 ? b + 256 : b).toString(16).padStart(2, '0')).join('');
 
   // SHA-256 of body alone — for byte-identity check against client
