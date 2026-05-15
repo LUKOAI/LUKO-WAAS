@@ -4,9 +4,10 @@ truth-anchored registries first, then web, then cross-platform, then LLM merge.
 from __future__ import annotations
 
 import logging
+import re
 
 from .models import SellerInput, EnrichmentResult
-from .sources import vies
+from .sources import vies, companies_house
 from .scoring import score_candidate, compute_overall
 from .segmentation import classify_jurisdiction, extract_de_signals, decide_outreach_priority
 
@@ -20,6 +21,77 @@ def _vat_country(vat: str | None) -> tuple[str | None, str | None]:
     if len(v) >= 4 and v[:2].isalpha():
         return v[:2], v[2:]
     return None, v
+
+
+_UK_COUNTRY_TOKENS = {"GB", "UK", "UNITEDKINGDOM", "BRITAIN", "ENGLAND", "SCOTLAND", "WALES", "NORTHERNIRELAND"}
+
+
+def _is_uk(country: str | None, vat: str | None) -> bool:
+    c = re.sub(r"[^A-Z]", "", (country or "").upper())
+    if c in _UK_COUNTRY_TOKENS:
+        return True
+    v = re.sub(r"\s", "", (vat or "").upper())
+    return v.startswith("GB")
+
+
+def _companies_house_lookup(s: SellerInput, r: EnrichmentResult) -> dict | None:
+    """Try Companies House by company number first; if that fails, fall back to an
+    exact name match (case-insensitive). Fuzzy multi-candidate matches are intentionally
+    discarded — wrong officer data is worse than no officer data.
+    """
+    # 1) by number — registry_id from Amazon, or anything that looks like a CH number
+    for raw in (s.registry_id, r.registry_id):
+        if not raw:
+            continue
+        try:
+            data = companies_house.lookup_by_number(raw)
+            if data:
+                return data
+        except Exception:
+            log.exception("CH lookup_by_number failed for %s", raw)
+
+    # 2) by name — exact match only
+    name = (r.company_name or s.business_name or "").strip()
+    if not name:
+        return None
+    try:
+        candidates = companies_house.search_by_name(name, items_per_page=10)
+    except Exception:
+        log.exception("CH search_by_name failed for %s", name)
+        return None
+    exact = [c for c in candidates if (c.get("company_name") or "").strip().lower() == name.lower()]
+    if len(exact) != 1 or not exact[0].get("company_number"):
+        return None
+    try:
+        return companies_house.lookup_by_number(exact[0]["company_number"])
+    except Exception:
+        log.exception("CH lookup_by_number (after name match) failed for %s", exact[0])
+        return None
+
+
+def _merge_companies_house(d: dict, r: EnrichmentResult) -> None:
+    """Companies House is high-trust for identity (90), but never overrides VIES (95)."""
+    if d.get("company_name") and not r.company_name:
+        r.company_name = d["company_name"]
+        r.confidence["company"] = max(r.confidence.get("company", 0), 90)
+        r.sources["company_name"] = "companies_house"
+    if d.get("legal_form") and not r.legal_form:
+        r.legal_form = d["legal_form"]
+        r.sources["legal_form"] = "companies_house"
+    if d.get("address") and not r.business_address:
+        r.business_address = d["address"]
+        r.sources["business_address"] = "companies_house"
+    if d.get("country") and not r.country:
+        r.country = d["country"]
+    if d.get("company_number") and not r.registry_id:
+        r.registry_id = d["company_number"]
+        r.sources["registry_id"] = "companies_house"
+    if d.get("officers"):
+        r.officers = d["officers"]
+        r.sources["officers"] = "companies_house"
+    if d.get("status") == "dissolved":
+        # dissolved companies are a hard kill for outreach
+        r.agency_flag = (r.agency_flag or "") + ("|" if r.agency_flag else "") + "dissolved"
 
 
 def _skip_resident(r: EnrichmentResult, segment: str, reason: str) -> EnrichmentResult:
@@ -82,9 +154,15 @@ def enrich_one(s: SellerInput) -> EnrichmentResult:
     r.jurisdiction_segment = segment
     r.jurisdiction_reason = reason
 
-    # 2-N) TODO: companies_house, krs (PL — only if we ever re-enable), handelsregister (idem),
-    #            pappers, ear_de, lucid_de, impressum, ebay, kaufland, allegro, otto, llm_merge.
-    #            Wire each source like above; each returns a dict + appends candidates to r.candidates.
+    # 2) Companies House — UK official registry (free, JSON). UK is a high-density foreign segment.
+    if _is_uk(vies_country or s.country, s.vat):
+        ch_data = _companies_house_lookup(s, r)
+        if ch_data:
+            _merge_companies_house(ch_data, r)
+
+    # 3-N) TODO: pappers (FR), ear_de + lucid_de (verify foreign DE-operating signals),
+    #            handelsregister + krs (only if DE/PL ever re-enabled), impressum, ebay,
+    #            kaufland, allegro, otto, llm_merge.
 
     # Fallback: keep raw Amazon name if registries did not return anything.
     if not r.company_name and s.business_name:
@@ -121,6 +199,16 @@ def enrich_one(s: SellerInput) -> EnrichmentResult:
         r.phone = best.value
         r.confidence["phone"] = best.score
         r.sources["phone"] = best.source
+
+    # Officer fallback: when no email gave us a person, the registry director is the next-best
+    # named contact. Prefer "director" over secretaries / nominees.
+    if not r.decision_maker_name and r.officers:
+        directors = [o for o in r.officers if "director" in (o.get("role") or "").lower()]
+        pick = (directors or r.officers)[0]
+        if pick.get("name"):
+            r.decision_maker_name = pick["name"]
+            r.decision_maker_role = pick.get("role") or r.decision_maker_role
+            r.sources.setdefault("decision_maker_name", "companies_house")
 
     # Generic / agency-flagged go aside
     r.generic_contacts = [
