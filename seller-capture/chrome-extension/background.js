@@ -49,10 +49,26 @@ async function uploadToDrive(dataUrl, filename, folderId) {
 async function postToEndpoint(endpoint, payload, sharedSecret) {
   const body = JSON.stringify(payload);
   const ts = String(Math.floor(Date.now() / 1000));
+
+  // [HMAC DEBUG] Print everything client side computes BEFORE sending.
+  // Compare these values with the `debug` object in server response.
+  console.log('[HMAC DEBUG] === client side ===');
+  console.log('[HMAC DEBUG] secret_len:', sharedSecret ? sharedSecret.length : 0);
+  console.log('[HMAC DEBUG] secret_first6:', sharedSecret ? sharedSecret.substring(0, 6) : '(empty)');
+  console.log('[HMAC DEBUG] secret_last6:', sharedSecret ? sharedSecret.substring(sharedSecret.length - 6) : '(empty)');
+  console.log('[HMAC DEBUG] secret_is_hex:', sharedSecret ? /^[0-9a-fA-F]+$/.test(sharedSecret) : false);
+  console.log('[HMAC DEBUG] ts:', ts);
+  console.log('[HMAC DEBUG] body_len:', body.length);
+  console.log('[HMAC DEBUG] body_first120:', body.substring(0, 120));
+  console.log('[HMAC DEBUG] body_last60:', body.substring(Math.max(0, body.length - 60)));
+
   let url = endpoint;
   if (sharedSecret) {
     const sig = await hmacSha256Hex(sharedSecret, ts + "." + body);
+    console.log('[HMAC DEBUG] sig_computed:', sig);
     url += (url.includes("?") ? "&" : "?") + `ts=${encodeURIComponent(ts)}&sig=${encodeURIComponent(sig)}`;
+  } else {
+    console.log('[HMAC DEBUG] sig_computed: SKIPPED — sharedSecret empty in extension config');
   }
   const res = await fetch(url, {
     method: "POST",
@@ -63,6 +79,7 @@ async function postToEndpoint(endpoint, payload, sharedSecret) {
   let json;
   try { json = JSON.parse(text); } catch { json = { ok: false, error: `non-JSON response: ${text.slice(0, 200)}` }; }
   if (!res.ok && json.ok !== false) json = { ok: false, error: `HTTP ${res.status}: ${text.slice(0, 200)}` };
+  console.log('[HMAC DEBUG] server response:', json);
   return json;
 }
 
