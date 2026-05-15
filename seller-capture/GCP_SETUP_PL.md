@@ -19,8 +19,8 @@ Skala: **1-4 operatorów**, najczęściej 1. ~100 captures/dzień.
 - [x] **Krok 2** — BigQuery API enabled, billing `luko-amazon-content-manager` linked
 - [x] **Krok 3** — service account `luko-sellers-worker` + JSON key w `~/.config/luko-sellers/key.json` (Windows: `C:\Users\user\.config\luko-sellers\key.json`)
 - [x] **Krok 4** — dataset `luko_sellers` + 4 tabele + 3 widoki + 44 agencji w blacklist (via Cloud Shell)
-- [ ] **Krok 4.5** — end-to-end validation w Cloud Shell (sprawdzenie LLM merge + agency detection na 3 prawdziwych sprzedawcach przed deployem Cloud Run)
-- [ ] **Krok 6** — Apps Script + Sheet "Sellers Worklist" + Chrome extension (operatorski UI — przesuniete wyzej, bo bez tego ani capture ani review nie dziala)
+- [x] **Krok 4.5** — end-to-end validation OK (6 testowych sprzedawców, agency detection na TEST_CN_1 zadziałała, prompt caching aktywne, koszt ~$0.004)
+- [ ] **Krok 6** — Apps Script + Sheet "Sellers Worklist" + Chrome extension (operatorski UI)
 - [ ] **Krok 5** — Cloud Run enrichment worker (przesuniete nizej — sensowne gdy juz mamy ciagly ruch capturow; do tego czasu `python -m enrichment.main pending` z Cloud Shell wystarcza)
 - [ ] **Krok 7** — backfill legacy danych z istniejacych arkuszy
 
