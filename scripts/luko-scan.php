@@ -82,24 +82,29 @@ function luko_kw_material() {
 }
 
 function luko_kw_anlass() {
+	// Trailing `*` enables prefix-mode: matches the stem plus any German
+	// lowercase suffix, so "Kommunion*" catches "Kommunionkerze",
+	// "Kommunionsbild", "Kommunionsgeschenk", etc.
 	return array(
-		'Erstkommunion' => 'Erstkommunion',
-		'Kommunion'     => 'Kommunion',
-		'Konfirmation'  => 'Konfirmation',
-		'Firmung'       => 'Firmung',
-		'Taufe'         => 'Taufe',
-		'Hochzeit'      => 'Hochzeit',
-		'Trauerfeier'   => 'Trauer',
-		'Beerdigung'    => 'Trauer',
-		'Trauer'        => 'Trauer',
-		'Weihnachten'   => 'Weihnachten',
-		'Ostern'        => 'Ostern',
-		'Geburtstag'    => 'Geburtstag',
-		'Jubiläum'      => 'Jubiläum',
-		'Muttertag'     => 'Muttertag',
-		'Vatertag'      => 'Vatertag',
-		'Valentinstag'  => 'Valentinstag',
-		'Geburt'        => 'Geburt',
+		'Erstkommunion*' => 'Erstkommunion',
+		'Kommunion*'     => 'Kommunion',
+		'Konfirmation*'  => 'Konfirmation',
+		'Firmung*'       => 'Firmung',
+		'Firmkerze'      => 'Firmung',
+		'Firmkreuz'      => 'Firmung',
+		'Firmgeschenk'   => 'Firmung',
+		'Tauf*'          => 'Taufe',
+		'Hochzeit*'      => 'Hochzeit',
+		'Trauer*'        => 'Trauer',
+		'Beerdigung*'    => 'Trauer',
+		'Weihnacht*'     => 'Weihnachten',
+		'Oster*'         => 'Ostern',
+		'Geburtstag*'    => 'Geburtstag',
+		'Jubiläum*'      => 'Jubiläum',
+		'Muttertag*'     => 'Muttertag',
+		'Vatertag*'      => 'Vatertag',
+		'Valentinstag*'  => 'Valentinstag',
+		'Geburt'         => 'Geburt',
 	);
 }
 
@@ -110,53 +115,65 @@ function luko_kw_literatur() {
 		'Familienbibel'      => 'Bibel',
 		'Jugendbibel'        => 'Bibel',
 		'Kinderbibel'        => 'Bibel',
-		'Bibel'              => 'Bibel',
+		'Bibel*'             => 'Bibel',
 		// Katechismus
 		'Jugendkatechismus'  => 'Katechismus',
-		'Katechismus'        => 'Katechismus',
-		'YOUCAT'             => 'YOUCAT',
-		'Youcat'             => 'YOUCAT',
+		'Katechismus*'       => 'Katechismus',
+		'YOUCAT*'            => 'YOUCAT',
+		'Youcat*'            => 'YOUCAT',
 		// Gesangbuch / Liederbuch
-		'Gotteslob'          => 'Gotteslob',
+		'Gotteslob*'         => 'Gotteslob',
 		'Kantorenbuch'       => 'Gotteslob',
 		'Chorbuch'           => 'Gotteslob',
-		'Gesangbuch'         => 'Gesangbuch',
-		'Liederbuch'         => 'Gesangbuch',
+		'Gesangbuch*'        => 'Gesangbuch',
+		'Liederbuch*'        => 'Gesangbuch',
 		// Gebetbuch
-		'Gebetbuch'          => 'Gebetbuch',
-		'Stundenbuch'        => 'Stundenbuch',
-		'Brevier'            => 'Stundenbuch',
-		'Andachtsbuch'       => 'Andachtsbuch',
+		'Gebetbuch*'         => 'Gebetbuch',
+		'Stundenbuch*'       => 'Stundenbuch',
+		'Brevier*'           => 'Stundenbuch',
+		'Andachtsbuch*'      => 'Andachtsbuch',
+		'Tagebuch'           => 'Andachtsbuch',
 		// Theologie
-		'Theologie'          => 'Theologie',
-		'Apologetik'         => 'Theologie',
-		// Pilgerführer
-		'Pilgerführer'       => 'Wallfahrtsführer',
-		'Wallfahrtsführer'   => 'Wallfahrtsführer',
-		'Jakobsweg'          => 'Wallfahrtsführer',
+		'Theologie*'         => 'Theologie',
+		'Apologetik*'        => 'Theologie',
+		'Christentum'        => 'Theologie',
+		'christlich*'        => 'Theologie',
+		'Glaube'             => 'Theologie',
+		'Glauben'            => 'Theologie',
+		'Glaubens*'          => 'Theologie',
+		'Einführung'         => 'Theologie',
+		// Wallfahrt / Pilger
+		'Pilger*'            => 'Wallfahrtsführer',
+		'Wallfahrt*'         => 'Wallfahrtsführer',
+		'Jakobsweg*'         => 'Wallfahrtsführer',
+		// Heiligenleben (biographies of saints)
+		'Heilige*'           => 'Heiligenleben',
+		'Heiliger'           => 'Heiligenleben',
+		'Heiligenleben'      => 'Heiligenleben',
+		// Marian literature
+		'Marien*'            => 'Marienandacht',
 	);
 }
 
 function luko_kw_empfaenger() {
 	return array(
-		'Jugendliche' => 'Jugendliche',
-		'Erwachsene'  => 'Erwachsene',
-		'Senioren'    => 'Senioren',
-		'Mädchen'     => 'Mädchen',
-		'Jungen'      => 'Jungen',
-		'Frauen'      => 'Frauen',
-		'Männer'      => 'Männer',
-		'Damen'       => 'Frauen',
-		'Herren'      => 'Männer',
-		'Kinder'      => 'Kinder',
-		'Babys'       => 'Baby',
-		'Baby'        => 'Baby',
-		'Großeltern'  => 'Großeltern',
-		'Oma'         => 'Großeltern',
-		'Opa'         => 'Großeltern',
-		'Mutter'      => 'Mutter',
-		'Vater'       => 'Vater',
-		'Eltern'      => 'Eltern',
+		'Jugendliche*' => 'Jugendliche',
+		'Erwachsene*'  => 'Erwachsene',
+		'Senioren*'    => 'Senioren',
+		'Mädchen*'     => 'Mädchen',
+		'Jungen*'      => 'Jungen',
+		'Frauen*'      => 'Frauen',
+		'Männer*'      => 'Männer',
+		'Damen*'       => 'Frauen',
+		'Herren*'      => 'Männer',
+		'Kinder*'      => 'Kinder',
+		'Baby*'        => 'Baby',
+		'Großeltern*'  => 'Großeltern',
+		'Oma'          => 'Großeltern',
+		'Opa'          => 'Großeltern',
+		'Mutter*'      => 'Mutter',
+		'Vater*'       => 'Vater',
+		'Eltern*'      => 'Eltern',
 	);
 }
 
@@ -172,10 +189,19 @@ function luko_normalize_text( $text ) {
 }
 
 function luko_match_keywords( $haystack, $keywords ) {
+	// A trailing `*` on the needle enables prefix mode: the stem may be
+	// followed by any run of German lowercase letters before the right
+	// word boundary. This handles compound nouns like "Kommunionkerze",
+	// "Bibelvers", "Heiligenleben", "Wallfahrtsort" that an exact
+	// `\bX\b` match would miss.
 	$matches = array();
 	foreach ( $keywords as $needle => $canonical ) {
-		// Word-boundary match, case-insensitive, unicode-aware
-		$pattern = '/\b' . preg_quote( $needle, '/' ) . '\b/iu';
+		if ( substr( $needle, -1 ) === '*' ) {
+			$stem    = substr( $needle, 0, -1 );
+			$pattern = '/\b' . preg_quote( $stem, '/' ) . '[a-zäöüß]*\b/iu';
+		} else {
+			$pattern = '/\b' . preg_quote( $needle, '/' ) . '\b/iu';
+		}
 		if ( preg_match( $pattern, $haystack ) ) {
 			$matches[ $canonical ] = true;
 		}

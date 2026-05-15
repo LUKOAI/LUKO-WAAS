@@ -45,57 +45,121 @@ if ( ! is_user_logged_in() || ! current_user_can( 'manage_options' ) ) {
 // =============================================================================
 // DICTIONARIES — keep in sync with luko-scan.php
 // =============================================================================
+// Keyword convention: trailing `*` enables prefix mode (matches stem +
+// any German lowercase suffix). Keep in sync with luko-scan.php.
 function lp_kw_material() {
 	return array(
-		'Holz' => 'Holz', 'Olivenholz' => 'Holz', 'Buchenholz' => 'Holz', 'Eichenholz' => 'Holz',
-		'Silber' => 'Silber', '925 Silber' => 'Silber', 'Sterling Silber' => 'Silber',
-		'Gold' => 'Gold', 'vergoldet' => 'Gold',
-		'Edelstahl' => 'Edelstahl',
-		'Messing' => 'Messing', 'Bronze' => 'Bronze',
-		'Glas' => 'Glas', 'Kristall' => 'Glas',
-		'Keramik' => 'Keramik', 'Porzellan' => 'Keramik',
-		'Stein' => 'Stein', 'Marmor' => 'Stein',
-		'Leder' => 'Leder', 'Kunstleder' => 'Leder',
-		'Filz' => 'Filz', 'Stoff' => 'Stoff',
+		'Kunstleder'     => 'Kunstleder',
+		'Echtleder'      => 'Leder',
+		'Edelstahl'      => 'Edelstahl',
+		'Sterlingsilber' => 'Silber',
+		'Eichenholz'     => 'Holz',
+		'Buchenholz'     => 'Holz',
+		'Olivenholz'     => 'Holz',
+		'Filz'           => 'Filz',
+		'Leder'          => 'Leder',
+		'Holz'           => 'Holz',
+		'Metall'         => 'Metall',
+		'Silber'         => 'Silber',
+		'Vergoldet'      => 'Gold',
+		'Gold'           => 'Gold',
+		'Porzellan'      => 'Porzellan',
+		'Keramik'        => 'Keramik',
+		'Glas'           => 'Glas',
+		'Baumwolle'      => 'Baumwolle',
+		'Polyester'      => 'Polyester',
+		'Acryl'          => 'Acryl',
+		'Papier'         => 'Papier',
+		'Kunststoff'     => 'Kunststoff',
+		'Marmor'         => 'Marmor',
+		'Stein'          => 'Stein',
+		'Wolle'          => 'Wolle',
+		'Messing'        => 'Messing',
+		'Bronze'         => 'Bronze',
+		'Zinn'           => 'Zinn',
+		'Stoff'          => 'Stoff',
 	);
 }
 function lp_kw_anlass() {
 	return array(
-		'Erstkommunion' => 'Erstkommunion', 'Kommunion' => 'Kommunion',
-		'Konfirmation' => 'Konfirmation', 'Firmung' => 'Firmung',
-		'Taufe' => 'Taufe', 'Hochzeit' => 'Hochzeit',
-		'Trauerfeier' => 'Trauer', 'Beerdigung' => 'Trauer', 'Trauer' => 'Trauer',
-		'Weihnachten' => 'Weihnachten', 'Ostern' => 'Ostern',
-		'Geburtstag' => 'Geburtstag', 'Jubiläum' => 'Jubiläum',
-		'Muttertag' => 'Muttertag', 'Vatertag' => 'Vatertag', 'Valentinstag' => 'Valentinstag',
-		'Geburt' => 'Geburt',
+		'Erstkommunion*' => 'Erstkommunion',
+		'Kommunion*'     => 'Kommunion',
+		'Konfirmation*'  => 'Konfirmation',
+		'Firmung*'       => 'Firmung',
+		'Firmkerze'      => 'Firmung',
+		'Firmkreuz'      => 'Firmung',
+		'Firmgeschenk'   => 'Firmung',
+		'Tauf*'          => 'Taufe',
+		'Hochzeit*'      => 'Hochzeit',
+		'Trauer*'        => 'Trauer',
+		'Beerdigung*'    => 'Trauer',
+		'Weihnacht*'     => 'Weihnachten',
+		'Oster*'         => 'Ostern',
+		'Geburtstag*'    => 'Geburtstag',
+		'Jubiläum*'      => 'Jubiläum',
+		'Muttertag*'     => 'Muttertag',
+		'Vatertag*'      => 'Vatertag',
+		'Valentinstag*'  => 'Valentinstag',
+		'Geburt'         => 'Geburt',
 	);
 }
 function lp_kw_empfaenger() {
 	return array(
-		'Jugendliche' => 'Jugendliche', 'Erwachsene' => 'Erwachsene', 'Senioren' => 'Senioren',
-		'Mädchen' => 'Mädchen', 'Jungen' => 'Jungen',
-		'Frauen' => 'Frauen', 'Damen' => 'Frauen',
-		'Männer' => 'Männer', 'Herren' => 'Männer',
-		'Kinder' => 'Kinder', 'Babys' => 'Baby', 'Baby' => 'Baby',
-		'Großeltern' => 'Großeltern', 'Oma' => 'Großeltern', 'Opa' => 'Großeltern',
-		'Mutter' => 'Mutter', 'Vater' => 'Vater', 'Eltern' => 'Eltern',
+		'Jugendliche*' => 'Jugendliche',
+		'Erwachsene*'  => 'Erwachsene',
+		'Senioren*'    => 'Senioren',
+		'Mädchen*'     => 'Mädchen',
+		'Jungen*'      => 'Jungen',
+		'Frauen*'      => 'Frauen',
+		'Männer*'      => 'Männer',
+		'Damen*'       => 'Frauen',
+		'Herren*'      => 'Männer',
+		'Kinder*'      => 'Kinder',
+		'Baby*'        => 'Baby',
+		'Großeltern*'  => 'Großeltern',
+		'Oma'          => 'Großeltern',
+		'Opa'          => 'Großeltern',
+		'Mutter*'      => 'Mutter',
+		'Vater*'       => 'Vater',
+		'Eltern*'      => 'Eltern',
 	);
 }
 function lp_kw_literatur() {
 	return array(
-		'Erstkommunionbibel' => 'Bibel', 'Familienbibel' => 'Bibel',
-		'Jugendbibel' => 'Bibel', 'Kinderbibel' => 'Bibel', 'Bibel' => 'Bibel',
-		'Jugendkatechismus' => 'Katechismus', 'Katechismus' => 'Katechismus',
-		'YOUCAT' => 'YOUCAT', 'Youcat' => 'YOUCAT',
-		'Gotteslob' => 'Gotteslob', 'Kantorenbuch' => 'Gotteslob', 'Chorbuch' => 'Gotteslob',
-		'Gesangbuch' => 'Gesangbuch', 'Liederbuch' => 'Gesangbuch',
-		'Gebetbuch' => 'Gebetbuch',
-		'Stundenbuch' => 'Stundenbuch', 'Brevier' => 'Stundenbuch',
-		'Andachtsbuch' => 'Andachtsbuch',
-		'Theologie' => 'Theologie', 'Apologetik' => 'Theologie',
-		'Pilgerführer' => 'Wallfahrtsführer', 'Wallfahrtsführer' => 'Wallfahrtsführer',
-		'Jakobsweg' => 'Wallfahrtsführer',
+		'Erstkommunionbibel' => 'Bibel',
+		'Familienbibel'      => 'Bibel',
+		'Jugendbibel'        => 'Bibel',
+		'Kinderbibel'        => 'Bibel',
+		'Bibel*'             => 'Bibel',
+		'Jugendkatechismus'  => 'Katechismus',
+		'Katechismus*'       => 'Katechismus',
+		'YOUCAT*'            => 'YOUCAT',
+		'Youcat*'            => 'YOUCAT',
+		'Gotteslob*'         => 'Gotteslob',
+		'Kantorenbuch'       => 'Gotteslob',
+		'Chorbuch'           => 'Gotteslob',
+		'Gesangbuch*'        => 'Gesangbuch',
+		'Liederbuch*'        => 'Gesangbuch',
+		'Gebetbuch*'         => 'Gebetbuch',
+		'Stundenbuch*'       => 'Stundenbuch',
+		'Brevier*'           => 'Stundenbuch',
+		'Andachtsbuch*'      => 'Andachtsbuch',
+		'Tagebuch'           => 'Andachtsbuch',
+		'Theologie*'         => 'Theologie',
+		'Apologetik*'        => 'Theologie',
+		'Christentum'        => 'Theologie',
+		'christlich*'        => 'Theologie',
+		'Glaube'             => 'Theologie',
+		'Glauben'            => 'Theologie',
+		'Glaubens*'          => 'Theologie',
+		'Einführung'         => 'Theologie',
+		'Pilger*'            => 'Wallfahrtsführer',
+		'Wallfahrt*'         => 'Wallfahrtsführer',
+		'Jakobsweg*'         => 'Wallfahrtsführer',
+		'Heilige*'           => 'Heiligenleben',
+		'Heiliger'           => 'Heiligenleben',
+		'Heiligenleben'      => 'Heiligenleben',
+		'Marien*'            => 'Marienandacht',
 	);
 }
 
@@ -106,9 +170,17 @@ function lp_normalize( $text ) {
 	return wp_strip_all_tags( html_entity_decode( (string) $text, ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
 }
 function lp_match( $haystack, $kw ) {
+	// Trailing `*` = prefix mode (stem + any German lowercase suffix),
+	// to catch compound nouns like "Kommunionkerze" or "Heiligenleben".
 	$out = array();
 	foreach ( $kw as $needle => $canonical ) {
-		if ( preg_match( '/\b' . preg_quote( $needle, '/' ) . '\b/iu', $haystack ) ) {
+		if ( substr( $needle, -1 ) === '*' ) {
+			$stem    = substr( $needle, 0, -1 );
+			$pattern = '/\b' . preg_quote( $stem, '/' ) . '[a-zäöüß]*\b/iu';
+		} else {
+			$pattern = '/\b' . preg_quote( $needle, '/' ) . '\b/iu';
+		}
+		if ( preg_match( $pattern, $haystack ) ) {
 			$out[ $canonical ] = true;
 		}
 	}
