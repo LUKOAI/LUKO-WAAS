@@ -25,7 +25,13 @@ function doGet(e) {
 function doPost(e) {
   try {
     const auth = _verifySignature_(e);
-    if (!auth.ok) return _json({ ok: false, error: 'unauthorized: ' + auth.reason });
+    if (!auth.ok) {
+      return _json({
+        ok: false,
+        error: 'unauthorized: ' + auth.reason,
+        debug: auth.debug || null
+      });
+    }
     const payload = JSON.parse(e.postData.contents);
     if (!payload.seller_id) return _json({ ok: false, error: 'seller_id missing' });
 
@@ -75,34 +81,63 @@ function _json(obj) {
 
 /**
  * HMAC-SHA256 signature check. Extension sends:
- *   X-Luko-Timestamp: unix seconds
- *   X-Luko-Signature: hex(HMAC_SHA256(timestamp + "." + body, secret))
+ *   ts and sig as URL query parameters
+ *   sig = hex(HMAC_SHA256(ts + "." + body, secret))
  * Timestamp must be within ±5 minutes to prevent replay.
  *
- * The shared secret lives in Script Properties as CAPTURE_SHARED_SECRET.
- * If not set, the endpoint refuses ALL writes (fail-closed) — explicit opt-in to allow
- * unauthenticated for testing via CAPTURE_ALLOW_UNSIGNED='true'.
+ * On bad_signature, returns full debug payload in `debug` to help diagnose mismatches
+ * between client and server (secret typo, body transformation, etc.).
  */
 function _verifySignature_(e) {
   const props = PropertiesService.getScriptProperties();
   const secret = props.getProperty('CAPTURE_SHARED_SECRET') || '';
   const allowUnsigned = (props.getProperty('CAPTURE_ALLOW_UNSIGNED') || '').toLowerCase() === 'true';
   if (!secret) return { ok: allowUnsigned, reason: 'no_secret_set' };
-  const headers = (e && e.parameter && e.parameter['__headers__']) || null;
-  const ts = (e && e.parameter && e.parameter.ts) ||
-             (e && e.headers && (e.headers['X-Luko-Timestamp'] || e.headers['x-luko-timestamp'])) || '';
-  const sig = (e && e.parameter && e.parameter.sig) ||
-              (e && e.headers && (e.headers['X-Luko-Signature'] || e.headers['x-luko-signature'])) || '';
+
+  const ts = (e && e.parameter && e.parameter.ts) || '';
+  const sig = (e && e.parameter && e.parameter.sig) || '';
   if (!ts || !sig) return { ok: false, reason: 'missing_signature_headers' };
+
   const now = Math.floor(Date.now() / 1000);
-  if (Math.abs(now - parseInt(ts, 10)) > 300) return { ok: false, reason: 'timestamp_skew' };
+  if (Math.abs(now - parseInt(ts, 10)) > 300) {
+    return {
+      ok: false,
+      reason: 'timestamp_skew',
+      debug: { server_now: now, client_ts: parseInt(ts, 10), skew_sec: now - parseInt(ts, 10) }
+    };
+  }
+
   const body = (e && e.postData && e.postData.contents) || '';
   const expectedBytes = Utilities.computeHmacSha256Signature(ts + '.' + body, secret);
   const expected = expectedBytes.map(b => (b < 0 ? b + 256 : b).toString(16).padStart(2, '0')).join('');
-  if (expected.length !== sig.length) return { ok: false, reason: 'bad_signature' };
+
   let diff = 0;
-  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
-  return diff === 0 ? { ok: true } : { ok: false, reason: 'bad_signature' };
+  if (expected.length !== sig.length) {
+    diff = 1;
+  } else {
+    for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
+  }
+  if (diff === 0) return { ok: true };
+
+  return {
+    ok: false,
+    reason: 'bad_signature',
+    debug: {
+      secret_len: secret.length,
+      secret_first6: secret.substring(0, 6),
+      secret_last6: secret.substring(secret.length - 6),
+      secret_is_hex: /^[0-9a-fA-F]+$/.test(secret),
+      ts_received: ts,
+      ts_len: ts.length,
+      sig_received: sig,
+      sig_len: sig.length,
+      sig_expected: expected,
+      sig_expected_len: expected.length,
+      body_len: body.length,
+      body_first120: body.substring(0, 120),
+      body_last60: body.substring(Math.max(0, body.length - 60))
+    }
+  };
 }
 
 function _flattenParsed(p) {
