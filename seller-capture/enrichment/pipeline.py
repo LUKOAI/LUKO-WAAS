@@ -7,7 +7,7 @@ import logging
 import re
 
 from .models import SellerInput, EnrichmentResult
-from .sources import vies, companies_house
+from .sources import vies, companies_house, pappers
 from .scoring import score_candidate, compute_overall
 from .segmentation import classify_jurisdiction, extract_de_signals, decide_outreach_priority
 
@@ -24,6 +24,9 @@ def _vat_country(vat: str | None) -> tuple[str | None, str | None]:
 
 
 _UK_COUNTRY_TOKENS = {"GB", "UK", "UNITEDKINGDOM", "BRITAIN", "ENGLAND", "SCOTLAND", "WALES", "NORTHERNIRELAND"}
+_FR_COUNTRY_TOKENS = {"FR", "FRA", "FRANCE"}
+# any of these substrings inside a registry's status field means "don't contact"
+_INACTIVE_STATUS_HINTS = ("dissolv", "radi", "cess", "liquidation", "administration", "struck off", "ferm")
 
 
 def _is_uk(country: str | None, vat: str | None) -> bool:
@@ -34,64 +37,109 @@ def _is_uk(country: str | None, vat: str | None) -> bool:
     return v.startswith("GB")
 
 
-def _companies_house_lookup(s: SellerInput, r: EnrichmentResult) -> dict | None:
-    """Try Companies House by company number first; if that fails, fall back to an
-    exact name match (case-insensitive). Fuzzy multi-candidate matches are intentionally
-    discarded — wrong officer data is worse than no officer data.
+def _is_fr(country: str | None, vat: str | None) -> bool:
+    c = re.sub(r"[^A-Z]", "", (country or "").upper())
+    if c in _FR_COUNTRY_TOKENS:
+        return True
+    v = re.sub(r"\s", "", (vat or "").upper())
+    return v.startswith("FR")
+
+
+def _is_inactive_status(status: str | None) -> bool:
+    if not status:
+        return False
+    s = status.lower()
+    if "active" in s and "inactive" not in s:
+        return False
+    return any(h in s for h in _INACTIVE_STATUS_HINTS)
+
+
+def _registry_lookup_by_number_or_name(
+    module,
+    lookup_fn_name: str,
+    raw_numbers: list[str | None],
+    name: str | None,
+) -> dict | None:
+    """Generic lookup: try a list of candidate registry numbers, then fall back to an
+    exact-name match. Multi-candidate matches are intentionally discarded — wrong officer
+    data is worse than no officer data. `module` exposes a callable `lookup_fn_name` and
+    `search_by_name`.
     """
-    # 1) by number — registry_id from Amazon, or anything that looks like a CH number
-    for raw in (s.registry_id, r.registry_id):
+    lookup_fn = getattr(module, lookup_fn_name)
+    for raw in raw_numbers:
         if not raw:
             continue
         try:
-            data = companies_house.lookup_by_number(raw)
+            data = lookup_fn(raw)
             if data:
                 return data
         except Exception:
-            log.exception("CH lookup_by_number failed for %s", raw)
+            log.exception("%s %s failed for %s", module.__name__, lookup_fn_name, raw)
 
-    # 2) by name — exact match only
-    name = (r.company_name or s.business_name or "").strip()
+    name = (name or "").strip()
     if not name:
         return None
     try:
-        candidates = companies_house.search_by_name(name, items_per_page=10)
+        candidates = module.search_by_name(name)
     except Exception:
-        log.exception("CH search_by_name failed for %s", name)
+        log.exception("%s search_by_name failed for %s", module.__name__, name)
         return None
     exact = [c for c in candidates if (c.get("company_name") or "").strip().lower() == name.lower()]
     if len(exact) != 1 or not exact[0].get("company_number"):
         return None
     try:
-        return companies_house.lookup_by_number(exact[0]["company_number"])
+        return lookup_fn(exact[0]["company_number"])
     except Exception:
-        log.exception("CH lookup_by_number (after name match) failed for %s", exact[0])
+        log.exception("%s %s (post-name-match) failed for %s", module.__name__, lookup_fn_name, exact[0])
         return None
 
 
-def _merge_companies_house(d: dict, r: EnrichmentResult) -> None:
-    """Companies House is high-trust for identity (90), but never overrides VIES (95)."""
+def _companies_house_lookup(s: SellerInput, r: EnrichmentResult) -> dict | None:
+    return _registry_lookup_by_number_or_name(
+        companies_house, "lookup_by_number",
+        raw_numbers=[s.registry_id, r.registry_id],
+        name=r.company_name or s.business_name,
+    )
+
+
+def _pappers_lookup(s: SellerInput, r: EnrichmentResult) -> dict | None:
+    # FR sellers expose SIREN inside their VAT (FR{2}{9-digit SIREN}); use it as the primary key.
+    siren_from_vat = pappers.siren_from_vat(s.vat) or pappers.siren_from_vat(r.vat)
+    return _registry_lookup_by_number_or_name(
+        pappers, "lookup_by_siren",
+        raw_numbers=[siren_from_vat, s.registry_id, r.registry_id],
+        name=r.company_name or s.business_name,
+    )
+
+
+def _merge_registry(d: dict, r: EnrichmentResult, *, trust: int = 90) -> None:
+    """Fills empty slots from a registry payload (CH / Pappers / etc). Never overrides
+    higher-trust prior values: VIES (95) wins over CH/Pappers (90) on company_name.
+    """
+    src = d.get("source") or "registry"
     if d.get("company_name") and not r.company_name:
         r.company_name = d["company_name"]
-        r.confidence["company"] = max(r.confidence.get("company", 0), 90)
-        r.sources["company_name"] = "companies_house"
+        r.confidence["company"] = max(r.confidence.get("company", 0), trust)
+        r.sources["company_name"] = src
     if d.get("legal_form") and not r.legal_form:
         r.legal_form = d["legal_form"]
-        r.sources["legal_form"] = "companies_house"
+        r.sources["legal_form"] = src
     if d.get("address") and not r.business_address:
         r.business_address = d["address"]
-        r.sources["business_address"] = "companies_house"
+        r.sources["business_address"] = src
     if d.get("country") and not r.country:
         r.country = d["country"]
     if d.get("company_number") and not r.registry_id:
         r.registry_id = d["company_number"]
-        r.sources["registry_id"] = "companies_house"
-    if d.get("officers"):
+        r.sources["registry_id"] = src
+    if d.get("officers") and not r.officers:
         r.officers = d["officers"]
-        r.sources["officers"] = "companies_house"
-    if d.get("status") == "dissolved":
-        # dissolved companies are a hard kill for outreach
-        r.agency_flag = (r.agency_flag or "") + ("|" if r.agency_flag else "") + "dissolved"
+        r.sources["officers"] = src
+    if _is_inactive_status(d.get("status")):
+        flag = "dissolved" if "dissolv" in (d.get("status") or "").lower() else "inactive_registry"
+        existing = r.agency_flag or ""
+        if flag not in existing:
+            r.agency_flag = (existing + "|" + flag) if existing else flag
 
 
 def _skip_resident(r: EnrichmentResult, segment: str, reason: str) -> EnrichmentResult:
@@ -154,15 +202,20 @@ def enrich_one(s: SellerInput) -> EnrichmentResult:
     r.jurisdiction_segment = segment
     r.jurisdiction_reason = reason
 
-    # 2) Companies House — UK official registry (free, JSON). UK is a high-density foreign segment.
-    if _is_uk(vies_country or s.country, s.vat):
+    # 2) Country-specific official registries — dispatched by VIES-confirmed country / VAT prefix.
+    #    UK and FR are the two highest-density foreign segments on amazon.de.
+    eff_country = vies_country or s.country
+    if _is_uk(eff_country, s.vat):
         ch_data = _companies_house_lookup(s, r)
         if ch_data:
-            _merge_companies_house(ch_data, r)
+            _merge_registry(ch_data, r)
+    elif _is_fr(eff_country, s.vat):
+        fr_data = _pappers_lookup(s, r)
+        if fr_data:
+            _merge_registry(fr_data, r)
 
-    # 3-N) TODO: pappers (FR), ear_de + lucid_de (verify foreign DE-operating signals),
-    #            handelsregister + krs (only if DE/PL ever re-enabled), impressum, ebay,
-    #            kaufland, allegro, otto, llm_merge.
+    # 3-N) TODO: ear_de + lucid_de (verify foreign DE-operating signals), handelsregister + krs
+    #            (only if DE/PL ever re-enabled), impressum, ebay, kaufland, allegro, otto, llm_merge.
 
     # Fallback: keep raw Amazon name if registries did not return anything.
     if not r.company_name and s.business_name:
