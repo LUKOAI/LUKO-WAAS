@@ -6,9 +6,11 @@ from __future__ import annotations
 import logging
 import re
 
-from .models import SellerInput, EnrichmentResult
-from .sources import vies, companies_house, pappers
-from .scoring import score_candidate, compute_overall
+from urllib.parse import urlparse
+
+from .models import SellerInput, EnrichmentResult, Contact
+from .sources import vies, companies_house, pappers, impressum
+from .scoring import score_candidate, compute_overall, classify_email
 from .segmentation import classify_jurisdiction, extract_de_signals, decide_outreach_priority
 
 log = logging.getLogger(__name__)
@@ -43,6 +45,80 @@ def _is_fr(country: str | None, vat: str | None) -> bool:
         return True
     v = re.sub(r"\s", "", (vat or "").upper())
     return v.startswith("FR")
+
+
+URL_RE = re.compile(r"https?://[^\s)>\"'<]+", re.IGNORECASE)
+# Hosts that aren't a seller's "own" website — kept aside in other_urls instead.
+_NON_WEBSITE_HOSTS = {
+    "amazon.com", "amazon.de", "amazon.co.uk", "amazon.fr", "amazon.it", "amazon.es",
+    "amazon.pl", "amazon.nl", "amazon.se", "amazon.ca", "amazon.com.mx", "amazon.co.jp",
+    "facebook.com", "fb.com", "instagram.com", "twitter.com", "x.com", "youtube.com",
+    "linkedin.com", "tiktok.com", "pinterest.com", "snapchat.com",
+    "wa.me", "t.me", "telegram.org", "telegram.me",
+    "google.com", "maps.google.com", "goo.gl", "bit.ly", "tinyurl.com",
+}
+
+
+def _host(url: str) -> str:
+    h = (urlparse(url).netloc or "").lower()
+    return h[4:] if h.startswith("www.") else h
+
+
+def _is_social_or_marketplace(host: str) -> bool:
+    return any(host == d or host.endswith("." + d) for d in _NON_WEBSITE_HOSTS)
+
+
+def _extract_website_from_text(*texts: str | None) -> tuple[str | None, list[str]]:
+    """Returns (primary_website, other_urls). Primary is the first URL whose host is not
+    Amazon, social media, or a known link-shortener. Others go into the bucket."""
+    primary: str | None = None
+    others: list[str] = []
+    seen: set[str] = set()
+    for txt in texts:
+        if not txt:
+            continue
+        for m in URL_RE.finditer(txt):
+            url = m.group(0).rstrip(".,;:)>\"'")
+            if url in seen:
+                continue
+            seen.add(url)
+            host = _host(url)
+            if not host:
+                continue
+            if _is_social_or_marketplace(host):
+                if not host.startswith("amazon."):
+                    others.append(url)
+                continue
+            if primary is None:
+                primary = url
+            else:
+                others.append(url)
+    return primary, others
+
+
+def _person_from_email(email: str) -> str | None:
+    """Recovers a "First Last" name from 'first.last@domain' style addresses."""
+    local = email.split("@", 1)[0]
+    parts = local.split(".")
+    if len(parts) == 2 and all(p.isalpha() and len(p) >= 2 for p in parts):
+        return f"{parts[0].capitalize()} {parts[1].capitalize()}"
+    return None
+
+
+def _ingest_impressum(imp: dict, r: EnrichmentResult) -> None:
+    """Turns impressum scrape output into Contact candidates + optional officers fill-in."""
+    src_label = f"impressum:{imp.get('source_url') or r.website}"
+    for e in imp.get("emails") or []:
+        r.candidates.append(Contact(
+            kind="email", value=e, label=None,
+            person_name=_person_from_email(e), source=src_label,
+        ))
+    for p in imp.get("phones") or []:
+        r.candidates.append(Contact(kind="phone", value=p, source=src_label))
+    # Officers fill empty slots only — registry data (CH/Pappers) is more authoritative.
+    if not r.officers and imp.get("officers"):
+        r.officers = imp["officers"]
+        r.sources["officers"] = src_label
 
 
 def _is_inactive_status(status: str | None) -> bool:
@@ -214,8 +290,29 @@ def enrich_one(s: SellerInput) -> EnrichmentResult:
         if fr_data:
             _merge_registry(fr_data, r)
 
-    # 3-N) TODO: ear_de + lucid_de (verify foreign DE-operating signals), handelsregister + krs
-    #            (only if DE/PL ever re-enabled), impressum, ebay, kaufland, allegro, otto, llm_merge.
+    # 3) Website detection from raw Amazon text — anything that isn't Amazon / social / shortener
+    #    becomes the seller's primary website (used by impressum next).
+    if not r.website:
+        website, other = _extract_website_from_text(s.raw_text, s.gpsr_raw, s.business_address)
+        if website:
+            r.website = website
+            r.sources["website"] = "amazon_raw"
+        for u in other:
+            if u not in r.other_urls:
+                r.other_urls.append(u)
+
+    # 4) Impressum / legal-notice scraper — best-effort, fills candidates + officers.
+    if r.website:
+        try:
+            imp = impressum.lookup(r.website, country_hint=r.country)
+        except Exception:
+            log.exception("impressum.lookup failed for %s", r.website)
+            imp = None
+        if imp:
+            _ingest_impressum(imp, r)
+
+    # 5-N) TODO: ear_de + lucid_de (verify foreign DE-operating signals), handelsregister + krs
+    #            (only if DE/PL ever re-enabled), ebay, kaufland, allegro, otto, llm_merge.
 
     # Fallback: keep raw Amazon name if registries did not return anything.
     if not r.company_name and s.business_name:
@@ -253,15 +350,23 @@ def enrich_one(s: SellerInput) -> EnrichmentResult:
         r.confidence["phone"] = best.score
         r.sources["phone"] = best.source
 
+    # If the email pick gave us a name that matches a known officer, lift their role across.
+    if r.decision_maker_name and not r.decision_maker_role and r.officers:
+        name_low = r.decision_maker_name.lower()
+        for o in r.officers:
+            if (o.get("name") or "").lower() == name_low and o.get("role"):
+                r.decision_maker_role = o["role"]
+                break
+
     # Officer fallback: when no email gave us a person, the registry director is the next-best
-    # named contact. Prefer "director" over secretaries / nominees.
+    # named contact. Prefer "director" / "Geschäftsführer" over secretaries / nominees.
     if not r.decision_maker_name and r.officers:
-        directors = [o for o in r.officers if "director" in (o.get("role") or "").lower()]
+        directors = [o for o in r.officers if re.search(r"director|gesch[äa]ftsf[üu]hrer|pr[ée]sident|amministratore", (o.get("role") or ""), re.IGNORECASE)]
         pick = (directors or r.officers)[0]
         if pick.get("name"):
             r.decision_maker_name = pick["name"]
             r.decision_maker_role = pick.get("role") or r.decision_maker_role
-            r.sources.setdefault("decision_maker_name", "companies_house")
+            r.sources.setdefault("decision_maker_name", r.sources.get("officers", "registry"))
 
     # Generic / agency-flagged go aside
     r.generic_contacts = [
