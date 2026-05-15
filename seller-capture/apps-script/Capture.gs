@@ -24,6 +24,8 @@ function doGet(e) {
 
 function doPost(e) {
   try {
+    const auth = _verifySignature_(e);
+    if (!auth.ok) return _json({ ok: false, error: 'unauthorized: ' + auth.reason });
     const payload = JSON.parse(e.postData.contents);
     if (!payload.seller_id) return _json({ ok: false, error: 'seller_id missing' });
 
@@ -69,6 +71,38 @@ function doPost(e) {
 
 function _json(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * HMAC-SHA256 signature check. Extension sends:
+ *   X-Luko-Timestamp: unix seconds
+ *   X-Luko-Signature: hex(HMAC_SHA256(timestamp + "." + body, secret))
+ * Timestamp must be within ±5 minutes to prevent replay.
+ *
+ * The shared secret lives in Script Properties as CAPTURE_SHARED_SECRET.
+ * If not set, the endpoint refuses ALL writes (fail-closed) — explicit opt-in to allow
+ * unauthenticated for testing via CAPTURE_ALLOW_UNSIGNED='true'.
+ */
+function _verifySignature_(e) {
+  const props = PropertiesService.getScriptProperties();
+  const secret = props.getProperty('CAPTURE_SHARED_SECRET') || '';
+  const allowUnsigned = (props.getProperty('CAPTURE_ALLOW_UNSIGNED') || '').toLowerCase() === 'true';
+  if (!secret) return { ok: allowUnsigned, reason: 'no_secret_set' };
+  const headers = (e && e.parameter && e.parameter['__headers__']) || null;
+  const ts = (e && e.parameter && e.parameter.ts) ||
+             (e && e.headers && (e.headers['X-Luko-Timestamp'] || e.headers['x-luko-timestamp'])) || '';
+  const sig = (e && e.parameter && e.parameter.sig) ||
+              (e && e.headers && (e.headers['X-Luko-Signature'] || e.headers['x-luko-signature'])) || '';
+  if (!ts || !sig) return { ok: false, reason: 'missing_signature_headers' };
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - parseInt(ts, 10)) > 300) return { ok: false, reason: 'timestamp_skew' };
+  const body = (e && e.postData && e.postData.contents) || '';
+  const expectedBytes = Utilities.computeHmacSha256Signature(ts + '.' + body, secret);
+  const expected = expectedBytes.map(b => (b < 0 ? b + 256 : b).toString(16).padStart(2, '0')).join('');
+  if (expected.length !== sig.length) return { ok: false, reason: 'bad_signature' };
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
+  return diff === 0 ? { ok: true } : { ok: false, reason: 'bad_signature' };
 }
 
 function _flattenParsed(p) {

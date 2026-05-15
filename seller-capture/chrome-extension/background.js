@@ -1,7 +1,21 @@
 async function getConfig() {
   return await chrome.storage.sync.get([
-    "endpoint", "driveFolderId", "operatorId", "lang", "marketplaceOverride"
+    "endpoint", "driveFolderId", "operatorId", "lang", "marketplaceOverride", "sharedSecret"
   ]);
+}
+
+function hexFromBytes(bytes) {
+  return Array.from(new Uint8Array(bytes)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function hmacSha256Hex(secret, message) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw", enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(message));
+  return hexFromBytes(sig);
 }
 
 async function captureScreenshot(tabId) {
@@ -32,11 +46,18 @@ async function uploadToDrive(dataUrl, filename, folderId) {
   return await res.json();
 }
 
-async function postToEndpoint(endpoint, payload) {
-  const res = await fetch(endpoint, {
+async function postToEndpoint(endpoint, payload, sharedSecret) {
+  const body = JSON.stringify(payload);
+  const ts = String(Math.floor(Date.now() / 1000));
+  let url = endpoint;
+  if (sharedSecret) {
+    const sig = await hmacSha256Hex(sharedSecret, ts + "." + body);
+    url += (url.includes("?") ? "&" : "?") + `ts=${encodeURIComponent(ts)}&sig=${encodeURIComponent(sig)}`;
+  }
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
+    body
   });
   const text = await res.text();
   let json;
@@ -71,7 +92,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
       p.screenshot = screenshot;
 
-      const result = await postToEndpoint(cfg.endpoint, p);
+      const result = await postToEndpoint(cfg.endpoint, p, cfg.sharedSecret);
       sendResponse({ ok: !!result.ok, result, error: result.error });
     } catch (e) {
       sendResponse({ ok: false, error: e.message || String(e) });

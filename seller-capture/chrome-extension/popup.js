@@ -1,4 +1,4 @@
-const FIELDS = ["endpoint", "driveFolderId", "operatorId", "marketplaceOverride", "lang"];
+const FIELDS = ["endpoint", "driveFolderId", "operatorId", "marketplaceOverride", "lang", "sharedSecret"];
 
 async function applyI18n() {
   const { t } = window.__lukoI18n;
