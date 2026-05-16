@@ -184,32 +184,31 @@ $env:ANTHROPIC_API_KEY="sk-ant-twój-klucz-tutaj"
 export COMPANIES_HOUSE_API_KEY="twój-klucz"
 ```
 
-### C. Klucz Pappers (FR firms — darmowy plan 100/dzień)
+### C. Klucz Pappers (FR firms — płatny, OPCJONALNY)
 
-1. https://www.pappers.fr/api → kliknij **S'inscrire**
-2. Załóż konto, plan **Gratuit**
-3. **Mes API tokens** → skopiuj `api_token`
+Pappers ma dziś tylko płatne plany — pipeline gracefully omija FR registry lookup gdy klucza brak. Jeśli FR sellers to nie target, możesz pominąć ten punkt.
+
+Jeśli go potrzebujesz:
+1. https://www.pappers.fr/api → wybierz plan + utwórz konto
+2. **Mes API tokens** → skopiuj `api_token`
 
 ```bash
 export PAPPERS_API_KEY="twój-klucz"
 ```
 
-### D. Google CSE (wyszukiwarka firm — darmowy 100/dzień)
+### D. Klucz Brave Search (wyszukiwarka firm — $5 darmowych kredytów/m, ~1000 zapytań)
 
-To trochę bardziej zaangażowane:
-1. https://programmablesearchengine.google.com/ → utwórz nową wyszukiwarkę:
-   - "Search the entire web"
-   - Nazwij `luko-seller-finder`
-2. Po utworzeniu klik **Setup** → skopiuj **Search engine ID**
-3. https://console.cloud.google.com/apis/credentials → **Create Credentials** → **API key**
-4. Skopiuj klucz
+Brave zastąpił dawne Google CSE — Google zdeprekował "Search the entire web" toggle w styczniu 2026 i nowe Programmable Search Engines nie znajdują brand sites poza wskazanymi domenami. Brave robi to za free na "Data for AI" planie:
+
+1. https://api.search.brave.com/app/signup → załóż konto
+2. **Subscriptions** → wybierz **Data for AI Free** ($5 credit/m, ~1000 queries)
+3. **API Keys** → utwórz key → skopiuj
 
 ```bash
-export GOOGLE_CSE_KEY="twój-klucz"
-export GOOGLE_CSE_ID="twój-search-engine-id"
+export BRAVE_API_KEY="twój-klucz"
 ```
 
-Jeśli któryś z kluczy Ci nie wyjdzie — nie szkodzi. Pipeline pomija po cichu i działa dalej z tym co ma.
+Jeśli któryś z kluczy Ci nie wyjdzie — nie szkodzi. Pipeline pomija po cichu i działa dalej z tym co ma (np. bez Brave klucza Brave website-finder skipuje, ale impressum.lookup + CH lookup nadal działają).
 
 ---
 

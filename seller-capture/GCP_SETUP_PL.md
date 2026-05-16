@@ -167,8 +167,14 @@ bq query --use_legacy_sql=false \
 Wstępny szkic:
 1. Build kontenera z `seller-capture/enrichment/` (Dockerfile do utworzenia)
 2. Push do Artifact Registry w `luko-sellers`
-3. Deploy Cloud Run service z env vars (BQ_PROJECT, BQ_DATASET, ANTHROPIC_API_KEY z Secret Manager, COMPANIES_HOUSE_API_KEY, PAPPERS_API_KEY)
+3. Deploy Cloud Run service z env vars (BQ_PROJECT, BQ_DATASET, secrety z Secret Manager):
+   - `ANTHROPIC_API_KEY` — required (Haiku PASS 1 + Sonnet PASS 2)
+   - `BRAVE_API_KEY` — required (website-finder; bez tego impressum scrape nie ma jak znaleźć brand site)
+   - `COMPANIES_HOUSE_API_KEY` — required dla UK Ltd cluster (darmowy)
+   - `PAPPERS_API_KEY` — opcjonalny, FR sellers (płatny; pomijany jeśli brak)
 4. Cloud Scheduler cron `*/5 * * * *` → HTTP POST do Cloud Run z HMAC
+
+Pełna checklist deploy: `DEPLOY_CHECKLIST.md` w tym samym katalogu.
 
 ---
 
