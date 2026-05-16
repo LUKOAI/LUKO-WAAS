@@ -149,10 +149,25 @@ of your job is to resolve the conflict.
 # Your output — exactly three fields, nothing more
 
 1. `consolidated_decision_maker` — your best single contact pick:
-   - `name`: full personal name (e.g. "Max Mustermann", "SMITH, John",
-     "Dupont Jean"). Use the casing the source registry uses (UK CH yells
-     surnames; Pappers Mixed Case; impressum varies). Null if no named
-     individual can be identified from any source.
+   - `name`: full personal name of a REAL HUMAN INDIVIDUAL (e.g. "Max
+     Mustermann", "SMITH, John", "Dupont Jean"). Use the casing the source
+     registry uses (UK CH yells surnames; Pappers Mixed Case; impressum
+     varies). **REJECT TEAM ALIASES AND DEPARTMENT NAMES.** Forbidden values
+     (return null instead):
+       "Sales Team", "DTC Sales", "Sales USA", "Sales", "Support",
+       "Customer Service", "Customer Care", "Info", "Contact", "Office",
+       "PR", "Press", "Media", "Marketing", "HR", "Affiliate",
+       "Wholesale", "Partner", "Partners", "Team", "Staff", "Admin",
+       "Reviews", "Helpdesk", "Service", "Verkauf", "Vertrieb", "Kontakt",
+       "Buchhaltung", "Empfang", "Réception", "Atención", "Servicio",
+       "Equipo", "Vendite"
+     Heuristic: if the candidate "name" contains a department/role word
+     and no human first name + surname pair, it's an alias — set null
+     and explain in `notes` ("found only dtc.sales@... alias, no named
+     individual"). A surname like "Sales" attached to a real first name
+     ("John Sales") is fine; the alias trap is the role-word standing
+     in for a person.
+     Null if no named individual can be identified from any source.
    - `role`: the actual role title in its native language — "Geschäftsführer",
      "director", "Président", "Directeur général", "Amministratore unico",
      "Owner", "Founder", "Inhaber", "Prokurist". Do NOT translate. Null if
@@ -612,6 +627,16 @@ Output:
 
 - **Picking a first name "Sarah" or "Max" alone as the decision_maker.name**
   when the source records the full name elsewhere. Always carry the full name.
+
+- **Returning a department alias as `decision_maker.name`** —
+  "Sales Team", "DTC Sales", "Support", "Customer Service", "Info",
+  "Marketing", "PR", "Wholesale". These are inboxes, not people. If a
+  team-alias email is the only contact ("dtc.sales@emeet.com" with no
+  named individual found), set `name: null`, keep the email in the
+  `email` field, and add a note ("only team-alias contact found, no
+  named decision-maker identified"). The downstream operator will then
+  know this row needs LinkedIn research before outreach, not a cold
+  email to a no-one inbox.
 
 - **Treating a company-form email ("contact@company.com") as personal** even
   when the company is small. Generic addresses route to whoever monitors
