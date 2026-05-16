@@ -289,10 +289,14 @@ function _triggerEnrichmentJob_(limit) {
   const url = 'https://run.googleapis.com/v2/projects/' + projectId +
               '/locations/' + region + '/jobs/' + jobName + ':run';
   const token = ScriptApp.getOAuthToken();
+  // Override the full args (Dockerfile has CMD only, no ENTRYPOINT, so we send
+  // the whole command). Default limit covers most Re-enrich batches; bump if
+  // many rows selected.
+  const safeLimit = Math.max(parseInt(limit, 10) || 20, 1);
   const body = {
     overrides: {
       containerOverrides: [{
-        args: ['pending', '--limit=' + String(Math.max(parseInt(limit, 10) || 20, 1))]
+        args: ['python', '-m', 'enrichment.main', 'pending', '--limit=' + String(safeLimit)]
       }]
     }
   };
