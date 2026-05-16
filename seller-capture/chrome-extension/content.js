@@ -205,7 +205,12 @@
   //   - "8766135" (UK Companies House, pure digits)
   //   - "KvK 75699451" (Dutch)
   //   - "452484875" (US-like, pure digits)
-  const RE_HRB = /Handels(?:register[-\s]?Nr(?:ummer)?|reg\.?Nr\.?)\.?[:\s]+([^\n<]{1,80}?)(?:\s*(?:\n|$|<))/i;
+  //
+  // CRITICAL FIX: Previous pattern `register[-\s]?Nr(?:ummer)?` tried to match
+  //   register + (optional space) + Nr + (optional "ummer") = "registerNr" or
+  //   "registerNrummer", which fails on full word "registernummer" because after
+  //   "register" comes "n" then "u" (not "Nr"). Now matches "nummer" as full alt.
+  const RE_HRB = /Handelsregister(?:nummer|[-\s]?Nr\.?)\.?[:\s]+([^\n<]{1,80}?)(?:\s*(?:\n|$|<))/i;
   const RE_EPR_LUCID = /\b(?:LUCID|Verpackungs?reg(?:ister)?[-\s]?Nr\.?)\.?[:\s]*(DE\d{10,15})\b/i;
   const RE_EPR_OTHER = /\b(?:EPR[-\s]*Nr\.?|EAR[-\s]*Nr\.?|EcoTLC|Ecologic)[:\s.]*([A-Z]{0,4}\s*\d{6,15})/i;
   const RE_EMAIL = /[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/gi;
