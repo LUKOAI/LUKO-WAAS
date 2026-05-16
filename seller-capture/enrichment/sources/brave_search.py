@@ -119,21 +119,117 @@ def search(query: str, num: int = 5, country: str | None = None) -> list[dict]:
     ]
 
 
+# Legal-form / corporate suffix tokens we strip when computing a brand slug.
+# These appear inside company names but never inside the brand's own domain.
+_LEGAL_FORM_TOKENS = {
+    "limited", "ltd", "ltda", "gmbh", "ag", "sa", "sarl", "srl", "spa",
+    "plc", "inc", "llc", "co", "company", "corporation", "corp",
+    "kg", "ohg", "ug", "ek", "bv", "nv", "oy", "ab",
+    "the", "and", "&",
+}
+# Things commonly attached to brand names that aren't part of the brand itself.
+_GEO_TOKENS = {
+    "uk", "u.k.", "ireland", "deutschland", "germany", "europe", "eu",
+    "international", "global", "group", "holdings", "world", "worldwide",
+    # Chinese city prefixes commonly stamped onto CN seller names by
+    # registration/regulatory copy; they crowd out the actual brand token.
+    "shenzhen", "guangzhou", "shanghai", "beijing", "dongguan", "ningbo",
+    "hangzhou", "xiamen", "fuzhou", "hong", "kong", "hk",
+    # Other regional cities
+    "munich", "munchen", "berlin", "hamburg", "london", "paris", "madrid",
+}
+
+
+def _slug_from_name(name: str) -> str | None:
+    """First brand-meaningful token of `name`, lowercase, alnum-only.
+
+    Used to score Brave results: when the seller is "ANKER SOLIX TECHNOLOGY
+    (UK) LTD" the slug is "anker" — so anker.com beats marketscreener.com
+    even when Brave ranked the latter higher for the "impressum" query.
+    Returns None when no meaningful token is left after stripping legal forms.
+    """
+    if not name:
+        return None
+    # split on non-alnum, lowercase
+    tokens = re.split(r"[^A-Za-z0-9]+", name.lower())
+    for tok in tokens:
+        if not tok:
+            continue
+        if tok in _LEGAL_FORM_TOKENS or tok in _GEO_TOKENS:
+            continue
+        if len(tok) < 4:
+            # short tokens are usually noise (acronyms, articles); keep
+            # scanning. Exception: a 3-letter token is fine if it's the
+            # only meaningful one we'd otherwise return below.
+            continue
+        return tok
+    # fallback: first 3+-letter token regardless of length floor
+    for tok in tokens:
+        if tok and tok not in _LEGAL_FORM_TOKENS and tok not in _GEO_TOKENS and len(tok) >= 3:
+            return tok
+    return None
+
+
+def _brand_query_tokens(name: str) -> str | None:
+    """Strip legal-form / geo tokens from `name` and return the brand-only
+    fragment for use as a search query (instead of the full corporate name,
+    which biases Brave toward register pages).
+
+    Example:
+      "ANKER SOLIX TECHNOLOGY (UK) LTD" -> "anker solix technology"
+      "MOLETA MUNRO LTD"                -> "moleta munro"
+    """
+    if not name:
+        return None
+    tokens = re.split(r"[^A-Za-z0-9]+", name.lower())
+    keep = [t for t in tokens if t and t not in _LEGAL_FORM_TOKENS and t not in _GEO_TOKENS]
+    if not keep:
+        return None
+    # Cap at 2 tokens: the brand itself plus an optional qualifier
+    # ("anker solix", "moleta munro"). More tokens add descriptor words
+    # ("technology", "innovations") that confuse Brave's relevance ranking
+    # and surface review/generic articles instead of the brand site.
+    return " ".join(keep[:2])
+
+
 def find_company_website(name: str, country: str | None = None) -> Optional[str]:
     """Returns the site root (scheme://host) of the most likely seller-owned website,
     or None when nothing usable comes back. Drop-in replacement for
     google_cse.find_company_website.
+
+    Strategy:
+      Q1 — search for the brand-only query (slug + remaining brand tokens) so
+           Brave is biased toward the actual company site instead of the
+           Companies House / Pappers register page for the formal name.
+      Q2 — fall back to the formal-name + legal-notice variants (legacy).
+
+      Across both query result sets, two-tier ranking:
+        1. Prefer non-blocklisted hosts whose base domain contains the brand
+           slug (anker.com beats marketscreener.com for "Anker Innovations").
+        2. Otherwise fall back to the first non-blocklisted result.
     """
     name = (name or "").strip()
     if not name or len(name) < 3:
         return None
+    slug = _slug_from_name(name)
+    brand_q = _brand_query_tokens(name)
     suffixes = LEGAL_SUFFIX_BY_COUNTRY.get(_norm_country(country) or "", _DEFAULT_SUFFIXES)
-    seen_hosts: set[str] = set()
+
+    # Compose query plan: brand-only query first (no suffix), then the legacy
+    # quoted-formal-name + impressum/legal-notice variants.
+    queries: list[str] = []
+    if brand_q and brand_q.lower() != name.lower():
+        queries.append(brand_q)
     for suffix in suffixes:
+        queries.append(f'"{name}" {suffix}')
+
+    seen_hosts: set[str] = set()
+    ordered_candidates: list[tuple[str, str]] = []  # (host, scheme://netloc)
+    for q in queries:
         try:
-            results = search(f'"{name}" {suffix}', num=5, country=country)
+            results = search(q, num=5, country=country)
         except Exception:
-            log.exception("Brave search failed for %r", name)
+            log.exception("Brave search failed for %r", q)
             return None
         for item in results:
             link = item.get("link")
@@ -146,5 +242,18 @@ def find_company_website(name: str, country: str | None = None) -> Optional[str]
             seen_hosts.add(host)
             if _is_blocklisted(host):
                 continue
-            return f"{parsed.scheme}://{parsed.netloc}"
-    return None
+            ordered_candidates.append((host, f"{parsed.scheme}://{parsed.netloc}"))
+
+    if not ordered_candidates:
+        return None
+
+    # Tier 1: slug-match wins, even if it's not the top-ranked Brave result.
+    if slug:
+        for host, url in ordered_candidates:
+            base = (host[4:] if host.startswith("www.") else host).split(".")[0]
+            # slug "anker" hits anker.com / anker-uk.co.uk / ankersolix.com
+            if slug in base or base in slug:
+                return url
+
+    # Tier 2: legacy first-non-blocklisted fallback.
+    return ordered_candidates[0][1]
