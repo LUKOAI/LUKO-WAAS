@@ -104,7 +104,46 @@
     return COUNTRY_MAP[k] || (k.length === 2 ? k.toUpperCase() : "");
   }
 
-  // ===== Block locators on the page =====
+  // ===== DOM-based address extraction (most reliable for Amazon's structured HTML) =====
+  //
+  // Amazon renders Business-Verkäufer addresses as:
+  //   <div class="a-row"><span class="a-text-bold">Geschäftsadresse:</span></div>
+  //   <div class="a-row indent-left"><span>STREET</span></div>
+  //   <div class="a-row indent-left"><span>CITY</span></div>
+  //   ... etc
+  // We find the label span by text match, then walk DOM siblings collecting
+  // address lines. This is more robust than parsing innerText regex (which can
+  // miss when Amazon renders without expected whitespace).
+  function findAddressBlockInDOM(labelTexts) {
+    const labelRe = new RegExp("^\\s*(" + labelTexts.join("|") + ")\\s*:?\\s*$", "i");
+    const allBoldSpans = document.querySelectorAll(
+      "span.a-text-bold, span[class*='bold'], b, strong"
+    );
+    for (const span of allBoldSpans) {
+      const txt = (span.textContent || "").replace(/\s+/g, " ").trim();
+      if (!labelRe.test(txt)) continue;
+      // Find ancestor row div
+      const labelRow = span.closest("div.a-row") || span.parentElement;
+      if (!labelRow) continue;
+      // Collect following sibling divs that contain address lines
+      const lines = [];
+      let next = labelRow.nextElementSibling;
+      while (next && lines.length < 6) {
+        // Stop if this div has a bold label inside (= next section starts)
+        const hasNextLabel = next.querySelector && next.querySelector(
+          "span.a-text-bold, span[class*='bold'], b, strong"
+        );
+        if (hasNextLabel) break;
+        const text = (next.textContent || "").replace(/\s+/g, " ").trim();
+        if (!text) { next = next.nextElementSibling; continue; }
+        lines.push(text);
+        next = next.nextElementSibling;
+      }
+      if (lines.length) return parseAddressLines(lines);
+    }
+    return {};
+  }
+
 
   // Find the section that has both impressum sub-blocks. Different page layouts.
   function findSellerInfoNode() {
@@ -371,7 +410,23 @@
       const fromLegal = parseLegalBlock(legalBlock || "");
       const fromBV = parseBusinessVerkauferBlock(bvBlock || "");
 
-      // Address fallback: if BV block parsing missed Geschäftsadresse / Kundendienstadresse
+      // PRIMARY address extraction: DOM-based (most reliable for Amazon HTML).
+      // Amazon renders address as a sequence of <div class="indent-left"> divs after
+      // a label span — easier to walk DOM than parse innerText regex.
+      const domBusiness = findAddressBlockInDOM(["Geschäftsadresse", "Geschaeftsadresse", "Business address"]);
+      if (domBusiness.street) {
+        Object.assign(fromBV, domBusiness);
+      }
+      const domCS = findAddressBlockInDOM(["Kundendienstadresse", "Kundendienst-Adresse", "Customer service address"]);
+      if (domCS.street) {
+        fromBV.cs_street = domCS.street;
+        fromBV.cs_postal_code = domCS.postal_code || "";
+        fromBV.cs_city = domCS.city || "";
+        fromBV.cs_region = domCS.region || "";
+        fromBV.cs_country = domCS.country || "";
+      }
+
+      // Address fallback (regex-on-text): if DOM-based + BV block parsing both missed
       // (e.g. block extraction got truncated by an aggressive stop pattern), re-scan
       // the FULL seller-info section. These labels are unique enough to search globally.
       if (!fromBV.street) {

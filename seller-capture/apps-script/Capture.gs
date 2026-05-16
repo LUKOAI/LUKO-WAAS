@@ -202,9 +202,37 @@ function _appendToInbox(ss, flat) {
 }
 
 /**
- * Idempotent helper to (re)inject headers without writing data. Use after schema
- * changes or if the header row was accidentally deleted.
+ * One-off helper: delete pre-v2 capture rows (which were saved under the 15-column
+ * schema and now appear with shifted data under the 33-column schema). Run AFTER
+ * re-capturing those sellers (the new captures overwrite BQ data via MERGE on
+ * seller_id — only the Sheet history shows stale rows).
+ *
+ * Usage: in Apps Script dropdown, select cleanOldInboxRows -> Run.
  */
+function cleanOldInboxRows() {
+  const sheetId = PropertiesService.getScriptProperties().getProperty('CAPTURE_SHEET_ID');
+  if (!sheetId) throw new Error('CAPTURE_SHEET_ID not set');
+  const ss = SpreadsheetApp.openById(sheetId);
+  const sh = ss.getSheetByName(CAPTURE_TAB);
+  if (!sh) { Logger.log('No Capture inbox tab'); return; }
+  const data = sh.getDataRange().getValues();
+  if (data.length < 2) { Logger.log('Empty inbox'); return; }
+  // A row is "old format" if column 5 (asin column, 0-indexed 4) contains something
+  // that doesn't look like an ASIN (B0XXXXXXXX or 10-char alphanumeric).
+  const asinRe = /^[A-Z0-9]{10}$/;
+  const toDelete = [];
+  for (let i = 1; i < data.length; i++) {
+    const asinCell = String(data[i][4] || '').trim();
+    // Old rows have business_name in column 5 (e.g. "Gusti Leder GmbH"), or empty
+    if (asinCell && !asinRe.test(asinCell)) toDelete.push(i + 1);
+    // Also delete fully-blank rows (e.g. from earlier appendRow with empty headers)
+    const allBlank = data[i].every(c => c === '' || c == null);
+    if (allBlank) toDelete.push(i + 1);
+  }
+  // Delete from bottom to preserve indices
+  toDelete.sort((a, b) => b - a).forEach(rowNum => sh.deleteRow(rowNum));
+  Logger.log('Deleted ' + toDelete.length + ' old/blank rows.');
+}
 function repairInboxHeaders() {
   const sheetId = PropertiesService.getScriptProperties().getProperty('CAPTURE_SHEET_ID');
   if (!sheetId) throw new Error('CAPTURE_SHEET_ID not set in Script Properties');
