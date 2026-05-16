@@ -32,7 +32,13 @@ log = logging.getLogger(__name__)
 
 HAIKU_MODEL = "claude-haiku-4-5"     # PASS 1: structured-data merge, no tools
 SONNET_MODEL = "claude-sonnet-4-6"   # PASS 2: web_search agentic research
-DEFAULT_CONFIDENCE_THRESHOLD = 60    # PASS 1 < this => escalate to PASS 2
+# PASS 1 confidence < this => escalate to PASS 2. Dropped from 60 to 50 after
+# empirical mixed-batch test (2026-05-16): UK Ltd cases with CH-confirmed
+# officers but no email landed at conf 35-45, all of them escalated and PASS 2
+# found nothing better. The early-exit rule below (registry officer present)
+# catches that subset directly; threshold 50 narrows the remaining window
+# where PASS 2 still has a realistic shot at rescuing the contact.
+DEFAULT_CONFIDENCE_THRESHOLD = 50
 
 MAX_TOKENS = 4096  # output cap. Higher than legacy because Sonnet's research
                    # may include intermediate reasoning + multi-paragraph notes
@@ -863,21 +869,41 @@ def _is_usable(merge: Optional[dict]) -> bool:
     return "consolidated_decision_maker" in merge
 
 
+def _has_registry_officers(sources: dict) -> bool:
+    """True when the bundle carries officer data from an authoritative
+    registry (Companies House or Pappers). Used by the orchestrator to
+    short-circuit PASS 2 — if we already have a director's name from an
+    official source, web research rarely surfaces a better personal email
+    for the same role, so the PASS 2 budget is poorly spent.
+    """
+    for key in ("companies_house", "pappers"):
+        payload = sources.get(key) or {}
+        if isinstance(payload, dict) and payload.get("officers"):
+            return True
+    return False
+
+
 def consolidate_2pass(
     sources: dict,
     confidence_threshold: int = DEFAULT_CONFIDENCE_THRESHOLD,
 ) -> Optional[dict]:
     """Two-pass entry point.
 
-    1. Always run PASS 1 (Haiku, structured-only).
-    2. Run PASS 2 (Sonnet, web_search) only when PASS 1 confidence is below
-       `confidence_threshold` AND PASS 1 didn't flag agency. Agency-flagged
-       records are excluded from outreach regardless, so PASS 2 would be
-       wasted budget.
+    PASS 1 (Haiku, structured-only) runs for every seller.
 
-    Returns a dict matching the OUTPUT_SCHEMA, augmented with:
-      - `_metas`: list of per-call meta dicts (PASS 1 only, or PASS 1 + PASS 2)
-      - `_escalated`: bool — true if PASS 2 ran
+    PASS 2 (Sonnet + web_search) is skipped when ANY of:
+      - PASS 1 flagged agency (outreach excluded regardless)
+      - PASS 1 confidence >= `confidence_threshold`
+      - PASS 1 produced a named decision-maker AND the bundle has registry
+        officers (CH / Pappers): research has nothing realistic to add to a
+        registry-confirmed director name
+
+    Otherwise PASS 2 runs and gets PASS 1's output as `prior_consolidation`.
+
+    Returns a dict matching OUTPUT_SCHEMA, augmented with:
+      - `_metas`: list of per-call meta dicts
+      - `_escalated`: bool
+      - `_skip_reason`: 'agency' | 'high_confidence' | 'registry_officer' | None
     """
     metas: list[dict] = []
 
@@ -886,15 +912,25 @@ def consolidate_2pass(
         metas.append(pass1["_meta"])
 
     pass1_usable = _is_usable(pass1)
+    skip_reason: str | None = None
     if pass1_usable:
         dm = pass1.get("consolidated_decision_maker") or {}
         agency = pass1.get("agency_flag") or {}
         conf = dm.get("confidence") or 0
         flagged = bool(agency.get("is_agency"))
-        if flagged or conf >= confidence_threshold:
-            pass1["_metas"] = metas
-            pass1["_escalated"] = False
-            return pass1
+        has_named_dm = bool(dm.get("name"))
+        if flagged:
+            skip_reason = "agency"
+        elif conf >= confidence_threshold:
+            skip_reason = "high_confidence"
+        elif has_named_dm and _has_registry_officers(sources):
+            skip_reason = "registry_officer"
+
+    if pass1_usable and skip_reason is not None:
+        pass1["_metas"] = metas
+        pass1["_escalated"] = False
+        pass1["_skip_reason"] = skip_reason
+        return pass1
 
     # Escalate to PASS 2.
     pass2 = consolidate_sonnet_websearch(
@@ -907,12 +943,14 @@ def consolidate_2pass(
     if _is_usable(pass2):
         pass2["_metas"] = metas
         pass2["_escalated"] = True
+        pass2["_skip_reason"] = None
         return pass2
 
     # PASS 2 failed. Return PASS 1 if it was at least parseable.
     if pass1_usable:
         pass1["_metas"] = metas
         pass1["_escalated"] = True  # we tried, just failed
+        pass1["_skip_reason"] = None
         return pass1
     return None
 
