@@ -9,7 +9,7 @@ import re
 from urllib.parse import urlparse
 
 from .models import SellerInput, EnrichmentResult, Contact
-from .sources import vies, companies_house, pappers, impressum, google_cse, llm_merge
+from .sources import vies, companies_house, pappers, impressum, brave_search, llm_merge
 from .scoring import score_candidate, compute_overall, classify_email
 from .segmentation import classify_jurisdiction, extract_de_signals, decide_outreach_priority
 
@@ -381,7 +381,7 @@ def enrich_one(s: SellerInput) -> EnrichmentResult:
         if fr_data:
             _merge_registry(fr_data, r)
 
-    # 3) Website detection — first try Amazon raw text, then fall back to Google CSE
+    # 3) Website detection — first try Amazon raw text, then fall back to Brave Search
     #    ("<company_name> impressum" / mentions-legales / aviso-legal etc).
     if not r.website:
         website, other = _extract_website_from_text(s.raw_text, s.gpsr_raw, s.business_address)
@@ -393,13 +393,13 @@ def enrich_one(s: SellerInput) -> EnrichmentResult:
                 r.other_urls.append(u)
     if not r.website and (r.company_name or s.business_name):
         try:
-            found = google_cse.find_company_website(r.company_name or s.business_name, country=r.country)
+            found = brave_search.find_company_website(r.company_name or s.business_name, country=r.country)
         except Exception:
-            log.exception("google_cse.find_company_website failed")
+            log.exception("brave_search.find_company_website failed")
             found = None
         if found:
             r.website = found
-            r.sources["website"] = "google_cse"
+            r.sources["website"] = "brave_search"
 
     # 4) Impressum / legal-notice scraper — best-effort, fills candidates + officers.
     imp: dict | None = None

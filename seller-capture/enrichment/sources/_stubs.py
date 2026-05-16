@@ -18,6 +18,6 @@ Order of priority for filling in:
 14. kaufland        — Kaufland.de seller impressum scraper
 15. allegro         — Allegro.pl seller info scraper (NIP + firma)
 16. otto            — OTTO marketplace seller info
-17. google_cse      — Google Custom Search wrapper
+17. brave_search    — Brave Search API wrapper (replaced deprecated google_cse)
 18. llm_merge       — Claude Haiku / Sonnet for cross-source matching and decision-maker extraction
 """
