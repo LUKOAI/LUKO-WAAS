@@ -199,7 +199,13 @@
 
   const RE_VAT = /\b(?:USt[-\s]*Id[-\s]*Nr\.?|UStID|VAT(?:\s*(?:Number|Nr\.?|ID|No))?|Numero\s+(?:di\s+)?(?:partita\s+)?IVA|Numéro\s+de\s+TVA|Número\s+de\s+IVA|NIP|BTW(?:-nr)?|Umsatzsteuer[-\s]*Identifikationsnummer(?:\s+gemäß[^:]+)?)[:\s.]*([A-Z]{2}\s*[0-9A-Z]{6,14})\b/i;
   const RE_WEEE = /WEEE[-\s]*Reg\.?[-\s]*Nr\.?[:\s.]*([A-Z]{2}\s*\d{6,12})/i;
-  const RE_HRB = /Handels(?:register[-\s]?Nr(?:ummer)?|reg\.?Nr\.?)\.?[:\s]*([A-Z]{2,4}\s*\d+(?:\s*[A-Z]+)?)/i;
+  // HRB / KvK / Companies House / etc. — label-based: capture whatever follows the
+  // "Handelsregisternummer:" label until line break. Tolerant of any value format:
+  //   - "HRB 15487 FF" (German with prefix)
+  //   - "8766135" (UK Companies House, pure digits)
+  //   - "KvK 75699451" (Dutch)
+  //   - "452484875" (US-like, pure digits)
+  const RE_HRB = /Handels(?:register[-\s]?Nr(?:ummer)?|reg\.?Nr\.?)\.?[:\s]+([^\n<]{1,80}?)(?:\s*(?:\n|$|<))/i;
   const RE_EPR_LUCID = /\b(?:LUCID|Verpackungs?reg(?:ister)?[-\s]?Nr\.?)\.?[:\s]*(DE\d{10,15})\b/i;
   const RE_EPR_OTHER = /\b(?:EPR[-\s]*Nr\.?|EAR[-\s]*Nr\.?|EcoTLC|Ecologic)[:\s.]*([A-Z]{0,4}\s*\d{6,15})/i;
   const RE_EMAIL = /[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/gi;
@@ -259,6 +265,10 @@
   //   if first "street" line is JUST a number (e.g. UK "39"), combine with next
   function parseAddressLines(lines) {
     lines = lines.map(clean).filter(Boolean);
+    // Dedupe (Amazon DOM sometimes renders address text in nested spans → walker
+    // grabs duplicates). Preserve original order.
+    const seen = new Set();
+    lines = lines.filter(ln => { if (seen.has(ln)) return false; seen.add(ln); return true; });
     const out = {};
     if (!lines.length) return out;
     const used = new Set();
@@ -271,18 +281,27 @@
     }
 
     // 2. Postal code (possibly with city on same line)
-    //    \d{2,6} covers:
-    //      DE/PL/US 5-digit (12345), PL 5-digit total but with dash split 2+3 (63-507),
-    //      US ZIP+4 (12345-6789), CN 6-digit (518000), shorter European (1234)
+    //    Country-specific patterns — strict enough to NOT match bare house numbers
+    //    like "39" (UK street number on its own line).
+    //      UK alphanumeric: "WD17 1JA"
+    //      PL: "63-507" (2 digits + dash + 3 digits)
+    //      DE/AT/CH/FR/IT/ES/etc.: 5 digits "12345"
+    //      US: 5 digits, optionally +4 "12345-6789"
+    //      CN: 6 digits "518000"
+    //      NL: 4 digits + 2 letters "6921RB" or "6921 RB"
     const POSTAL_WITH_CITY = [
       /^([A-Z]{1,2}\d[A-Z\d]?\s+\d[A-Z]{2})\s+(.+)$/i,    // UK: "WD17 1JA City"
-      /^(\d{2,6}(?:-\d{2,4})?)\s+(.+)$/,                   // DE/PL/US/CN: "12345 City" / "63-507 City"
-      /^(\d{4}\s*[A-Z]{2})\s+(.+)$/i,                      // NL: "1234AB City" or "1234 AB City"
+      /^(\d{2}-\d{3})\s+(.+)$/,                            // PL: "63-507 City"
+      /^(\d{5}(?:-\d{4})?)\s+(.+)$/,                       // DE/US: "12345 City" / "12345-6789 City"
+      /^(\d{6})\s+(.+)$/,                                  // CN: "518000 City"
+      /^(\d{4}\s*[A-Z]{2})\s+(.+)$/i,                      // NL: "1234AB City"
     ];
     const POSTAL_ALONE = [
-      /^([A-Z]{1,2}\d[A-Z\d]?\s+\d[A-Z]{2})$/i,            // UK alone
-      /^(\d{2,6}(?:-\d{2,4})?)$/,                          // DE/PL/US/CN alone
-      /^(\d{4}\s*[A-Z]{2})$/i,                             // NL alone
+      /^([A-Z]{1,2}\d[A-Z\d]?\s+\d[A-Z]{2})$/i,            // UK
+      /^(\d{2}-\d{3})$/,                                   // PL
+      /^(\d{5}(?:-\d{4})?)$/,                              // DE/US
+      /^(\d{6})$/,                                         // CN
+      /^(\d{4}\s*[A-Z]{2})$/i,                             // NL
     ];
     let postalIdx = -1;
     for (let i = 0; i < lines.length; i++) {
@@ -333,7 +352,7 @@
       }
     }
 
-    // 4. City — first remaining no-digit line
+    // 4. City — first remaining no-digit line (skipped if postal+city set city already)
     if (!out.city) {
       for (let i = 0; i < lines.length; i++) {
         if (used.has(i)) continue;
@@ -345,8 +364,25 @@
       }
     }
 
-    // 5. Region — next remaining no-digit line after city (e.g. PA for US, Brandenburg for DE)
-    for (let i = 0; i < lines.length; i++) {
+    // 5. address_line_2 — lines BEFORE street (typically owner name for sole-proprietor
+    //    sellers like PL "Krzysztof Bochen", or extra business descriptor above address).
+    if (streetIdx > 0) {
+      const beforeStreet = [];
+      for (let i = 0; i < streetIdx; i++) {
+        if (used.has(i)) continue;
+        beforeStreet.push(lines[i]);
+        used.add(i);
+      }
+      if (beforeStreet.length) out.address_line_2 = beforeStreet.join(" | ");
+    }
+
+    // 6. Region — first no-digit unused line BETWEEN street and (postal or country).
+    //    For EU 5-line "street/city/region/postal/country" gets us Brandenburg / Hertfordshire.
+    const endIdx = Math.min(
+      countryIdx >= 0 ? countryIdx : lines.length,
+      postalIdx >= 0 ? postalIdx : lines.length
+    );
+    for (let i = (streetIdx >= 0 ? streetIdx + 1 : 0); i < endIdx; i++) {
       if (used.has(i)) continue;
       if (!/\d/.test(lines[i])) {
         out.region = lines[i];
@@ -355,12 +391,16 @@
       }
     }
 
-    // 6. address_line_2 — any remaining line (e.g. owner name for sole-proprietor PL sellers
-    //    like "Krzysztof Bochen" above the street)
+    // 7. Any remaining unused → append to address_line_2 (catchall for extras)
+    const remain = [];
     for (let i = 0; i < lines.length; i++) {
       if (used.has(i)) continue;
-      if (!out.address_line_2) out.address_line_2 = lines[i];
-      else out.address_line_2 = out.address_line_2 + " | " + lines[i];
+      remain.push(lines[i]);
+    }
+    if (remain.length) {
+      out.address_line_2 = out.address_line_2
+        ? out.address_line_2 + " | " + remain.join(" | ")
+        : remain.join(" | ");
     }
 
     return out;
