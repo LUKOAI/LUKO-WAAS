@@ -97,11 +97,24 @@ def _extract_website_from_text(*texts: str | None) -> tuple[str | None, list[str
 
 
 def _person_from_email(email: str) -> str | None:
-    """Recovers a "First Last" name from 'first.last@domain' style addresses."""
+    """Recovers a "First Last" name from 'first.last@domain' style addresses.
+
+    Rejects locals where the resulting two-token name would be a team /
+    department alias ("dtc.sales" → would have been "Dtc Sales"; "support.india"
+    → "Support India"). Those slipped into r.decision_maker_name via the
+    candidate-scoring step downstream, masquerading as real people. The
+    llm_merge._looks_like_team_alias helper applies the same heuristic to
+    LLM-returned names; using it here keeps the two paths consistent.
+    """
+    from .sources.llm_merge import _looks_like_team_alias
+
     local = email.split("@", 1)[0]
     parts = local.split(".")
     if len(parts) == 2 and all(p.isalpha() and len(p) >= 2 for p in parts):
-        return f"{parts[0].capitalize()} {parts[1].capitalize()}"
+        candidate = f"{parts[0].capitalize()} {parts[1].capitalize()}"
+        if _looks_like_team_alias(candidate):
+            return None
+        return candidate
     return None
 
 
