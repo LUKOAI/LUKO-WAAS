@@ -1,0 +1,66 @@
+{
+  "manifest_version": 3,
+  "name": "Luko Seller Capture",
+  "version": "0.1.0",
+  "description": "Capture Amazon seller profile data into Luko BigQuery + Sheet pipeline.",
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "storage",
+    "scripting",
+    "identity"
+  ],
+  "host_permissions": [
+    "https://www.amazon.com/*",
+    "https://www.amazon.de/*",
+    "https://www.amazon.co.uk/*",
+    "https://www.amazon.fr/*",
+    "https://www.amazon.it/*",
+    "https://www.amazon.es/*",
+    "https://www.amazon.pl/*",
+    "https://www.amazon.nl/*",
+    "https://www.amazon.se/*",
+    "https://www.amazon.com.be/*",
+    "https://www.googleapis.com/*",
+    "https://script.google.com/*",
+    "https://script.googleusercontent.com/*"
+  ],
+  "background": { "service_worker": "background.js" },
+  "action": {
+    "default_title": "Capture seller (Alt+S)",
+    "default_popup": "popup.html"
+  },
+  "commands": {
+    "capture": {
+      "suggested_key": { "default": "Alt+S" },
+      "description": "Capture current Amazon seller"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.amazon.com/sp*",
+        "https://www.amazon.de/sp*",
+        "https://www.amazon.co.uk/sp*",
+        "https://www.amazon.fr/sp*",
+        "https://www.amazon.it/sp*",
+        "https://www.amazon.es/sp*",
+        "https://www.amazon.pl/sp*",
+        "https://www.amazon.nl/sp*",
+        "https://www.amazon.se/sp*",
+        "https://www.amazon.com.be/sp*"
+      ],
+      "js": ["i18n.js", "toast.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "oauth2": {
+    "client_id": "REPLACE_WITH_OAUTH_CLIENT_ID.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/drive.file"
+    ]
+  },
+  "web_accessible_resources": [
+    { "resources": ["selectors.json", "i18n/*.json"], "matches": ["<all_urls>"] }
+  ]
+}

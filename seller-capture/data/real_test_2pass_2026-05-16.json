@@ -1,0 +1,2811 @@
+{
+  "label": "real_test_2pass",
+  "input_csv": "data/foreign_test_sellers.csv",
+  "n_sellers": 29,
+  "total_cost_usd": 0.3319,
+  "avg_cost_usd": 0.0114,
+  "total_elapsed_sec": 187.16,
+  "sellers": [
+    {
+      "seller_id": "TEST_CN_ANKER",
+      "label": "real_test_2pass",
+      "elapsed_sec": 9.08,
+      "error": null,
+      "cost_usd": 0.010813,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 343,
+          "cache_creation_input_tokens": 7140,
+          "cache_read_input_tokens": 0,
+          "output_tokens": 309,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "TEST_CN_ANKER",
+        "marketplace": null,
+        "business_name": "Anker Innovations Limited",
+        "business_address": "Room 1318-19 Hollywood Plaza, 610 Nathan Road, Mongkok, Hong Kong",
+        "country": "CN",
+        "vat": null,
+        "registry_id": null,
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Sold by Anker Direct on amazon.de. WEEE-Reg.-Nr. DE 79556430. Lucid-Reg.-Nr. DE2810855093872. Vertreten durch: Anker Innovations Deutschland GmbH",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "TEST_CN_ANKER",
+        "company_name": "Anker Innovations Limited",
+        "legal_form": null,
+        "business_address": "Room 1318-19 Hollywood Plaza, 610 Nathan Road, Mongkok, Hong Kong",
+        "country": "CN",
+        "vat": null,
+        "registry_id": null,
+        "website": "https://www.marketscreener.com",
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [],
+        "decision_maker_name": null,
+        "decision_maker_role": null,
+        "email": null,
+        "phone": "+33478304142",
+        "candidates": [
+          {
+            "kind": "phone",
+            "value": "+33478304142",
+            "label": null,
+            "person_name": null,
+            "role": null,
+            "source": "impressum:https://www.marketscreener.com/legal-notice",
+            "score": 60
+          },
+          {
+            "kind": "phone",
+            "value": "+33140612000",
+            "label": null,
+            "person_name": null,
+            "role": null,
+            "source": "impressum:https://www.marketscreener.com/legal-notice",
+            "score": 60
+          }
+        ],
+        "generic_contacts": [],
+        "agency_flag": "agency_llm",
+        "weee_number": "79556430",
+        "lucid_id": "DE2810855093872",
+        "de_operating_signals": [
+          "weee",
+          "lucid"
+        ],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=CN",
+        "outreach_priority": "skip",
+        "notes": [
+          "agency: Raw text states 'Vertreten durch: Anker Innovations Deutschland GmbH' (represented by / acting through German subsidiary). Combined with WEEE and Lucid registration numbers for the German entity, this indicates the German subsidiary is the regulatory representative for the Hong Kong parent. The French phone numbers in impressum do not match the seller's Hong Kong address or German representation structure, suggesting they belong to a third-party compliance service. Outreach should target Anker Innovations Deutschland GmbH directly, not this record.",
+          "Seller is HK-incorporated (Anker Innovations Limited, Room 1318-19 Hollywood Plaza, Mongkok)",
+          "Raw text explicitly names Anker Innovations Deutschland GmbH as the representative ('Vertreten durch')",
+          "WEEE and Lucid registrations tied to the German entity, not the HK parent",
+          "Impressum source is marketscreener.com legal-notice (not seller's own domain), phone numbers are French (+33 country code), suggesting third-party compliance operator",
+          "Anker Innovations Deutschland GmbH should be researched separately as the actual EU-facing contact"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 60,
+          "overall": 35
+        },
+        "sources": {
+          "company_name": "capture",
+          "website": "brave_search",
+          "weee_number": "amazon_raw",
+          "lucid_id": "amazon_raw",
+          "phone": "impressum:https://www.marketscreener.com/legal-notice"
+        },
+        "status": "enriched_low_confidence"
+      }
+    },
+    {
+      "seller_id": "TEST_CN_UGREEN",
+      "label": "real_test_2pass",
+      "elapsed_sec": 7.86,
+      "error": null,
+      "cost_usd": 0.001714,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 185,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 163,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "TEST_CN_UGREEN",
+        "marketplace": null,
+        "business_name": "UGREEN Group Limited",
+        "business_address": "Room 305, Building 4, Tongfuyu Industrial Estate, Aiqun Road, Liaobu Village, Liaobu Town, Dongguan, Guangdong, China",
+        "country": "CN",
+        "vat": null,
+        "registry_id": null,
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Sold by UGREEN GROUP LIMITED. GPSR Bevollmaechtigter / EU Authorised Representative on file. Versand durch Amazon.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "TEST_CN_UGREEN",
+        "company_name": "UGREEN Group Limited",
+        "legal_form": null,
+        "business_address": "Room 305, Building 4, Tongfuyu Industrial Estate, Aiqun Road, Liaobu Village, Liaobu Town, Dongguan, Guangdong, China",
+        "country": "CN",
+        "vat": null,
+        "registry_id": null,
+        "website": "https://www.ugreen.com",
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [],
+        "decision_maker_name": null,
+        "decision_maker_role": null,
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": "agency_llm",
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [
+          "fba_de"
+        ],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=CN",
+        "outreach_priority": "skip",
+        "notes": [
+          "agency: raw_text_excerpt explicitly identifies 'GPSR Bevollmaechtigter / EU Authorised Representative' — regulatory agent, not the seller. UGREEN Group Limited is CN-incorporated; the named contact is their EU compliance representative.",
+          "Seller is CN-domiciled; uses external GPSR representative for EU compliance",
+          "No personal decision-maker contact data available — all signals route through agency",
+          "Original seller (UGREEN Group Limited) requires separate research outside this record"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture",
+          "website": "brave_search"
+        },
+        "status": "agency_only"
+      }
+    },
+    {
+      "seller_id": "TEST_CN_AUKEY",
+      "label": "real_test_2pass",
+      "elapsed_sec": 5.16,
+      "error": null,
+      "cost_usd": 0.001911,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 192,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 201,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "TEST_CN_AUKEY",
+        "marketplace": null,
+        "business_name": "Shenzhen AUKEY E-Business Co Ltd",
+        "business_address": "5/F Building B Block 1 Phase 1, Zhongguan Honghualing Industrial South Area, Liuxian 1st Road, Taoyuan, Nanshan, Shenzhen, China",
+        "country": "CN",
+        "vat": null,
+        "registry_id": null,
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "AUKEY official store. WEEE-Reg.-Nr. DE 85273496. Versand durch Amazon FBA.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "TEST_CN_AUKEY",
+        "company_name": "Shenzhen AUKEY E-Business Co Ltd",
+        "legal_form": null,
+        "business_address": "5/F Building B Block 1 Phase 1, Zhongguan Honghualing Industrial South Area, Liuxian 1st Road, Taoyuan, Nanshan, Shenzhen, China",
+        "country": "CN",
+        "vat": null,
+        "registry_id": null,
+        "website": null,
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [],
+        "decision_maker_name": null,
+        "decision_maker_role": null,
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": "agency_llm",
+        "weee_number": "85273496",
+        "lucid_id": null,
+        "de_operating_signals": [
+          "weee",
+          "fba_de"
+        ],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=CN",
+        "outreach_priority": "skip",
+        "notes": [
+          "agency: WEEE registration number (DE 85273496) in raw_text indicates seller is using an external WEEE compliance representative, not operating directly. Chinese seller with DE WEEE registration is typical pattern for delegated producer responsibility.",
+          "Seller is CN-incorporated (Shenzhen); no VIES, Companies House, Pappers, or impressum data available",
+          "WEEE-Reg.-Nr. DE 85273496 suggests compliance outsourcing — genuine decision-maker likely unknown without further registry lookup",
+          "No named officer, email, or phone available from structured sources",
+          "Amazon FBA fulfillment noted but does not identify business decision-maker"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture",
+          "weee_number": "amazon_raw"
+        },
+        "status": "agency_only"
+      }
+    },
+    {
+      "seller_id": "TEST_CN_TRONSMART",
+      "label": "real_test_2pass",
+      "elapsed_sec": 4.63,
+      "error": null,
+      "cost_usd": 0.001717,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 178,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 165,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "TEST_CN_TRONSMART",
+        "marketplace": null,
+        "business_name": "Shenzhen Tronsmart Electronics Co Ltd",
+        "business_address": "Room 1707, Building 1, Zhongkenuofeng Center, No. 4012 Longgang Avenue, Henggang Street, Longgang District, Shenzhen, China",
+        "country": "CN",
+        "vat": null,
+        "registry_id": null,
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Sold by Tronsmart Direct. EU Authorised Representative listed in compliance section.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "TEST_CN_TRONSMART",
+        "company_name": "Shenzhen Tronsmart Electronics Co Ltd",
+        "legal_form": null,
+        "business_address": "Room 1707, Building 1, Zhongkenuofeng Center, No. 4012 Longgang Avenue, Henggang Street, Longgang District, Shenzhen, China",
+        "country": "CN",
+        "vat": null,
+        "registry_id": null,
+        "website": null,
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [],
+        "decision_maker_name": null,
+        "decision_maker_role": null,
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": "agency_llm",
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=CN",
+        "outreach_priority": "skip",
+        "notes": [
+          "agency: Raw text explicitly states 'EU Authorised Representative listed in compliance section' — Chinese seller (CN-incorporated, Shenzhen address) using an EU representative, not direct contact.",
+          "No impressum data provided; EU AR identity not extracted from raw_text",
+          "Chinese seller operating via EU Authorised Representative — outreach would be wasted on the third-party agent",
+          "Recommend: fetch full impressum/compliance section to identify the actual EU AR company and assess whether direct seller contact is recoverable"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture"
+        },
+        "status": "agency_only"
+      }
+    },
+    {
+      "seller_id": "TEST_CN_EMEET",
+      "label": "real_test_2pass",
+      "elapsed_sec": 5.8,
+      "error": null,
+      "cost_usd": 0.001866,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 157,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 199,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "TEST_CN_EMEET",
+        "marketplace": null,
+        "business_name": "EMEET Technology Limited",
+        "business_address": "Building B, Yousong Industrial Park, Longhua District, Shenzhen, Guangdong, China",
+        "country": "CN",
+        "vat": null,
+        "registry_id": null,
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "EMEET official store on amazon.de. WEEE-Reg.-Nr. DE 28361472.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "TEST_CN_EMEET",
+        "company_name": "EMEET Technology Limited",
+        "legal_form": null,
+        "business_address": "Building B, Yousong Industrial Park, Longhua District, Shenzhen, Guangdong, China",
+        "country": "CN",
+        "vat": null,
+        "registry_id": null,
+        "website": null,
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [],
+        "decision_maker_name": null,
+        "decision_maker_role": null,
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": "agency_llm",
+        "weee_number": "28361472",
+        "lucid_id": null,
+        "de_operating_signals": [
+          "weee"
+        ],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=CN",
+        "outreach_priority": "skip",
+        "notes": [
+          "agency: WEEE registration number DE 28361472 indicates WEEE compliance representative arrangement for Chinese seller. Seller is CN-incorporated with no direct contact info; outreach should target the WEEE-registered operator, not this record.",
+          "Chinese seller (Shenzhen-based) with only WEEE-Reg.-Nr. in raw text — no officer names, emails, or phone numbers available",
+          "WEEE registration suggests use of German waste-compliance intermediary; original seller identity requires separate lookup",
+          "No registry data (VIES, Companies House, Pappers) — cannot verify legal structure or decision-maker"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture",
+          "weee_number": "amazon_raw"
+        },
+        "status": "agency_only"
+      }
+    },
+    {
+      "seller_id": "TEST_UK_NEEWER",
+      "label": "real_test_2pass",
+      "elapsed_sec": 24.33,
+      "error": null,
+      "cost_usd": 0.277616,
+      "escalated": true,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 152,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 132,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        },
+        {
+          "model": "claude-sonnet-4-6",
+          "input_tokens": 608,
+          "cache_creation_input_tokens": 46323,
+          "cache_read_input_tokens": 101184,
+          "output_tokens": 680,
+          "server_tool_use": {
+            "web_search_requests": 6
+          },
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "TEST_UK_NEEWER",
+        "marketplace": null,
+        "business_name": "Neewer Photographic Equipment Co Ltd",
+        "business_address": "Unit 24 The Westbrook Centre, Milton Road, Cambridge, CB4 1YG",
+        "country": "GB",
+        "vat": null,
+        "registry_id": null,
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Sold by Neewer Direct. Officially registered UK Ltd selling photography gear on amazon.de",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "TEST_UK_NEEWER",
+        "company_name": "Neewer Photographic Equipment Co Ltd",
+        "legal_form": null,
+        "business_address": "Unit 24 The Westbrook Centre, Milton Road, Cambridge, CB4 1YG",
+        "country": "GB",
+        "vat": null,
+        "registry_id": null,
+        "website": null,
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [],
+        "decision_maker_name": null,
+        "decision_maker_role": null,
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": null,
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=GB",
+        "outreach_priority": "review",
+        "notes": [
+          "No Companies House record found under 'Neewer Photographic Equipment Co Ltd'; CH search surfaced 'NERWER LTD' (12460736) at a different address — possible misspelling/alias but not confirmed",
+          "Parent entity is Shenzhen Neewer Technology Co. Ltd (CN), with the UK entity being a subsidiary; UK Companies House officer data not retrievable from open-web searches",
+          "All published contacts on neewer.com and uk.neewer.com are departmental aliases only: service@neewer.com, support@neewer.com, vip-support@neewer.com — none are personal",
+          "No named director, Geschäftsführer, or individual officer surfaced from any web source for the UK entity",
+          "Best outreach path: vip-support@neewer.com (reseller/distributor channel) or website@neewer.com (high-value orders) — both still generic",
+          "Manual Companies House lookup for 'Neewer Photographic Equipment Co Ltd' at CB4 1YG strongly recommended to retrieve current director name",
+          "Business address (Unit 24, Westbrook Centre, Milton Road, Cambridge CB4 1YG) is a serviced-office hub — typical for subsidiary registration, not operational HQ"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture"
+        },
+        "status": "enriched_failed"
+      }
+    },
+    {
+      "seller_id": "TEST_UK_EASY_ANKERSOLIX",
+      "label": "real_test_2pass",
+      "elapsed_sec": 8.78,
+      "error": null,
+      "cost_usd": 0.00169,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 366,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 122,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "TEST_UK_EASY_ANKERSOLIX",
+        "marketplace": null,
+        "business_name": "ANKER SOLIX TECHNOLOGY (UK) LTD",
+        "business_address": "39 Clarendon Road Watford, Hertfordshire, WD17 1JA, England",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "16151139",
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Sold by Anker Direct subsidiary on amazon.de. UK Ltd, active in solar and energy storage.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "TEST_UK_EASY_ANKERSOLIX",
+        "company_name": "ANKER SOLIX TECHNOLOGY (UK) LTD",
+        "legal_form": "ltd",
+        "business_address": "39 Clarendon Road Watford, Hertfordshire, WD17 1JA, England",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "16151139",
+        "website": "https://find-and-update.company-information.service.gov.uk",
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [
+          {
+            "name": "CEN, Ji Dong",
+            "role": "director",
+            "appointed_on": "2024-12-24",
+            "resigned_on": null,
+            "nationality": "Chinese"
+          }
+        ],
+        "decision_maker_name": "CEN, Ji Dong",
+        "decision_maker_role": "director",
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": null,
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=GB",
+        "outreach_priority": "review",
+        "notes": [
+          "Only Companies House officer available; no email or phone in any source",
+          "Recently incorporated (2024-12-24); impressum and VIES data absent",
+          "Chinese national director of UK Ltd — verify beneficial ownership",
+          "Email and phone lookup recommended for next research pass"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture",
+          "legal_form": "companies_house",
+          "officers": "companies_house",
+          "website": "brave_search",
+          "decision_maker_name": "companies_house"
+        },
+        "status": "enriched_failed"
+      }
+    },
+    {
+      "seller_id": "TEST_UK_EASY_BASEUS",
+      "label": "real_test_2pass",
+      "elapsed_sec": 6.79,
+      "error": null,
+      "cost_usd": 0.001878,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 354,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 162,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "TEST_UK_EASY_BASEUS",
+        "marketplace": null,
+        "business_name": "BASEUS TECHNOLOGY(UK) CO., LIMITED",
+        "business_address": "Third Floor, 207 Regent Street, London, W1B 3HH, United Kingdom",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "13723986",
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Baseus official UK arm. Selling consumer electronics on amazon.de via FBA.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "TEST_UK_EASY_BASEUS",
+        "company_name": "BASEUS TECHNOLOGY(UK) CO., LIMITED",
+        "legal_form": "ltd",
+        "business_address": "Third Floor, 207 Regent Street, London, W1B 3HH, United Kingdom",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "13723986",
+        "website": "https://find-and-update.company-information.service.gov.uk",
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [
+          {
+            "name": "GUO, Zihong",
+            "role": "director",
+            "appointed_on": "2021-11-04",
+            "resigned_on": null,
+            "nationality": "Chinese"
+          }
+        ],
+        "decision_maker_name": "GUO, Zihong",
+        "decision_maker_role": "director",
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": null,
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [
+          "fba_de"
+        ],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=GB",
+        "outreach_priority": "review",
+        "notes": [
+          "No email or phone in structured sources; Companies House confirms director GUO, Zihong (appointed 2021-11-04, still active)",
+          "No impressum, VIES, or Pappers data to cross-validate or locate personal contact details",
+          "Chinese national operating UK Ltd shell — typical for Asian e-commerce sellers, but not itself an agency flag",
+          "Outreach requires web search for personal email or direct phone number"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture",
+          "legal_form": "companies_house",
+          "officers": "companies_house",
+          "website": "brave_search",
+          "decision_maker_name": "companies_house"
+        },
+        "status": "enriched_failed"
+      }
+    },
+    {
+      "seller_id": "TEST_UK_EASY_TPLINK",
+      "label": "real_test_2pass",
+      "elapsed_sec": 6.45,
+      "error": null,
+      "cost_usd": 0.001982,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 453,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 163,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "TEST_UK_EASY_TPLINK",
+        "marketplace": null,
+        "business_name": "TP-LINK UK LIMITED",
+        "business_address": "Sceptre House, Hornbeam Square North, Harrogate, HG2 8PB, England",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "07205003",
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "TP-Link UK subsidiary. Networking gear sold across EU Amazon sites including amazon.de.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "TEST_UK_EASY_TPLINK",
+        "company_name": "TP-LINK UK LIMITED",
+        "legal_form": "ltd",
+        "business_address": "Sceptre House, Hornbeam Square North, Harrogate, HG2 8PB, England",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "07205003",
+        "website": "https://find-and-update.company-information.service.gov.uk",
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [
+          {
+            "name": "QIAO, Junjie",
+            "role": "secretary",
+            "appointed_on": "2023-09-15",
+            "resigned_on": null,
+            "nationality": null
+          },
+          {
+            "name": "QIAO, Junjie",
+            "role": "director",
+            "appointed_on": "2023-09-15",
+            "resigned_on": null,
+            "nationality": "Chinese"
+          }
+        ],
+        "decision_maker_name": "QIAO, Junjie",
+        "decision_maker_role": "director",
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": null,
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=GB",
+        "outreach_priority": "review",
+        "notes": [
+          "Companies House shows QIAO as both director and secretary (dual roles, appointed same date)",
+          "No personal email or phone in any source — outreach will require web research to identify contact channels",
+          "Companies House address (Thatcham) differs from Amazon business_address (Harrogate) — subsidiary structure likely",
+          "TP-Link is legitimate networking manufacturer, not an agency",
+          "QIAO is sole officer; Chinese national directing UK Ltd subsidiary"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture",
+          "legal_form": "companies_house",
+          "officers": "companies_house",
+          "website": "brave_search",
+          "decision_maker_name": "companies_house"
+        },
+        "status": "enriched_failed"
+      }
+    },
+    {
+      "seller_id": "REAL_UK_MOLETAMUNROLTD",
+      "label": "real_test_2pass",
+      "elapsed_sec": 7.03,
+      "error": null,
+      "cost_usd": 0.00186,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 351,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 159,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "REAL_UK_MOLETAMUNROLTD",
+        "marketplace": null,
+        "business_name": "MOLETA MUNRO LTD",
+        "business_address": "43-46 London Street, Edinburgh, EH3 6LX, Scotland",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "SC314415",
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Real UK Ltd discovered via category=kitchen. Active per Companies House. Test fixture from real-data validation run.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "REAL_UK_MOLETAMUNROLTD",
+        "company_name": "MOLETA MUNRO LTD",
+        "legal_form": "ltd",
+        "business_address": "43-46 London Street, Edinburgh, EH3 6LX, Scotland",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "SC314415",
+        "website": "https://find-and-update.company-information.service.gov.uk",
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [
+          {
+            "name": "BADDON, Alan Justin Maclean",
+            "role": "director",
+            "appointed_on": "2007-02-07",
+            "resigned_on": null,
+            "nationality": "British"
+          }
+        ],
+        "decision_maker_name": "BADDON, Alan Justin Maclean",
+        "decision_maker_role": "director",
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": null,
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=GB",
+        "outreach_priority": "review",
+        "notes": [
+          "Single director BADDON confirmed active in Companies House since 2007-02-07",
+          "No personal email or phone in any structured source — impressum unavailable",
+          "VIES and Pappers absent; no website scrape to confirm contact details",
+          "Confidence limited to 45: officer identity is certain, but no direct contact path identified",
+          "PASS 2 web research recommended to locate director email or phone"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture",
+          "legal_form": "companies_house",
+          "officers": "companies_house",
+          "website": "brave_search",
+          "decision_maker_name": "companies_house"
+        },
+        "status": "enriched_failed"
+      }
+    },
+    {
+      "seller_id": "REAL_UK_BEAUTYLOGISTICSLIMITED",
+      "label": "real_test_2pass",
+      "elapsed_sec": 6.52,
+      "error": null,
+      "cost_usd": 0.002133,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 524,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 179,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "REAL_UK_BEAUTYLOGISTICSLIMITED",
+        "marketplace": null,
+        "business_name": "BEAUTY LOGISTICS LIMITED",
+        "business_address": "7 Redbridge Lane East, Ilford, IG4 5ET, United Kingdom",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "11606995",
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Real UK Ltd discovered via category=beauty. Active per Companies House. Test fixture from real-data validation run.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "REAL_UK_BEAUTYLOGISTICSLIMITED",
+        "company_name": "BEAUTY LOGISTICS LIMITED",
+        "legal_form": "ltd",
+        "business_address": "7 Redbridge Lane East, Ilford, IG4 5ET, United Kingdom",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "11606995",
+        "website": "https://find-and-update.company-information.service.gov.uk",
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [
+          {
+            "name": "MUDAHY, Peter",
+            "role": "secretary",
+            "appointed_on": "2018-10-05",
+            "resigned_on": null,
+            "nationality": null
+          },
+          {
+            "name": "HUSSAIN, Jangeer",
+            "role": "director",
+            "appointed_on": "2018-10-05",
+            "resigned_on": null,
+            "nationality": "British"
+          },
+          {
+            "name": "HUSSAIN, Usman",
+            "role": "director",
+            "appointed_on": "2021-03-24",
+            "resigned_on": null,
+            "nationality": "British"
+          }
+        ],
+        "decision_maker_name": "HUSSAIN, Jangeer",
+        "decision_maker_role": "director",
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": null,
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=GB",
+        "outreach_priority": "review",
+        "notes": [
+          "No email or phone contact data available in any source",
+          "Two directors present: HUSSAIN, Jangeer (appointed 2018-10-05) and HUSSAIN, Usman (appointed 2021-03-24); picked first-appointed per deterministic rule",
+          "Secretary MUDAHY, Peter skipped per director-preference rule",
+          "Companies House is authoritative; no impressum or VIES to cross-check",
+          "Outreach will require phone/email research in PASS 2"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture",
+          "legal_form": "companies_house",
+          "officers": "companies_house",
+          "website": "brave_search",
+          "decision_maker_name": "llm_merge",
+          "decision_maker_role": "llm_merge"
+        },
+        "status": "enriched_failed"
+      }
+    },
+    {
+      "seller_id": "REAL_UK_CRAFTSALIVELTD",
+      "label": "real_test_2pass",
+      "elapsed_sec": 7.39,
+      "error": null,
+      "cost_usd": 0.002275,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 731,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 166,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "REAL_UK_CRAFTSALIVELTD",
+        "marketplace": null,
+        "business_name": "CRAFTS ALIVE LTD",
+        "business_address": "133b Rhosmaen Street, Llandeilo, Carmarthenshire, SA19 6EN",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "03085568",
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Real UK Ltd discovered via category=beauty. Active per Companies House. Test fixture from real-data validation run.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "REAL_UK_CRAFTSALIVELTD",
+        "company_name": "CRAFTS ALIVE LTD",
+        "legal_form": "private-limited-guarant-nsc",
+        "business_address": "133b Rhosmaen Street, Llandeilo, Carmarthenshire, SA19 6EN",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "03085568",
+        "website": "https://find-and-update.company-information.service.gov.uk",
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [
+          {
+            "name": "FRANKS, Elaine Katrina,Frances, Grace",
+            "role": "director",
+            "appointed_on": "2024-05-23",
+            "resigned_on": null,
+            "nationality": "British"
+          },
+          {
+            "name": "MCGILL, Elizabeth",
+            "role": "director",
+            "appointed_on": "2025-01-30",
+            "resigned_on": null,
+            "nationality": "British"
+          },
+          {
+            "name": "RUDLAND, Gary Stephen",
+            "role": "director",
+            "appointed_on": "2020-11-17",
+            "resigned_on": null,
+            "nationality": "British"
+          },
+          {
+            "name": "SHIPTON, Jon",
+            "role": "director",
+            "appointed_on": "2008-07-03",
+            "resigned_on": null,
+            "nationality": "British"
+          },
+          {
+            "name": "TAIT, Ruth Victoria",
+            "role": "director",
+            "appointed_on": "2019-11-30",
+            "resigned_on": null,
+            "nationality": "British"
+          }
+        ],
+        "decision_maker_name": "FRANKS, Elaine Katrina,Frances, Grace",
+        "decision_maker_role": "director",
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": null,
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=GB",
+        "outreach_priority": "review",
+        "notes": [
+          "Five active directors on record; selected FRANKS (appointed 2024-05-23, most recent) per alphabetical-determinism tiebreaker",
+          "No email or phone contact data available from any source",
+          "No impressum or website data provided — PASS 2 web research recommended to extract director contact details",
+          "Company incorporated 1995, legitimately-aged UK Ltd in Wales"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture",
+          "legal_form": "companies_house",
+          "officers": "companies_house",
+          "website": "brave_search",
+          "decision_maker_name": "companies_house"
+        },
+        "status": "enriched_failed"
+      }
+    },
+    {
+      "seller_id": "REAL_UK_IKEALIMITED",
+      "label": "real_test_2pass",
+      "elapsed_sec": 13.04,
+      "error": null,
+      "cost_usd": 0.002249,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 720,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 163,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "REAL_UK_IKEALIMITED",
+        "marketplace": null,
+        "business_name": "IKEA LIMITED",
+        "business_address": "1 Bow Churchyard, London, EC4M 9DQ, United Kingdom",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "01986283",
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Real UK Ltd discovered via category=home decor. Active per Companies House. Test fixture from real-data validation run.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "REAL_UK_IKEALIMITED",
+        "company_name": "IKEA LIMITED",
+        "legal_form": "ltd",
+        "business_address": "1 Bow Churchyard, London, EC4M 9DQ, United Kingdom",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "01986283",
+        "website": "https://www.ikea.com",
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [
+          {
+            "name": "SHOOSMITHS SECRETARIES LIMITED",
+            "role": "corporate-secretary",
+            "appointed_on": "2013-09-01",
+            "resigned_on": null,
+            "nationality": null
+          },
+          {
+            "name": "BIRKIN, Emily",
+            "role": "director",
+            "appointed_on": "2026-01-01",
+            "resigned_on": null,
+            "nationality": "British"
+          },
+          {
+            "name": "EL GARAA, Mostafa",
+            "role": "director",
+            "appointed_on": "2026-01-01",
+            "resigned_on": null,
+            "nationality": "French,Moroccan"
+          },
+          {
+            "name": "MOORE, Donna Marie",
+            "role": "director",
+            "appointed_on": "2024-10-18",
+            "resigned_on": null,
+            "nationality": "British"
+          },
+          {
+            "name": "MOUROUZIDES, Constantinos",
+            "role": "director",
+            "appointed_on": "2019-10-15",
+            "resigned_on": null,
+            "nationality": "Cypriot"
+          }
+        ],
+        "decision_maker_name": "BIRKIN, Emily",
+        "decision_maker_role": "director",
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": null,
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=GB",
+        "outreach_priority": "review",
+        "notes": [
+          "Four active directors on file; picked BIRKIN (earliest alphabetically by surname initial among directors appointed 2026-01-01 and 2024-10-18)",
+          "No personal email or phone in any source",
+          "SHOOSMITHS SECRETARIES LIMITED is a corporate secretary, not an operational contact",
+          "No impressum data available to identify preferred outreach officer",
+          "Outreach will require email-only contact via generic business address or further web research"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture",
+          "legal_form": "companies_house",
+          "officers": "companies_house",
+          "website": "brave_search",
+          "decision_maker_name": "companies_house"
+        },
+        "status": "enriched_failed"
+      }
+    },
+    {
+      "seller_id": "REAL_UK_HAPPYPETPRODUCTSLIMITED",
+      "label": "real_test_2pass",
+      "elapsed_sec": 6.94,
+      "error": null,
+      "cost_usd": 0.002332,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 623,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 199,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "REAL_UK_HAPPYPETPRODUCTSLIMITED",
+        "marketplace": null,
+        "business_name": "HAPPY PET PRODUCTS LIMITED",
+        "business_address": "Unit 1 Flatten Way, Syston, Leicester, LE7 1GU",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "04246736",
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Real UK Ltd discovered via category=pet supplies. Active per Companies House. Test fixture from real-data validation run.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "REAL_UK_HAPPYPETPRODUCTSLIMITED",
+        "company_name": "HAPPY PET PRODUCTS LIMITED",
+        "legal_form": "ltd",
+        "business_address": "Unit 1 Flatten Way, Syston, Leicester, LE7 1GU",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "04246736",
+        "website": "https://find-and-update.company-information.service.gov.uk",
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [
+          {
+            "name": "DURRANT, William John",
+            "role": "director",
+            "appointed_on": "2023-12-01",
+            "resigned_on": null,
+            "nationality": "British"
+          },
+          {
+            "name": "HIRSCHBERG, Debra Sue",
+            "role": "director",
+            "appointed_on": "2001-07-10",
+            "resigned_on": null,
+            "nationality": "American"
+          },
+          {
+            "name": "HIRSCHBERG, Mark Gerald",
+            "role": "director",
+            "appointed_on": "2001-07-10",
+            "resigned_on": null,
+            "nationality": "American"
+          },
+          {
+            "name": "TAILOR, Nishit",
+            "role": "director",
+            "appointed_on": "2025-08-01",
+            "resigned_on": null,
+            "nationality": "British"
+          }
+        ],
+        "decision_maker_name": "DURRANT, William John",
+        "decision_maker_role": "director",
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": null,
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=GB",
+        "outreach_priority": "review",
+        "notes": [
+          "Four active directors on record; picked DURRANT (most recent appointment 2023-12-01, British national)",
+          "HIRSCHBERG pair (Debra Sue, Mark Gerald) appointed 2001, longest tenure — secondary targets if DURRANT unreachable",
+          "TAILOR Nishit appointed 2025-08-01 (very recent)",
+          "No contact emails or phone numbers in any source — impressum null, VIES null, Companies House provides only names and roles",
+          "Email/phone outreach blocked; recommend web search or Companies House registered office phone lookup for this record in PASS 2"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture",
+          "legal_form": "companies_house",
+          "officers": "companies_house",
+          "website": "brave_search",
+          "decision_maker_name": "companies_house"
+        },
+        "status": "enriched_failed"
+      }
+    },
+    {
+      "seller_id": "REAL_UK_SUPERPETLIMITED",
+      "label": "real_test_2pass",
+      "elapsed_sec": 6.22,
+      "error": null,
+      "cost_usd": 0.001933,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 544,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 135,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "REAL_UK_SUPERPETLIMITED",
+        "marketplace": null,
+        "business_name": "SUPERPET LIMITED",
+        "business_address": "Unit 10 Wilverley Road, Somerford Business Park, Christchurch, Dorset, BH23 3RU, England",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "10900958",
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Real UK Ltd discovered via category=pet supplies. Active per Companies House. Test fixture from real-data validation run.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "REAL_UK_SUPERPETLIMITED",
+        "company_name": "SUPERPET LIMITED",
+        "legal_form": "ltd",
+        "business_address": "Unit 10 Wilverley Road, Somerford Business Park, Christchurch, Dorset, BH23 3RU, England",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "10900958",
+        "website": "https://find-and-update.company-information.service.gov.uk",
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [
+          {
+            "name": "GOODE, Anthony Peter",
+            "role": "director",
+            "appointed_on": "2022-02-18",
+            "resigned_on": null,
+            "nationality": "British"
+          },
+          {
+            "name": "GOODE, Joseph Anthony",
+            "role": "director",
+            "appointed_on": "2017-09-07",
+            "resigned_on": null,
+            "nationality": "British"
+          },
+          {
+            "name": "GOODE, Susan",
+            "role": "director",
+            "appointed_on": "2022-10-18",
+            "resigned_on": null,
+            "nationality": "British"
+          }
+        ],
+        "decision_maker_name": "GOODE, Anthony Peter",
+        "decision_maker_role": "director",
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": null,
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=GB",
+        "outreach_priority": "review",
+        "notes": [
+          "Three active directors on record; Joseph Anthony selected as earliest-appointed (2017-09-07 vs 2022 appointments)",
+          "No email, phone, or impressum data available; confidence severely limited",
+          "Anthony Peter and Susan also viable contacts if Joseph unavailable",
+          "UK Ltd structure confirms legitimacy; no agency signals detected"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture",
+          "legal_form": "companies_house",
+          "officers": "companies_house",
+          "website": "brave_search",
+          "decision_maker_name": "companies_house"
+        },
+        "status": "enriched_failed"
+      }
+    },
+    {
+      "seller_id": "REAL_UK_WICKHAMGARDENEERSLTD",
+      "label": "real_test_2pass",
+      "elapsed_sec": 6.53,
+      "error": null,
+      "cost_usd": 0.00213,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 556,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 172,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "REAL_UK_WICKHAMGARDENEERSLTD",
+        "marketplace": null,
+        "business_name": "WICKHAM GARDENEERS LTD",
+        "business_address": "29 Hartland Way, Croydon, CR0 8RJ, England",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "08622793",
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Real UK Ltd discovered via category=garden. Active per Companies House. Test fixture from real-data validation run.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "REAL_UK_WICKHAMGARDENEERSLTD",
+        "company_name": "WICKHAM GARDENEERS LTD",
+        "legal_form": "ltd",
+        "business_address": "29 Hartland Way, Croydon, CR0 8RJ, England",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "08622793",
+        "website": "https://find-and-update.company-information.service.gov.uk",
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [
+          {
+            "name": "GARDENEERS, Moniek Anna Jacqueline",
+            "role": "secretary",
+            "appointed_on": "2013-07-24",
+            "resigned_on": null,
+            "nationality": null
+          },
+          {
+            "name": "GARDENEERS, Moniek Anna Jacqueline",
+            "role": "director",
+            "appointed_on": "2013-07-24",
+            "resigned_on": null,
+            "nationality": "Dutch"
+          },
+          {
+            "name": "WICKHAM, James Christopher Michael",
+            "role": "director",
+            "appointed_on": "2013-07-24",
+            "resigned_on": null,
+            "nationality": "British"
+          }
+        ],
+        "decision_maker_name": "GARDENEERS, Moniek Anna Jacqueline",
+        "decision_maker_role": "director",
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": null,
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=GB",
+        "outreach_priority": "review",
+        "notes": [
+          "Two directors on record: WICKHAM James Christopher Michael and GARDENEERS Moniek Anna Jacqueline (also secretary); no contact details available in any source",
+          "GARDENEERS holds dual director+secretary roles (less common); WICKHAM preferred as sole director by role-priority rule",
+          "No email or phone in Companies House, impressum, or raw text — outreach will require external lookup or call to switchboard",
+          "Active company since 2013, address verified across all sources"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture",
+          "legal_form": "companies_house",
+          "officers": "companies_house",
+          "website": "brave_search",
+          "decision_maker_name": "companies_house"
+        },
+        "status": "enriched_failed"
+      }
+    },
+    {
+      "seller_id": "REAL_UK_THEENGLISHGARDENCOMPANYLI",
+      "label": "real_test_2pass",
+      "elapsed_sec": 6.32,
+      "error": null,
+      "cost_usd": 0.001628,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 369,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 109,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "REAL_UK_THEENGLISHGARDENCOMPANYLI",
+        "marketplace": null,
+        "business_name": "THE ENGLISH GARDEN COMPANY LIMITED",
+        "business_address": "The Camp North Mymms Park, North Mymms, Hatfield, Hertfordshire, AL9 7TN, England",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "05481756",
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Real UK Ltd discovered via category=garden. Active per Companies House. Test fixture from real-data validation run.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "REAL_UK_THEENGLISHGARDENCOMPANYLI",
+        "company_name": "THE ENGLISH GARDEN COMPANY LIMITED",
+        "legal_form": "ltd",
+        "business_address": "The Camp North Mymms Park, North Mymms, Hatfield, Hertfordshire, AL9 7TN, England",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "05481756",
+        "website": "https://find-and-update.company-information.service.gov.uk",
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [
+          {
+            "name": "FLETCHER, Graham Neil",
+            "role": "director",
+            "appointed_on": "2007-07-30",
+            "resigned_on": null,
+            "nationality": "British"
+          }
+        ],
+        "decision_maker_name": "FLETCHER, Graham Neil",
+        "decision_maker_role": "director",
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": null,
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=GB",
+        "outreach_priority": "review",
+        "notes": [
+          "Only Companies House officer available; no contact email or phone in any source",
+          "No impressum, VIES, or Pappers data to cross-reference or enrich contact details",
+          "UK Ltd confirmed active; Companies House record authoritative but contact details incomplete"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture",
+          "legal_form": "companies_house",
+          "officers": "companies_house",
+          "website": "brave_search",
+          "decision_maker_name": "companies_house"
+        },
+        "status": "enriched_failed"
+      }
+    },
+    {
+      "seller_id": "REAL_UK_JLLFITNESSLIMITED",
+      "label": "real_test_2pass",
+      "elapsed_sec": 6.27,
+      "error": null,
+      "cost_usd": 0.001727,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 338,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 135,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "REAL_UK_JLLFITNESSLIMITED",
+        "marketplace": null,
+        "business_name": "JLL FITNESS LIMITED",
+        "business_address": "Unit 31 Gravelly Industrial Park, Birmingham, B24 8HZ, United Kingdom",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "08115682",
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Real UK Ltd discovered via category=fitness. Active per Companies House. Test fixture from real-data validation run.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "REAL_UK_JLLFITNESSLIMITED",
+        "company_name": "JLL FITNESS LIMITED",
+        "legal_form": "ltd",
+        "business_address": "Unit 31 Gravelly Industrial Park, Birmingham, B24 8HZ, United Kingdom",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "08115682",
+        "website": "https://find-and-update.company-information.service.gov.uk",
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [
+          {
+            "name": "SUN, Yu",
+            "role": "director",
+            "appointed_on": "2025-05-09",
+            "resigned_on": null,
+            "nationality": "American"
+          }
+        ],
+        "decision_maker_name": "SUN, Yu",
+        "decision_maker_role": "director",
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": null,
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=GB",
+        "outreach_priority": "review",
+        "notes": [
+          "Companies House officer SUN, Yu (director, appointed 2025-05-09) is sole active officer",
+          "No email or phone found in any source; generic outreach channels will be required",
+          "No impressum, VIES, or Pappers data available to corroborate or enrich contact details",
+          "American nationality noted; verify residency/signatory authority before outreach"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture",
+          "legal_form": "companies_house",
+          "officers": "companies_house",
+          "website": "brave_search",
+          "decision_maker_name": "companies_house"
+        },
+        "status": "enriched_failed"
+      }
+    },
+    {
+      "seller_id": "REAL_UK_DEALFORANYOCCASIONLTD",
+      "label": "real_test_2pass",
+      "elapsed_sec": 6.4,
+      "error": null,
+      "cost_usd": 0.001995,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 461,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 164,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "REAL_UK_DEALFORANYOCCASIONLTD",
+        "marketplace": null,
+        "business_name": "DEALFORANYOCCASION LTD",
+        "business_address": "233 College Street, Nuneaton, CV10 7BL, United Kingdom",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "15649490",
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Real UK Ltd discovered via category=baby. Active per Companies House. Test fixture from real-data validation run.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "REAL_UK_DEALFORANYOCCASIONLTD",
+        "company_name": "DEALFORANYOCCASION LTD",
+        "legal_form": "ltd",
+        "business_address": "233 College Street, Nuneaton, CV10 7BL, United Kingdom",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "15649490",
+        "website": "https://find-and-update.company-information.service.gov.uk",
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [
+          {
+            "name": "GOROWSKA, Sylwia Joanna",
+            "role": "director",
+            "appointed_on": "2024-04-15",
+            "resigned_on": null,
+            "nationality": "Polish"
+          },
+          {
+            "name": "GOROWSKI, Ireneusz Dominik",
+            "role": "director",
+            "appointed_on": "2024-04-15",
+            "resigned_on": null,
+            "nationality": "Polish"
+          }
+        ],
+        "decision_maker_name": "GOROWSKA, Sylwia Joanna",
+        "decision_maker_role": "director",
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": null,
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=GB",
+        "outreach_priority": "review",
+        "notes": [
+          "Two co-directors appointed simultaneously (2024-04-15); selected GOROWSKA per alphabetical surname rule",
+          "No contact email or phone available from any source",
+          "No impressum, VIES, Pappers, or Amazon raw contact data provided",
+          "Very recent incorporation (Apr 2024) — Companies House is authoritative source",
+          "Outreach must be via business address or Companies House official channel"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture",
+          "legal_form": "companies_house",
+          "officers": "companies_house",
+          "website": "brave_search",
+          "decision_maker_name": "companies_house"
+        },
+        "status": "enriched_failed"
+      }
+    },
+    {
+      "seller_id": "REAL_UK_BUBBLEBUMUKLIMITED",
+      "label": "real_test_2pass",
+      "elapsed_sec": 6.74,
+      "error": null,
+      "cost_usd": 0.001959,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 470,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 155,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "REAL_UK_BUBBLEBUMUKLIMITED",
+        "marketplace": null,
+        "business_name": "BUBBLEBUM (UK) LIMITED",
+        "business_address": "Unit C2 Community Building Northside Village Centre, Glengalliagh Road, Derry, BT48 8NN, Northern Ireland",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "NI601199",
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Real UK Ltd discovered via category=baby. Active per Companies House. Test fixture from real-data validation run.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "REAL_UK_BUBBLEBUMUKLIMITED",
+        "company_name": "BUBBLEBUM (UK) LIMITED",
+        "legal_form": "ltd",
+        "business_address": "Unit C2 Community Building Northside Village Centre, Glengalliagh Road, Derry, BT48 8NN, Northern Ireland",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "NI601199",
+        "website": "https://find-and-update.company-information.service.gov.uk",
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [
+          {
+            "name": "KELLY, Fintan Patrick",
+            "role": "director",
+            "appointed_on": "2010-12-01",
+            "resigned_on": null,
+            "nationality": "Irish"
+          },
+          {
+            "name": "KELLY, Grainne",
+            "role": "director",
+            "appointed_on": "2009-11-04",
+            "resigned_on": null,
+            "nationality": "Irish"
+          }
+        ],
+        "decision_maker_name": "KELLY, Fintan Patrick",
+        "decision_maker_role": "director",
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": null,
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=GB",
+        "outreach_priority": "review",
+        "notes": [
+          "Two co-directors (KELLY Fintan Patrick and KELLY Grainne); Fintan picked per alphabetical surname-initial rule",
+          "No contact email or phone available in any source — outreach will require Companies House lookup or manual search",
+          "Companies House record active and current; both officers appointed/confirmed with no resignations",
+          "Raw text indicates test fixture from validation run — verify business legitimacy before outreach"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture",
+          "legal_form": "companies_house",
+          "officers": "companies_house",
+          "website": "brave_search",
+          "decision_maker_name": "companies_house"
+        },
+        "status": "enriched_failed"
+      }
+    },
+    {
+      "seller_id": "REAL_UK_ALPSUKBABYCAREPRODUCTSLTD",
+      "label": "real_test_2pass",
+      "elapsed_sec": 3.79,
+      "error": null,
+      "cost_usd": 0.001851,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 477,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 132,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "REAL_UK_ALPSUKBABYCAREPRODUCTSLTD",
+        "marketplace": null,
+        "business_name": "ALPS (UK) BABY CARE PRODUCTS LTD",
+        "business_address": "Rf001, 1st Floor Front, 36 Gerrard Street, London, W1D 5QA, United Kingdom",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "10300945",
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Real UK Ltd discovered via category=baby. Active per Companies House. Test fixture from real-data validation run.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "REAL_UK_ALPSUKBABYCAREPRODUCTSLTD",
+        "company_name": "ALPS (UK) BABY CARE PRODUCTS LTD",
+        "legal_form": "ltd",
+        "business_address": "Rf001, 1st Floor Front, 36 Gerrard Street, London, W1D 5QA, United Kingdom",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "10300945",
+        "website": null,
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [
+          {
+            "name": "GUAN, Peng",
+            "role": "secretary",
+            "appointed_on": "2016-07-28",
+            "resigned_on": null,
+            "nationality": null
+          },
+          {
+            "name": "GUAN, Peng",
+            "role": "director",
+            "appointed_on": "2016-07-28",
+            "resigned_on": null,
+            "nationality": "Chinese"
+          }
+        ],
+        "decision_maker_name": "GUAN, Peng",
+        "decision_maker_role": "director",
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": null,
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=GB",
+        "outreach_priority": "review",
+        "notes": [
+          "GUAN, Peng holds both director and secretary roles (same officer, appointed 2016-07-28)",
+          "No email or phone available from structured sources; PASS 2 web research required",
+          "Chinese national operating UK Ltd shell — typical China→UK reseller pattern",
+          "No impressum or VIES data to cross-verify identity"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture",
+          "legal_form": "companies_house",
+          "officers": "companies_house",
+          "decision_maker_name": "llm_merge",
+          "decision_maker_role": "llm_merge"
+        },
+        "status": "enriched_failed"
+      }
+    },
+    {
+      "seller_id": "REAL_UK_BABYCAREBRADFORDLIMITED",
+      "label": "real_test_2pass",
+      "elapsed_sec": 7.26,
+      "error": null,
+      "cost_usd": 0.002097,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 448,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 187,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "REAL_UK_BABYCAREBRADFORDLIMITED",
+        "marketplace": null,
+        "business_name": "BABYCARE (BRADFORD) LIMITED",
+        "business_address": "1 Junction Terrace, Bradford, West Yorkshire, BD2 4LB, England",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "06021352",
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Real UK Ltd discovered via category=baby. Active per Companies House. Test fixture from real-data validation run.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "REAL_UK_BABYCAREBRADFORDLIMITED",
+        "company_name": "BABYCARE (BRADFORD) LIMITED",
+        "legal_form": "ltd",
+        "business_address": "1 Junction Terrace, Bradford, West Yorkshire, BD2 4LB, England",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "06021352",
+        "website": "https://find-and-update.company-information.service.gov.uk",
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [
+          {
+            "name": "SAUNDERS, Gary Anthony Peter",
+            "role": "director",
+            "appointed_on": "2007-01-18",
+            "resigned_on": null,
+            "nationality": "British"
+          },
+          {
+            "name": "SAUNDERS, Jayne Margaret",
+            "role": "director",
+            "appointed_on": "2007-01-18",
+            "resigned_on": null,
+            "nationality": "British"
+          }
+        ],
+        "decision_maker_name": "SAUNDERS, Gary Anthony Peter",
+        "decision_maker_role": "director",
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": null,
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=GB",
+        "outreach_priority": "review",
+        "notes": [
+          "Both SAUNDERS, Gary Anthony Peter and SAUNDERS, Jayne Margaret are active directors (appointed 2007-01-18, no resignation). Picked Gary (alphabetical surname-initial tiebreaker).",
+          "No contact email or phone available from any source; only Companies House registry data present.",
+          "No impressum scraped; no VIES or Pappers data. Confidence limited by absence of personal email or direct phone contact.",
+          "PASS 2 web research recommended to locate business website, impressum, or trading contact details."
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture",
+          "legal_form": "companies_house",
+          "officers": "companies_house",
+          "website": "brave_search",
+          "decision_maker_name": "companies_house"
+        },
+        "status": "enriched_failed"
+      }
+    },
+    {
+      "seller_id": "REAL_UK_RYMANLIMITED",
+      "label": "real_test_2pass",
+      "elapsed_sec": 6.78,
+      "error": null,
+      "cost_usd": 0.002439,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 800,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 185,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "REAL_UK_RYMANLIMITED",
+        "marketplace": null,
+        "business_name": "RYMAN LIMITED",
+        "business_address": "Ryman House, Savoy Road, Crewe, Cheshire, CW1 6NA",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "03007166",
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Real UK Ltd discovered via category=office stationery. Active per Companies House. Test fixture from real-data validation run.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "REAL_UK_RYMANLIMITED",
+        "company_name": "RYMAN LIMITED",
+        "legal_form": "ltd",
+        "business_address": "Ryman House, Savoy Road, Crewe, Cheshire, CW1 6NA",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "03007166",
+        "website": "https://find-and-update.company-information.service.gov.uk",
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [
+          {
+            "name": "LAWTON, Kirsten",
+            "role": "secretary",
+            "appointed_on": "2018-04-06",
+            "resigned_on": null,
+            "nationality": null
+          },
+          {
+            "name": "CHILDS, Ian Michael",
+            "role": "director",
+            "appointed_on": "1995-03-17",
+            "resigned_on": null,
+            "nationality": "British"
+          },
+          {
+            "name": "KYPRIANOU, Kypros",
+            "role": "director",
+            "appointed_on": "2004-01-01",
+            "resigned_on": null,
+            "nationality": "British"
+          },
+          {
+            "name": "LAKIN, Simon John",
+            "role": "director",
+            "appointed_on": "2008-04-10",
+            "resigned_on": null,
+            "nationality": "British"
+          },
+          {
+            "name": "LAWTON, Kirsten",
+            "role": "director",
+            "appointed_on": "2022-03-25",
+            "resigned_on": null,
+            "nationality": "British"
+          },
+          {
+            "name": "PAPHITIS, Theodoros",
+            "role": "director",
+            "appointed_on": "1995-03-17",
+            "resigned_on": null,
+            "nationality": "British"
+          }
+        ],
+        "decision_maker_name": "CHILDS, Ian Michael",
+        "decision_maker_role": "director",
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": null,
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=GB",
+        "outreach_priority": "review",
+        "notes": [
+          "Five directors present; selected CHILDS as earliest-appointed (1995-03-17) per deterministic tiebreak",
+          "Kirsten Lawton appointed director 2022-03-25 (later than CHILDS); secretary appointment 2018-04-06 predates director appointment",
+          "No personal email, phone, or impressum available — PASS 2 web research required",
+          "Paphitis, Kyprianou, Lakin are co-directors with equal registry weight; CHILDS chosen on seniority"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture",
+          "legal_form": "companies_house",
+          "officers": "companies_house",
+          "website": "brave_search",
+          "decision_maker_name": "companies_house"
+        },
+        "status": "enriched_failed"
+      }
+    },
+    {
+      "seller_id": "REAL_UK_PRESTIGEANDPERFORMANCECAR",
+      "label": "real_test_2pass",
+      "elapsed_sec": 11.05,
+      "error": null,
+      "cost_usd": 0.002093,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 464,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 183,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "REAL_UK_PRESTIGEANDPERFORMANCECAR",
+        "marketplace": null,
+        "business_name": "PRESTIGE AND PERFORMANCE CARS WAKEFIELD LTD",
+        "business_address": "Unit 5, Enterprise Business Park, Mortimer Rise, Ossett, WF5 9JH, United Kingdom",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "15724700",
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Real UK Ltd discovered via category=automotive. Active per Companies House. Test fixture from real-data validation run.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "REAL_UK_PRESTIGEANDPERFORMANCECAR",
+        "company_name": "PRESTIGE AND PERFORMANCE CARS WAKEFIELD LTD",
+        "legal_form": "ltd",
+        "business_address": "Unit 5, Enterprise Business Park, Mortimer Rise, Ossett, WF5 9JH, United Kingdom",
+        "country": "GB",
+        "vat": null,
+        "registry_id": "15724700",
+        "website": "https://find-and-update.company-information.service.gov.uk",
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [
+          {
+            "name": "HOWDEN, Jamie Mark",
+            "role": "director",
+            "appointed_on": "2024-05-16",
+            "resigned_on": null,
+            "nationality": "British"
+          },
+          {
+            "name": "KELLY, Gavin Stuart",
+            "role": "director",
+            "appointed_on": "2024-05-16",
+            "resigned_on": null,
+            "nationality": "British"
+          }
+        ],
+        "decision_maker_name": "HOWDEN, Jamie Mark",
+        "decision_maker_role": "director",
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": null,
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=GB",
+        "outreach_priority": "review",
+        "notes": [
+          "Two co-directors: HOWDEN, Jamie Mark and KELLY, Gavin Stuart (both appointed 2024-05-16); picked HOWDEN per alphabetical surname rule",
+          "No personal email or phone available; only Companies House registry data present",
+          "No impressum, VIES, or Pappers data — outreach contact details unavailable in structured sources",
+          "Very recent incorporation (2024-05-16) suggests startup or new marketplace entry",
+          "PASS 2 web research recommended to locate operational email contact"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture",
+          "legal_form": "companies_house",
+          "officers": "companies_house",
+          "website": "brave_search",
+          "decision_maker_name": "companies_house"
+        },
+        "status": "enriched_failed"
+      }
+    },
+    {
+      "seller_id": "REAL_DE_EFBELEKTRONIKDE",
+      "label": "real_test_2pass",
+      "elapsed_sec": 0.0,
+      "error": null,
+      "cost_usd": 0.0,
+      "escalated": null,
+      "llm_metas": [],
+      "input": {
+        "seller_id": "REAL_DE_EFBELEKTRONIKDE",
+        "marketplace": null,
+        "business_name": "efb-elektronik.de",
+        "business_address": null,
+        "country": "DE",
+        "vat": null,
+        "registry_id": null,
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Real DE GmbH discovered via category=elektronik. Geschäftsführer per impressum: Robin Ohle. Website: https://efb-elektronik.de.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "REAL_DE_EFBELEKTRONIKDE",
+        "company_name": "efb-elektronik.de",
+        "legal_form": null,
+        "business_address": null,
+        "country": "DE",
+        "vat": null,
+        "registry_id": null,
+        "website": null,
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [],
+        "decision_maker_name": null,
+        "decision_maker_role": null,
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": null,
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [],
+        "jurisdiction_segment": "DE",
+        "jurisdiction_reason": "country=DE",
+        "outreach_priority": "inactive",
+        "notes": [],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0
+        },
+        "sources": {
+          "company_name": "capture"
+        },
+        "status": "skipped_de"
+      }
+    },
+    {
+      "seller_id": "REAL_DE_DEUTRONICDE",
+      "label": "real_test_2pass",
+      "elapsed_sec": 0.0,
+      "error": null,
+      "cost_usd": 0.0,
+      "escalated": null,
+      "llm_metas": [],
+      "input": {
+        "seller_id": "REAL_DE_DEUTRONICDE",
+        "marketplace": null,
+        "business_name": "deutronic.de",
+        "business_address": null,
+        "country": "DE",
+        "vat": null,
+        "registry_id": null,
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Real DE GmbH discovered via category=elektronik. Geschäftsführer per impressum: Christian Wanzke. Website: https://deutronic.de.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "REAL_DE_DEUTRONICDE",
+        "company_name": "deutronic.de",
+        "legal_form": null,
+        "business_address": null,
+        "country": "DE",
+        "vat": null,
+        "registry_id": null,
+        "website": null,
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [],
+        "decision_maker_name": null,
+        "decision_maker_role": null,
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": null,
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [],
+        "jurisdiction_segment": "DE",
+        "jurisdiction_reason": "country=DE",
+        "outreach_priority": "inactive",
+        "notes": [],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0
+        },
+        "sources": {
+          "company_name": "capture"
+        },
+        "status": "skipped_de"
+      }
+    },
+    {
+      "seller_id": "REAL_DE_KEELEKTRONIKDE",
+      "label": "real_test_2pass",
+      "elapsed_sec": 0.0,
+      "error": null,
+      "cost_usd": 0.0,
+      "escalated": null,
+      "llm_metas": [],
+      "input": {
+        "seller_id": "REAL_DE_KEELEKTRONIKDE",
+        "marketplace": null,
+        "business_name": "ke-elektronik.de",
+        "business_address": null,
+        "country": "DE",
+        "vat": null,
+        "registry_id": null,
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Real DE GmbH discovered via category=elektronik. Geschäftsführer per impressum: Armin Dollinger. Website: https://ke-elektronik.de.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "REAL_DE_KEELEKTRONIKDE",
+        "company_name": "ke-elektronik.de",
+        "legal_form": null,
+        "business_address": null,
+        "country": "DE",
+        "vat": null,
+        "registry_id": null,
+        "website": null,
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [],
+        "decision_maker_name": null,
+        "decision_maker_role": null,
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": null,
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [],
+        "jurisdiction_segment": "DE",
+        "jurisdiction_reason": "country=DE",
+        "outreach_priority": "inactive",
+        "notes": [],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0
+        },
+        "sources": {
+          "company_name": "capture"
+        },
+        "status": "skipped_de"
+      }
+    },
+    {
+      "seller_id": "REAL_DE_ELECTRONICDIRECTDE",
+      "label": "real_test_2pass",
+      "elapsed_sec": 0.0,
+      "error": null,
+      "cost_usd": 0.0,
+      "escalated": null,
+      "llm_metas": [],
+      "input": {
+        "seller_id": "REAL_DE_ELECTRONICDIRECTDE",
+        "marketplace": null,
+        "business_name": "electronic-direct.de",
+        "business_address": null,
+        "country": "DE",
+        "vat": null,
+        "registry_id": null,
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Real DE GmbH discovered via category=elektronik. Geschäftsführer per impressum: Ralf Bühler. Website: https://electronic-direct.de.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "REAL_DE_ELECTRONICDIRECTDE",
+        "company_name": "electronic-direct.de",
+        "legal_form": null,
+        "business_address": null,
+        "country": "DE",
+        "vat": null,
+        "registry_id": null,
+        "website": null,
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [],
+        "decision_maker_name": null,
+        "decision_maker_role": null,
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": null,
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [],
+        "jurisdiction_segment": "DE",
+        "jurisdiction_reason": "country=DE",
+        "outreach_priority": "inactive",
+        "notes": [],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0
+        },
+        "sources": {
+          "company_name": "capture"
+        },
+        "status": "skipped_de"
+      }
+    },
+    {
+      "seller_id": "REAL_DE_ERELEKTRONIKDE",
+      "label": "real_test_2pass",
+      "elapsed_sec": 0.0,
+      "error": null,
+      "cost_usd": 0.0,
+      "escalated": null,
+      "llm_metas": [],
+      "input": {
+        "seller_id": "REAL_DE_ERELEKTRONIKDE",
+        "marketplace": null,
+        "business_name": "er-elektronik.de",
+        "business_address": null,
+        "country": "DE",
+        "vat": null,
+        "registry_id": null,
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Real DE GmbH discovered via category=elektronik. Geschäftsführer per impressum: Eberhard Resch. Website: https://er-elektronik.de.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "REAL_DE_ERELEKTRONIKDE",
+        "company_name": "er-elektronik.de",
+        "legal_form": null,
+        "business_address": null,
+        "country": "DE",
+        "vat": null,
+        "registry_id": null,
+        "website": null,
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [],
+        "decision_maker_name": null,
+        "decision_maker_role": null,
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": null,
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [],
+        "jurisdiction_segment": "DE",
+        "jurisdiction_reason": "country=DE",
+        "outreach_priority": "inactive",
+        "notes": [],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0
+        },
+        "sources": {
+          "company_name": "capture"
+        },
+        "status": "skipped_de"
+      }
+    }
+  ]
+}

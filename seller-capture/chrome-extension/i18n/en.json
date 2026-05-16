@@ -1,0 +1,19 @@
+{
+  "toast_capturing": "Capturing seller…",
+  "toast_ok": "Saved (row {row}, {filled}/{total} fields)",
+  "toast_duplicate": "Duplicate — seller already in row {row} ({status}, last seen {date})",
+  "toast_partial": "Saved with warnings: missing {missing}",
+  "toast_error": "Error: {message}",
+  "toast_agency_flag": "⚠ Seller is represented by agency «{agency}» — likely agency contact, enrichment will find owner",
+  "popup_endpoint": "Apps Script Web App URL",
+  "popup_endpoint_help": "Paste the /exec URL of the Capture deployment",
+  "popup_drive_folder": "Drive folder ID for screenshots",
+  "popup_marketplace_override": "Force marketplace (leave blank to autodetect)",
+  "popup_language": "Language",
+  "popup_operator_id": "Operator ID",
+  "popup_save": "Save",
+  "popup_saved": "Saved.",
+  "popup_test": "Test connection",
+  "popup_test_ok": "Connection OK",
+  "popup_test_fail": "Connection failed: {message}"
+}

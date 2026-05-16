@@ -1,0 +1,19 @@
+{
+  "toast_capturing": "Pobieranie danych sprzedawcy…",
+  "toast_ok": "Zapisano (wiersz {row}, {filled}/{total} pól)",
+  "toast_duplicate": "Duplikat — sprzedawca już w wierszu {row} (status: {status}, ostatnio {date})",
+  "toast_partial": "Zapisano z ostrzeżeniami: brakuje {missing}",
+  "toast_error": "Błąd: {message}",
+  "toast_agency_flag": "⚠ Sprzedawca reprezentowany przez agencję «{agency}» — kontakt prawdopodobnie agencyjny, enrichment znajdzie właściciela",
+  "popup_endpoint": "URL Apps Script Web App",
+  "popup_endpoint_help": "Wklej URL /exec deploymentu Capture",
+  "popup_drive_folder": "ID folderu Drive na screenshoty",
+  "popup_marketplace_override": "Wymuś marketplace (pusto = autodetekcja)",
+  "popup_language": "Język",
+  "popup_operator_id": "ID operatora",
+  "popup_save": "Zapisz",
+  "popup_saved": "Zapisano.",
+  "popup_test": "Test połączenia",
+  "popup_test_ok": "Połączenie OK",
+  "popup_test_fail": "Błąd połączenia: {message}"
+}

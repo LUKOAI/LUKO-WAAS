@@ -1,0 +1,63 @@
+{
+  "_comment": "Labels are matched case-insensitively after stripping ':' and whitespace. Add aliases per locale as discovered.",
+  "section_anchors": [
+    "#page-section-detail-seller-info",
+    "#seller-info-card",
+    "#aag",
+    "#help_seller_profile_about_seller_more_information",
+    "div[data-feature-name='detailSellerInfo']"
+  ],
+  "label_map": {
+    "business_name": [
+      "business name", "geschäftsname", "geschaftsname", "firmenname",
+      "raison sociale", "ragione sociale", "nombre comercial", "nombre del negocio",
+      "nazwa firmy", "naam bedrijf", "företagsnamn", "nom commercial"
+    ],
+    "business_address": [
+      "business address", "geschäftsadresse", "geschaftsadresse", "firmenanschrift",
+      "adresse commerciale", "indirizzo commerciale", "dirección comercial",
+      "adres firmy", "bedrijfsadres", "företagsadress"
+    ],
+    "customer_service_address": [
+      "customer service address", "kundendienst-adresse", "adresse du service client",
+      "indirizzo del servizio clienti", "adres obsługi klienta"
+    ],
+    "phone": [
+      "phone number", "telephone", "phone",
+      "telefonnummer", "téléphone", "numero di telefono", "número de teléfono",
+      "numer telefonu", "telefoonnummer", "telefonnummer"
+    ],
+    "email": [
+      "email", "email address", "e-mail-adresse", "e-mail",
+      "courriel", "correo electrónico", "adres email", "e-mailadres"
+    ],
+    "trade_register_number": [
+      "trade register number", "handelsregisternummer", "registre du commerce",
+      "numero di registrazione commerciale", "número de registro mercantil",
+      "numer rejestru handlowego", "krs"
+    ],
+    "vat_number": [
+      "vat number", "vat", "ust-idnr.", "ust-idnr", "umsatzsteuer-id",
+      "numéro de tva", "partita iva", "número de iva",
+      "numer vat", "btw-nummer", "moms-nr", "nip"
+    ],
+    "business_type": [
+      "business type", "geschäftstyp", "type d'activité",
+      "tipo di attività", "tipo de negocio", "rodzaj działalności"
+    ],
+    "country": [
+      "country", "land", "pays", "paese", "país", "kraj"
+    ]
+  },
+  "gpsr_responsible_section_labels": [
+    "sicherheitsinformationen",
+    "safety information",
+    "informations de sécurité",
+    "informazioni di sicurezza",
+    "información de seguridad",
+    "informacje dotyczące bezpieczeństwa",
+    "verantwortliche person",
+    "responsible person",
+    "personne responsable"
+  ]
+}
