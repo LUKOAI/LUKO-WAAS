@@ -475,15 +475,17 @@ def enrich_one(s: SellerInput) -> EnrichmentResult:
         for c in r.candidates if c.score < 60
     ]
 
-    # LLM merge (last step) — Claude Haiku 4.5 consolidates every signal,
-    # resolves cross-source conflicts, and detects agency patterns the
-    # heuristics miss (GPSR / fiscal / EPR / WEEE representatives).
+    # LLM merge (last step) — two-pass orchestrator:
+    #   PASS 1 = Haiku 4.5 over structured sources only (~1¢/seller, every record).
+    #   PASS 2 = Sonnet 4.6 + web_search, only when PASS 1 confidence is < 60
+    #            and no agency flag (~10¢/seller, low-confidence subset).
+    # Detects agency patterns (GPSR / fiscal / EPR / WEEE reps) in either pass.
     # No-op when ANTHROPIC_API_KEY is unset.
     try:
         bundle = _build_llm_sources(s, r, vies_res, ch_data, fr_data, imp)
-        merge = llm_merge.consolidate(bundle)
+        merge = llm_merge.consolidate_2pass(bundle)
     except Exception:
-        log.exception("llm_merge.consolidate failed for %s", s.seller_id)
+        log.exception("llm_merge.consolidate_2pass failed for %s", s.seller_id)
         merge = None
     if merge:
         _ingest_llm_merge(merge, r)

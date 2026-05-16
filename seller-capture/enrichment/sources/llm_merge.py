@@ -1,14 +1,20 @@
-"""LLM consolidation of multi-source seller enrichment evidence.
+"""Two-pass LLM consolidation of multi-source seller enrichment evidence.
 
-Final pipeline step. Claude Haiku 4.5 reads every signal we've collected
-(VIES, Companies House, Pappers, impressum, raw Amazon text) and produces a
-single decision-grade record: a chosen decision-maker, an agency flag, and
-operator-facing notes.
+PASS 1 — Haiku 4.5 + structured sources only (no web_search).
+  Cheap (~1-2¢/seller). Runs for every seller. Consolidates whatever VIES,
+  Companies House, Pappers, impressum, and Amazon raw_text gave us into a
+  single decision-grade record. Must be honest about confidence — when
+  signals are weak, return low confidence so PASS 2 can escalate.
 
-The system prompt is intentionally large (~5–6k tokens of rules + worked
-examples) so it crosses Haiku 4.5's **4096-token cache minimum** and amortises
-across every seller in a batch. Below that threshold prompt caching is silent
-no-op (the marker stays, just doesn't write a cache entry).
+PASS 2 — Sonnet 4.6 + web_search tool (agentic research).
+  Expensive (~10¢/seller). Runs ONLY when PASS 1 confidence < threshold and
+  no agency flag. Targets markets without free registry coverage (CN / JP /
+  US / unregistered EU). Receives PASS 1's output as `prior_consolidation`
+  to avoid duplicating known facts.
+
+Orchestrator: `consolidate_2pass(sources, confidence_threshold=60)`. Returns
+the same dict shape as either pass, plus `_metas` (list of per-call usage)
+for cost accounting.
 
 Env:
   ANTHROPIC_API_KEY — required; module returns None gracefully without it.
@@ -24,11 +30,11 @@ import anthropic
 
 log = logging.getLogger(__name__)
 
-MODEL = "claude-sonnet-4-6"  # was haiku-4-5 — Sonnet has stronger multi-step
-                              # reasoning needed for the agentic research loop below.
-                              # Cost ~10x Haiku per token but gives real contacts
-                              # (CEO names + personal emails) instead of "info@" placeholders.
-MAX_TOKENS = 4096  # output cap. Higher than before because Sonnet's research
+HAIKU_MODEL = "claude-haiku-4-5"     # PASS 1: structured-data merge, no tools
+SONNET_MODEL = "claude-sonnet-4-6"   # PASS 2: web_search agentic research
+DEFAULT_CONFIDENCE_THRESHOLD = 60    # PASS 1 < this => escalate to PASS 2
+
+MAX_TOKENS = 4096  # output cap. Higher than legacy because Sonnet's research
                    # may include intermediate reasoning + multi-paragraph notes
                    # justifying the decision-maker pick.
 PAYLOAD_CHAR_LIMIT = 200_000  # truncate huge raw-text dumps before sending
@@ -42,7 +48,43 @@ WEB_SEARCH_TOOL = {
     "max_uses": 8,  # cap searches per seller — keeps cost bounded
 }
 
-RESEARCH_PROMPT_PREFIX = """## RESEARCH MANDATE (READ FIRST)
+HAIKU_PASS1_PREFIX = """## CONSOLIDATION MANDATE — STRUCTURED SOURCES ONLY (PASS 1)
+
+You have NO web_search, NO URL fetch, NO external lookups. Your only inputs
+are the structured sources in the user message (VIES, Companies House,
+Pappers, impressum scrape result, Amazon raw_text). Consolidate them — do
+not invent or fabricate.
+
+**Be honest with confidence.** A downstream PASS 2 will re-process every
+seller you flag with `confidence < 60` using full web research. So:
+  - If you have a clear officer name + matching personal email + registry
+    confirmation, confidence 80-95.
+  - If you have a name OR a personal email but not both, confidence 40-60.
+  - If you only have generic info@ / contact@ and no named individual,
+    confidence 10-25 — PASS 2 will go find the CEO.
+  - If sources flag an agency / fiscal rep / GPSR representative, set
+    `is_agency: true` with a clear reason — PASS 2 will NOT re-research
+    (agency-flagged records are excluded from outreach regardless).
+
+Do not pad confidence above what the structured signals actually support.
+A confident-looking `info@brand.com` with no officer name is still a 20.
+
+---
+
+"""
+
+RESEARCH_PROMPT_PREFIX = """## RESEARCH MANDATE (READ FIRST — PASS 2)
+
+You may receive a `prior_consolidation` field in the user payload — that's
+PASS 1's output (Haiku, structured sources only). If PASS 1 already
+identified a named officer with a personal email, your job is to VERIFY
+that pick via the web (does the email domain match the company's real
+website? is the officer still active?). If PASS 1 returned a low-confidence
+generic-email record, your job is to FIND BETTER CONTACTS via research.
+If PASS 1 flagged agency, the orchestrator would not have called you — so
+you can assume agency=false unless your research reveals a fresh signal.
+
+
 
 You have a live `web_search` tool. USE IT AGGRESSIVELY. The operator-visible
 output of this enrichment is only as good as the contacts you surface. A
@@ -88,7 +130,7 @@ for thorough research; budget is not an issue.
 
 """
 
-SYSTEM_PROMPT = RESEARCH_PROMPT_PREFIX + """You are a B2B contact-research analyst specialising in cross-jurisdictional
+SYSTEM_PROMPT_BODY = """You are a B2B contact-research analyst specialising in cross-jurisdictional
 seller enrichment for the European Amazon marketplaces (primarily amazon.de).
 Your job is to consolidate evidence from official company registries (VIES,
 UK Companies House, French Pappers), website impressum / legal-notice scrapes,
@@ -609,6 +651,14 @@ Respond with JSON only — no preamble, no explanation, no markdown fencing.
 The response must conform exactly to the provided schema."""
 
 
+# Composed prompts per pass. Both share the consolidation body so PASS 1 and
+# PASS 2 agree on the schema, decision rules, agency patterns, and worked
+# examples — only the front-matter (research mandate vs. consolidation-only
+# mandate) differs.
+HAIKU_SYSTEM_PROMPT = HAIKU_PASS1_PREFIX + SYSTEM_PROMPT_BODY
+SONNET_SYSTEM_PROMPT = RESEARCH_PROMPT_PREFIX + SYSTEM_PROMPT_BODY
+
+
 # JSON Schema for output_config.format. Structured outputs require
 # additionalProperties: false on every object and all properties listed
 # in required.
@@ -655,34 +705,10 @@ def _get_client() -> Optional[anthropic.Anthropic]:
     return _client
 
 
-def consolidate(sources: dict) -> Optional[dict]:
-    """Send a per-seller evidence bundle to Claude Haiku 4.5 and return the
-    parsed consolidation result, or None on any failure / missing API key.
-
-    Expected `sources` shape (all keys optional except seller_id):
-        {
-          "seller_id": str,
-          "country": str | None,
-          "vat": str | None,
-          "business_name": str | None,
-          "business_address": str | None,
-          "vies": dict | None,                # whatever VIES returned
-          "companies_house": dict | None,     # Companies House profile
-          "pappers": dict | None,             # Pappers profile
-          "impressum": dict | None,           # impressum scrape result
-          "raw_text_excerpt": str | None,     # truncated Amazon raw text
-        }
-
-    Returns a dict with keys consolidated_decision_maker / agency_flag / notes,
-    or None.
+def _prepare_payload(sources: dict) -> str:
+    """Deterministic JSON encoding of the evidence bundle, with truncation of
+    the Amazon raw-text excerpt if the bundle is huge.
     """
-    client = _get_client()
-    if client is None:
-        log.info("ANTHROPIC_API_KEY not set; skipping LLM merge")
-        return None
-
-    # Deterministic JSON so the user-message bytes don't drift between calls
-    # for the same input (good for any downstream caching too).
     payload = json.dumps(sources, ensure_ascii=False, sort_keys=True, default=str)
     if len(payload) > PAYLOAD_CHAR_LIMIT:
         log.warning(
@@ -692,62 +718,211 @@ def consolidate(sources: dict) -> Optional[dict]:
         slim = dict(sources)
         slim["raw_text_excerpt"] = (slim.get("raw_text_excerpt") or "")[:2000]
         payload = json.dumps(slim, ensure_ascii=False, sort_keys=True, default=str)
+    return payload
+
+
+def _build_meta(model: str, response) -> dict:
+    """Pulls billable signals off the Anthropic response so callers can compute
+    per-seller cost without re-parsing logs."""
+    usage = response.usage
+    server_tool_use = getattr(usage, "server_tool_use", None)
+    return {
+        "model": model,
+        "input_tokens": usage.input_tokens,
+        "cache_creation_input_tokens": getattr(usage, "cache_creation_input_tokens", 0) or 0,
+        "cache_read_input_tokens": getattr(usage, "cache_read_input_tokens", 0) or 0,
+        "output_tokens": usage.output_tokens,
+        "server_tool_use": server_tool_use and {
+            "web_search_requests": getattr(server_tool_use, "web_search_requests", 0),
+        },
+        "stop_reason": response.stop_reason,
+    }
+
+
+def _call_pass(
+    model: str,
+    system_prompt: str,
+    user_payload: str,
+    seller_id: str | None,
+    *,
+    tools: list[dict] | None = None,
+) -> Optional[dict]:
+    """Single Anthropic call. Returns parsed JSON dict (with `_meta` attached)
+    or None on any failure / refusal / non-JSON output. Caller is responsible
+    for higher-level orchestration (escalation, fallbacks)."""
+    client = _get_client()
+    if client is None:
+        log.info("ANTHROPIC_API_KEY not set; skipping LLM merge")
+        return None
+
+    kwargs: dict = {
+        "model": model,
+        "max_tokens": MAX_TOKENS,
+        "system": [
+            {
+                "type": "text",
+                "text": system_prompt,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ],
+        "messages": [
+            {"role": "user", "content": f"Consolidate this seller record:\n\n{user_payload}"}
+        ],
+        "output_config": {
+            "format": {"type": "json_schema", "schema": OUTPUT_SCHEMA}
+        },
+    }
+    if tools:
+        kwargs["tools"] = tools
 
     try:
-        response = client.messages.create(
-            model=MODEL,
-            max_tokens=MAX_TOKENS,
-            tools=[WEB_SEARCH_TOOL],
-            system=[
-                {
-                    "type": "text",
-                    "text": SYSTEM_PROMPT,
-                    "cache_control": {"type": "ephemeral"},
-                }
-            ],
-            messages=[
-                {"role": "user", "content": f"Consolidate this seller record:\n\n{payload}"}
-            ],
-            output_config={
-                "format": {
-                    "type": "json_schema",
-                    "schema": OUTPUT_SCHEMA,
-                }
-            },
-        )
+        response = client.messages.create(**kwargs)
     except anthropic.APIError as exc:
-        log.warning("Anthropic APIError during LLM merge for %s: %s",
-                    sources.get("seller_id"), exc)
+        log.warning("Anthropic APIError (%s) during LLM merge for %s: %s",
+                    model, seller_id, exc)
         return None
     except Exception:
-        log.exception("Unexpected error during LLM merge for %s",
-                      sources.get("seller_id"))
+        log.exception("Unexpected error (%s) during LLM merge for %s",
+                      model, seller_id)
         return None
 
+    meta = _build_meta(model, response)
     usage = response.usage
     log.info(
-        "LLM merge %s: in=%s cache_w=%s cache_r=%s out=%s stop=%s",
-        sources.get("seller_id"),
+        "LLM merge %s [%s]: in=%s cache_w=%s cache_r=%s out=%s stop=%s",
+        seller_id, model,
         usage.input_tokens,
-        usage.cache_creation_input_tokens,
-        usage.cache_read_input_tokens,
+        getattr(usage, "cache_creation_input_tokens", 0) or 0,
+        getattr(usage, "cache_read_input_tokens", 0) or 0,
         usage.output_tokens,
         response.stop_reason,
     )
 
     if response.stop_reason == "refusal":
-        log.warning("LLM merge refused for %s", sources.get("seller_id"))
-        return None
+        log.warning("LLM merge refused (%s) for %s", model, seller_id)
+        return {"_meta": meta, "_refused": True}
 
     for block in response.content:
         if getattr(block, "type", None) == "text":
             try:
-                return json.loads(block.text)
+                parsed = json.loads(block.text)
+                parsed["_meta"] = meta
+                return parsed
             except json.JSONDecodeError:
-                log.warning("LLM merge returned non-JSON for %s: %s",
-                            sources.get("seller_id"), block.text[:200])
-                return None
+                log.warning("LLM merge returned non-JSON (%s) for %s: %s",
+                            model, seller_id, block.text[:200])
+                return {"_meta": meta, "_error": "non_json"}
 
-    log.warning("LLM merge response had no text content for %s",
-                sources.get("seller_id"))
+    log.warning("LLM merge response had no text content (%s) for %s",
+                model, seller_id)
+    return {"_meta": meta, "_error": "no_text"}
+
+
+def consolidate_haiku_structured(sources: dict) -> Optional[dict]:
+    """PASS 1 — Haiku 4.5, no tools. Cheap consolidation of the structured
+    sources we already gathered. Returns the same shape as PASS 2 (so the
+    orchestrator can return either verbatim).
+    """
+    return _call_pass(
+        model=HAIKU_MODEL,
+        system_prompt=HAIKU_SYSTEM_PROMPT,
+        user_payload=_prepare_payload(sources),
+        seller_id=sources.get("seller_id"),
+        tools=None,
+    )
+
+
+def consolidate_sonnet_websearch(
+    sources: dict,
+    prior_consolidation: Optional[dict] = None,
+) -> Optional[dict]:
+    """PASS 2 — Sonnet 4.6 with web_search tool. Agentic research for markets
+    without free registry coverage. If `prior_consolidation` is given, it's
+    merged into the payload as `prior_consolidation` so Sonnet can verify
+    or supersede PASS 1's pick instead of starting from scratch.
+    """
+    enriched = dict(sources)
+    if prior_consolidation:
+        # strip internal fields before showing to the LLM
+        prior_clean = {k: v for k, v in prior_consolidation.items() if not k.startswith("_")}
+        enriched["prior_consolidation"] = prior_clean
+    return _call_pass(
+        model=SONNET_MODEL,
+        system_prompt=SONNET_SYSTEM_PROMPT,
+        user_payload=_prepare_payload(enriched),
+        seller_id=sources.get("seller_id"),
+        tools=[WEB_SEARCH_TOOL],
+    )
+
+
+def _is_usable(merge: Optional[dict]) -> bool:
+    """True if the LLM call returned a parsed consolidation (not None and
+    not just a meta-only error stub)."""
+    if not merge:
+        return False
+    return "consolidated_decision_maker" in merge
+
+
+def consolidate_2pass(
+    sources: dict,
+    confidence_threshold: int = DEFAULT_CONFIDENCE_THRESHOLD,
+) -> Optional[dict]:
+    """Two-pass entry point.
+
+    1. Always run PASS 1 (Haiku, structured-only).
+    2. Run PASS 2 (Sonnet, web_search) only when PASS 1 confidence is below
+       `confidence_threshold` AND PASS 1 didn't flag agency. Agency-flagged
+       records are excluded from outreach regardless, so PASS 2 would be
+       wasted budget.
+
+    Returns a dict matching the OUTPUT_SCHEMA, augmented with:
+      - `_metas`: list of per-call meta dicts (PASS 1 only, or PASS 1 + PASS 2)
+      - `_escalated`: bool — true if PASS 2 ran
+    """
+    metas: list[dict] = []
+
+    pass1 = consolidate_haiku_structured(sources)
+    if pass1 and pass1.get("_meta"):
+        metas.append(pass1["_meta"])
+
+    pass1_usable = _is_usable(pass1)
+    if pass1_usable:
+        dm = pass1.get("consolidated_decision_maker") or {}
+        agency = pass1.get("agency_flag") or {}
+        conf = dm.get("confidence") or 0
+        flagged = bool(agency.get("is_agency"))
+        if flagged or conf >= confidence_threshold:
+            pass1["_metas"] = metas
+            pass1["_escalated"] = False
+            return pass1
+
+    # Escalate to PASS 2.
+    pass2 = consolidate_sonnet_websearch(
+        sources,
+        prior_consolidation=pass1 if pass1_usable else None,
+    )
+    if pass2 and pass2.get("_meta"):
+        metas.append(pass2["_meta"])
+
+    if _is_usable(pass2):
+        pass2["_metas"] = metas
+        pass2["_escalated"] = True
+        return pass2
+
+    # PASS 2 failed. Return PASS 1 if it was at least parseable.
+    if pass1_usable:
+        pass1["_metas"] = metas
+        pass1["_escalated"] = True  # we tried, just failed
+        return pass1
     return None
+
+
+# Public entry point. Keeps pipeline.py call site stable while we tune the
+# orchestrator. Pass-through wrapper — feel free to call consolidate_2pass
+# directly if you want a different threshold.
+def consolidate(sources: dict) -> Optional[dict]:
+    """Backwards-compatible entry point. Routes through the 2-pass orchestrator
+    at the default threshold (60). Existing callers (pipeline.py) keep working;
+    extra `_metas` / `_escalated` keys are silently ignored by _ingest_llm_merge.
+    """
+    return consolidate_2pass(sources)
