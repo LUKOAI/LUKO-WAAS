@@ -115,6 +115,7 @@ function _flattenParsed(p) {
     marketplace: p.marketplace,
     url: p.url,
     asin: x.asin || '',
+    seller_name: x.seller_name || '',
     brand: x.brand || '',
     captured_at: p.captured_at,
     operator_id: p.operator_id || '',
@@ -156,8 +157,11 @@ function _flattenParsed(p) {
 }
 
 // Order matters — this drives the Sheet column layout.
+// `seller_name` = Amazon storefront display name (h1#seller-name).
+// `brand` = actual product brand (Amazon "Marke" field on product page — empty until
+//           we add product-page capture).
 const INBOX_HEADERS = [
-  'captured_at', 'operator_id', 'seller_id', 'marketplace', 'asin', 'brand',
+  'captured_at', 'operator_id', 'seller_id', 'marketplace', 'asin', 'seller_name', 'brand',
   'business_name', 'business_type', 'representative_name',
   'street', 'address_line_2', 'postal_code', 'city', 'region', 'country',
   'cs_street', 'cs_postal_code', 'cs_city', 'cs_country', 'cs_differs',
@@ -357,6 +361,7 @@ function _bqUpsertEnriched(projectId, dataset, flat, existing) {
     WHEN MATCHED THEN UPDATE SET
       marketplace          = COALESCE(NULLIF(@marketplace,''),          T.marketplace),
       asin_example         = COALESCE(NULLIF(@asin,''),                 T.asin_example),
+      seller_name          = COALESCE(NULLIF(@seller_name,''),          T.seller_name),
       brand                = COALESCE(NULLIF(@brand,''),                T.brand),
       business_name        = COALESCE(NULLIF(@business_name,''),        T.business_name),
       business_type        = COALESCE(NULLIF(@business_type,''),        T.business_type),
@@ -386,7 +391,7 @@ function _bqUpsertEnriched(projectId, dataset, flat, existing) {
       agency_flag          = NULLIF(@agency,''),
       last_captured_at     = CURRENT_TIMESTAMP()
     WHEN NOT MATCHED THEN INSERT (
-      seller_id, marketplace, asin_example, brand,
+      seller_id, marketplace, asin_example, seller_name, brand,
       business_name, business_type, representative_name,
       street, address_line_2, region, postal_code, city, country, business_address,
       cs_street, cs_postal_code, cs_city, cs_region, cs_country, cs_differs,
@@ -394,7 +399,7 @@ function _bqUpsertEnriched(projectId, dataset, flat, existing) {
       vat_number, weee_number, epr_id, registry_id, other_id,
       agency_flag, status, last_captured_at
     ) VALUES (
-      @sid, @marketplace, @asin, @brand,
+      @sid, @marketplace, @asin, @seller_name, @brand,
       @business_name, @business_type, @representative_name,
       @street, @address_line_2, @region, @postal_code, @city, @country, @business_address,
       @cs_street, @cs_postal_code, @cs_city, @cs_region, @cs_country, @cs_differs,
@@ -409,6 +414,7 @@ function _bqUpsertEnriched(projectId, dataset, flat, existing) {
     { name: 'sid', type: 'STRING', value: flat.seller_id },
     { name: 'marketplace', type: 'STRING', value: flat.marketplace },
     { name: 'asin', type: 'STRING', value: flat.asin },
+    { name: 'seller_name', type: 'STRING', value: flat.seller_name },
     { name: 'brand', type: 'STRING', value: flat.brand },
     { name: 'business_name', type: 'STRING', value: flat.business_name },
     { name: 'business_type', type: 'STRING', value: flat.business_type },

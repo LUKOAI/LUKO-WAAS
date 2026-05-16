@@ -47,8 +47,11 @@
     return null;
   }
 
-  // Brand / storefront name — usually first h1 on the seller page header
-  function getBrand() {
+  // Seller's storefront display name — h1#seller-name on Amazon. This is the name
+  // shown to buyers (e.g. "AnkerDirect DE", "apodiscounter", "Utopia Brands") and is
+  // distinct from `brand` (the actual product brand, which appears on product detail
+  // pages as "Marke" — NOT available on the seller profile page).
+  function getSellerDisplayName() {
     const candidates = [
       "#seller-name",
       ".a-spacing-base h1",
@@ -230,38 +233,126 @@
 
   // ===== Address parsing =====
 
-  // Address coming from Business-Verkäufer block: usually 4-5 separate lines.
-  // Format observed (DE Amazon): street / city / region / postal / country
-  // Variants: 4 lines (no region), 3 lines, 2 lines, 1 line.
+  // ===== Address parsing — content-based (NOT position-based) =====
+  //
+  // Different countries / sellers use wildly different address formats:
+  //   DE 5-line:  Südstr 6 / Werneuchen / Brandenburg / 16356 / DE
+  //   DE 4-line:  Ernst-Reuter-Str. 24 / Bergisch Gladbach / 51427 / DE
+  //   DE 3-line:  Erich-Schlesinger-Str. 62 / 18059 Rostock / Deutschland
+  //   PL 4-line:  Krzysztof Bochen / 1 Maja 18 / 63-507 Kobyla Góra / PL
+  //   UK 6-line:  39 / Clarendon Road / WATFORD / Hertfordshire / WD17 1JA / GB
+  //   NL 5-line:  Express 2 / Duiven / Liemers / 6921RB / NL
+  //   US 5-line:  1151 BEAVER ST / BRISTOL / PA / 19007-3233 / US
+  //
+  // Position-based parsing fails on the variety. Content-based detection wins:
+  //   country = matches country dictionary
+  //   postal  = matches country-specific postal pattern
+  //   street  = contains a digit (house number)
+  //   city    = remaining no-digit line
+  //   if first "street" line is JUST a number (e.g. UK "39"), combine with next
   function parseAddressLines(lines) {
     lines = lines.map(clean).filter(Boolean);
     const out = {};
     if (!lines.length) return out;
+    const used = new Set();
 
-    if (lines.length === 5) {
-      out.street = lines[0];
-      out.city = lines[1];
-      out.region = lines[2];
-      out.postal_code = lines[3];
-      out.country = normalizeCountry(lines[4]);
-    } else if (lines.length === 4) {
-      out.street = lines[0];
-      out.city = lines[1];
-      out.postal_code = lines[2];
-      out.country = normalizeCountry(lines[3]);
-    } else if (lines.length === 3) {
-      // Gesetzliche-style: street / "postal city" / country-full
-      out.street = lines[0];
-      const m = lines[1].match(/^([0-9A-Z][0-9A-Z\- ]{2,12})\s+(.+)$/);
-      if (m) { out.postal_code = clean(m[1]); out.city = clean(m[2]); } else { out.city = lines[1]; }
-      out.country = normalizeCountry(lines[2]);
-    } else if (lines.length === 2) {
-      out.street = lines[0];
-      const m = lines[1].match(/^([0-9A-Z][0-9A-Z\- ]{2,12})\s+(.+)$/);
-      if (m) { out.postal_code = clean(m[1]); out.city = clean(m[2]); } else { out.city = lines[1]; }
-    } else if (lines.length === 1) {
-      out.street = lines[0];
+    // 1. Country — scan from end (country is conventionally last)
+    let countryIdx = -1;
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const c = normalizeCountry(lines[i]);
+      if (c) { out.country = c; countryIdx = i; used.add(i); break; }
     }
+
+    // 2. Postal code (possibly with city on same line)
+    const POSTAL_WITH_CITY = [
+      /^([A-Z]{1,2}\d[A-Z\d]?\s+\d[A-Z]{2})\s+(.+)$/i,    // UK: "WD17 1JA City"
+      /^(\d{4,5}(?:-\d{3,4})?)\s+(.+)$/,                   // DE/PL/US: "12345 City"
+      /^(\d{4}\s*[A-Z]{2})\s+(.+)$/i,                      // NL: "1234AB City" or "1234 AB City"
+    ];
+    const POSTAL_ALONE = [
+      /^([A-Z]{1,2}\d[A-Z\d]?\s+\d[A-Z]{2})$/i,            // UK alone
+      /^(\d{4,5}(?:-\d{3,4})?)$/,                          // DE/PL/US alone
+      /^(\d{4}\s*[A-Z]{2})$/i,                             // NL alone
+    ];
+    let postalIdx = -1;
+    for (let i = 0; i < lines.length; i++) {
+      if (used.has(i)) continue;
+      let matched = false;
+      for (const re of POSTAL_WITH_CITY) {
+        const m = lines[i].match(re);
+        if (m) {
+          out.postal_code = m[1].trim();
+          out.city = m[2].trim();
+          postalIdx = i;
+          used.add(i);
+          matched = true;
+          break;
+        }
+      }
+      if (matched) break;
+      for (const re of POSTAL_ALONE) {
+        const m = lines[i].match(re);
+        if (m) {
+          out.postal_code = m[1].trim();
+          postalIdx = i;
+          used.add(i);
+          matched = true;
+          break;
+        }
+      }
+      if (matched) break;
+    }
+
+    // 3. Street: line with a digit (house number)
+    let streetIdx = -1;
+    for (let i = 0; i < lines.length; i++) {
+      if (used.has(i)) continue;
+      if (/\d/.test(lines[i])) {
+        out.street = lines[i];
+        streetIdx = i;
+        used.add(i);
+        break;
+      }
+    }
+    // 3a. UK-style "39" / "Clarendon Road" — street is pure number, combine with next line
+    if (out.street && /^\d+[a-z]?$/i.test(out.street) && streetIdx + 1 < lines.length) {
+      const ni = streetIdx + 1;
+      if (!used.has(ni) && lines[ni] && !/^\d/.test(lines[ni])) {
+        out.street = (out.street + " " + lines[ni]).trim();
+        used.add(ni);
+      }
+    }
+
+    // 4. City — first remaining no-digit line
+    if (!out.city) {
+      for (let i = 0; i < lines.length; i++) {
+        if (used.has(i)) continue;
+        if (!/\d/.test(lines[i])) {
+          out.city = lines[i];
+          used.add(i);
+          break;
+        }
+      }
+    }
+
+    // 5. Region — next remaining no-digit line after city (e.g. PA for US, Brandenburg for DE)
+    for (let i = 0; i < lines.length; i++) {
+      if (used.has(i)) continue;
+      if (!/\d/.test(lines[i])) {
+        out.region = lines[i];
+        used.add(i);
+        break;
+      }
+    }
+
+    // 6. address_line_2 — any remaining line (e.g. owner name for sole-proprietor PL sellers
+    //    like "Krzysztof Bochen" above the street)
+    for (let i = 0; i < lines.length; i++) {
+      if (used.has(i)) continue;
+      if (!out.address_line_2) out.address_line_2 = lines[i];
+      else out.address_line_2 = out.address_line_2 + " | " + lines[i];
+    }
+
     return out;
   }
 
@@ -482,7 +573,10 @@
         if (!parsed[k] && pageIds[k]) parsed[k] = pageIds[k];
       }
 
-      parsed.brand = getBrand();
+      parsed.seller_name = getSellerDisplayName();
+      // `brand` (actual product brand from Amazon "Marke" field) requires a product
+      // page capture — leave empty here. Will be populated by a separate feature later.
+      parsed.brand = "";
       parsed.asin = getAsin() || "";
 
       // Flag if customer service address materially differs from business address
