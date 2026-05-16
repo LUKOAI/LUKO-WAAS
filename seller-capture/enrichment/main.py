@@ -37,6 +37,8 @@ def _bq() -> bigquery.Client:
 _SELECT_FIELDS = """
   e.seller_id, e.marketplace, e.business_name, e.business_address, e.country,
   e.vat_number AS vat, e.registry_id, e.phone_raw, e.email_raw,
+  e.representative_name, e.street, e.city, e.postal_code,
+  e.weee_number, e.phone_alt, e.email_alt,
   latest.raw_text AS raw_text, latest.gpsr_raw AS gpsr_raw
 """
 
@@ -84,19 +86,23 @@ def fetch_one(seller_id: str) -> SellerInput | None:
 
 
 def write_back(result: EnrichmentResult) -> None:
+    # COALESCE-pattern keeps existing BQ value if the enrichment result is empty.
+    # This is critical for fields the operator can see (company_name, decision_maker,
+    # email, phone) — when enrichment has no improvement we don't want to blank
+    # the capture data that the Chrome extension wrote.
     sql = f"""
     UPDATE `{PROJECT}.{DATASET}.sellers_enriched`
-    SET company_name = @company_name,
-        legal_form = @legal_form,
+    SET company_name = COALESCE(NULLIF(@company_name,''), company_name),
+        legal_form = COALESCE(NULLIF(@legal_form,''), legal_form),
         business_address = COALESCE(NULLIF(@business_address,''), business_address),
         country = COALESCE(NULLIF(@country,''), country),
         vat_number = COALESCE(NULLIF(@vat,''), vat_number),
         registry_id = COALESCE(NULLIF(@registry_id,''), registry_id),
-        decision_maker_name = @dm_name,
-        decision_maker_role = @dm_role,
-        email = @email,
-        phone = @phone,
-        website = @website,
+        decision_maker_name = COALESCE(NULLIF(@dm_name,''), decision_maker_name),
+        decision_maker_role = COALESCE(NULLIF(@dm_role,''), decision_maker_role),
+        email = COALESCE(NULLIF(@email,''), email),
+        phone = COALESCE(NULLIF(@phone,''), phone),
+        website = COALESCE(NULLIF(@website,''), website),
         other_urls = @other_urls,
         tech_stack = @tech_stack,
         brands = @brands,
@@ -104,7 +110,7 @@ def write_back(result: EnrichmentResult) -> None:
         notes = @notes,
         agency_flag = NULLIF(@agency_flag,''),
         generic_contacts = @generic_contacts,
-        weee_number = NULLIF(@weee_number,''),
+        weee_number = COALESCE(NULLIF(@weee_number,''), weee_number),
         lucid_id = NULLIF(@lucid_id,''),
         de_operating_signals = @de_signals,
         jurisdiction_segment = @j_segment,
@@ -122,11 +128,11 @@ def write_back(result: EnrichmentResult) -> None:
     """
     p = result
     overall = compute_overall(p)
-    # Track which fields enrichment populated/changed. `p.sources` is a per-field
-    # provenance map ({"company_name": "vies", "email": "impressum", ...}); its
-    # keys are exactly the fields the enrichment touched. Store as comma-separated
-    # list so operators can see at a glance what enrichment contributed.
-    overrides_str = ",".join(sorted((p.sources or {}).keys()))
+    # Track per-field provenance: which field got its value from which source.
+    # `p.sources` maps {"company_name": "vies", "email": "capture", ...}.
+    # Store as "field=source" pairs, comma-separated, so operator sees in one
+    # glance: "company_name=vies, decision_maker_name=capture, email=llm_merge, ..."
+    overrides_str = ", ".join(f"{k}={v}" for k, v in sorted((p.sources or {}).items()))
     params = [
         bigquery.ScalarQueryParameter("sid", "STRING", p.seller_id),
         bigquery.ScalarQueryParameter("company_name", "STRING", p.company_name or ""),

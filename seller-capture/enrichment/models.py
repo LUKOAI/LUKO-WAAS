@@ -15,6 +15,17 @@ class SellerInput:
     registry_id: Optional[str] = None
     phone_raw: Optional[str] = None
     email_raw: Optional[str] = None
+    # Capture-stage fields harvested by the Chrome extension v2+ — let enrichment
+    # carry them through to the LLM (so it can identify Geschäftsführer as the
+    # decision-maker, etc.) and to write_back (so capture data isn't lost if
+    # enrichment can't improve on it).
+    representative_name: Optional[str] = None   # Geschäftsführer / Director
+    street: Optional[str] = None
+    city: Optional[str] = None
+    postal_code: Optional[str] = None
+    weee_number: Optional[str] = None
+    phone_alt: Optional[str] = None
+    email_alt: Optional[str] = None
     # Raw text harvested by the Chrome extension; carries WEEE / LUCID / Trader / GPSR data
     raw_text: Optional[str] = None
     gpsr_raw: Optional[str] = None

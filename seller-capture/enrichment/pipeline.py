@@ -304,6 +304,32 @@ def enrich_one(s: SellerInput) -> EnrichmentResult:
     r.sources = {}
     r.confidence = {"company": 0, "email": 0, "phone": 0}
 
+    # Inherit capture-stage values as starting defaults so operator-visible fields
+    # are populated even when enrichment can't improve (DE/PL skip path, or foreign
+    # seller with no website / no Companies House key). Higher-confidence sources
+    # (VIES, registries, LLM merge) override these below — each source check uses
+    # `if not r.X` or compares confidence first.
+    if s.business_name:
+        r.company_name = s.business_name
+        r.sources["company_name"] = "capture"
+        r.confidence["company"] = 50
+    if s.representative_name:
+        r.decision_maker_name = s.representative_name
+        r.decision_maker_role = "Geschäftsführer"  # implicit when scraped from German impressum
+        r.sources["decision_maker_name"] = "capture"
+        r.sources["decision_maker_role"] = "capture"
+    if s.email_raw:
+        r.email = s.email_raw
+        r.sources["email"] = "capture"
+        r.confidence["email"] = 50
+    if s.phone_raw:
+        r.phone = s.phone_raw
+        r.sources["phone"] = "capture"
+        r.confidence["phone"] = 50
+    if s.weee_number:
+        r.weee_number = s.weee_number
+        r.sources["weee_number"] = "capture"
+
     # Pre-segment: PL/DE residents stay in the warehouse with raw Amazon fields,
     # but skip every external lookup. Foreign + unknown fall through to enrichment.
     pre_segment, pre_reason = classify_jurisdiction(s)
