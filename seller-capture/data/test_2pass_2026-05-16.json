@@ -1,0 +1,625 @@
+{
+  "label": "test_2pass",
+  "input_csv": "data/foreign_test_sellers.csv",
+  "n_sellers": 6,
+  "total_cost_usd": 0.4825,
+  "avg_cost_usd": 0.0804,
+  "total_elapsed_sec": 81.94,
+  "sellers": [
+    {
+      "seller_id": "TEST_CN_ANKER",
+      "label": "test_2pass",
+      "elapsed_sec": 8.59,
+      "error": null,
+      "cost_usd": 0.010668,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 343,
+          "cache_creation_input_tokens": 7140,
+          "cache_read_input_tokens": 0,
+          "output_tokens": 280,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "TEST_CN_ANKER",
+        "marketplace": null,
+        "business_name": "Anker Innovations Limited",
+        "business_address": "Room 1318-19 Hollywood Plaza, 610 Nathan Road, Mongkok, Hong Kong",
+        "country": "CN",
+        "vat": null,
+        "registry_id": null,
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Sold by Anker Direct on amazon.de. WEEE-Reg.-Nr. DE 79556430. Lucid-Reg.-Nr. DE2810855093872. Vertreten durch: Anker Innovations Deutschland GmbH",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "TEST_CN_ANKER",
+        "company_name": "Anker Innovations Limited",
+        "legal_form": null,
+        "business_address": "Room 1318-19 Hollywood Plaza, 610 Nathan Road, Mongkok, Hong Kong",
+        "country": "CN",
+        "vat": null,
+        "registry_id": null,
+        "website": "https://www.marketscreener.com",
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [],
+        "decision_maker_name": null,
+        "decision_maker_role": null,
+        "email": null,
+        "phone": "+33478304142",
+        "candidates": [
+          {
+            "kind": "phone",
+            "value": "+33478304142",
+            "label": null,
+            "person_name": null,
+            "role": null,
+            "source": "impressum:https://www.marketscreener.com/legal-notice",
+            "score": 60
+          },
+          {
+            "kind": "phone",
+            "value": "+33140612000",
+            "label": null,
+            "person_name": null,
+            "role": null,
+            "source": "impressum:https://www.marketscreener.com/legal-notice",
+            "score": 60
+          }
+        ],
+        "generic_contacts": [],
+        "agency_flag": "agency_llm",
+        "weee_number": "79556430",
+        "lucid_id": "DE2810855093872",
+        "de_operating_signals": [
+          "weee",
+          "lucid"
+        ],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=CN",
+        "outreach_priority": "skip",
+        "notes": [
+          "agency: raw_text states 'Vertreten durch: Anker Innovations Deutschland GmbH' (represented by). Combined with WEEE and Lucid registration numbers, this indicates a German subsidiary or compliance representative acting as the registered representative for the HK-domiciled parent. The impressum phones route to a French number (Market Screener contact), not to Anker's operational team.",
+          "Seller is CN (Hong Kong) incorporated; impressum redirects to Market Screener legal-notice template",
+          "raw_text_excerpt shows 'Vertreten durch Anker Innovations Deutschland GmbH' — regulatory representation structure, not the direct seller",
+          "WEEE-Reg.-Nr. and Lucid-Reg.-Nr. tied to the German subsidiary, not the HK parent",
+          "No named officer, no personal email, no direct seller contact found",
+          "Outreach should target Anker Innovations Deutschland GmbH separately, not this Hong Kong entity"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 60,
+          "overall": 35
+        },
+        "sources": {
+          "company_name": "capture",
+          "website": "brave_search",
+          "weee_number": "amazon_raw",
+          "lucid_id": "amazon_raw",
+          "phone": "impressum:https://www.marketscreener.com/legal-notice"
+        },
+        "status": "enriched_low_confidence"
+      }
+    },
+    {
+      "seller_id": "TEST_CN_UGREEN",
+      "label": "test_2pass",
+      "elapsed_sec": 10.61,
+      "error": null,
+      "cost_usd": 0.002281,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 527,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 208,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "TEST_CN_UGREEN",
+        "marketplace": null,
+        "business_name": "UGREEN Group Limited",
+        "business_address": "Room 305, Building 4, Tongfuyu Industrial Estate, Aiqun Road, Liaobu Village, Liaobu Town, Dongguan, Guangdong, China",
+        "country": "CN",
+        "vat": null,
+        "registry_id": null,
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Sold by UGREEN GROUP LIMITED. GPSR Bevollmaechtigter / EU Authorised Representative on file. Versand durch Amazon.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "TEST_CN_UGREEN",
+        "company_name": "UGREEN Group Limited",
+        "legal_form": null,
+        "business_address": "Room 305, Building 4, Tongfuyu Industrial Estate, Aiqun Road, Liaobu Village, Liaobu Town, Dongguan, Guangdong, China",
+        "country": "CN",
+        "vat": null,
+        "registry_id": null,
+        "website": "https://www.ugreen.com",
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [],
+        "decision_maker_name": null,
+        "decision_maker_role": null,
+        "email": "partner@ugreen.com",
+        "phone": null,
+        "candidates": [
+          {
+            "kind": "email",
+            "value": "partner@ugreen.com",
+            "label": null,
+            "person_name": null,
+            "role": null,
+            "source": "impressum:https://www.ugreen.com/pages/contact-us",
+            "score": 60
+          },
+          {
+            "kind": "email",
+            "value": "legal@ugreen.com",
+            "label": null,
+            "person_name": null,
+            "role": null,
+            "source": "impressum:https://www.ugreen.com/pages/contact-us",
+            "score": 60
+          },
+          {
+            "kind": "email",
+            "value": "pr@ugreen.com",
+            "label": null,
+            "person_name": null,
+            "role": null,
+            "source": "impressum:https://www.ugreen.com/pages/contact-us",
+            "score": 60
+          },
+          {
+            "kind": "email",
+            "value": "hr@ugreen.com",
+            "label": null,
+            "person_name": null,
+            "role": null,
+            "source": "impressum:https://www.ugreen.com/pages/contact-us",
+            "score": 60
+          },
+          {
+            "kind": "email",
+            "value": "affiliate@ugreen.com",
+            "label": null,
+            "person_name": null,
+            "role": null,
+            "source": "impressum:https://www.ugreen.com/pages/contact-us",
+            "score": 60
+          }
+        ],
+        "generic_contacts": [],
+        "agency_flag": "agency_llm",
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [
+          "fba_de"
+        ],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=CN",
+        "outreach_priority": "skip",
+        "notes": [
+          "agency: raw_text_excerpt explicitly states 'GPSR Bevollmaechtigter / EU Authorised Representative on file' — seller is Chinese, uses EU regulatory representative, not direct contact.",
+          "Seller is CN-incorporated (Dongguan, Guangdong); no EU registry records (VIES/CH/Pappers) — operating through GPSR agency arrangement",
+          "All contact emails from impressum are departmental/generic (partner@, legal@, pr@, hr@, affiliate@) — no personal officer identified",
+          "GPSR agency is the regulatory postbox; outreach to UGREEN Group itself requires separate research outside this record"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 60,
+          "phone": 0,
+          "overall": 41
+        },
+        "sources": {
+          "company_name": "capture",
+          "website": "brave_search",
+          "email": "impressum:https://www.ugreen.com/pages/contact-us"
+        },
+        "status": "enriched_low_confidence"
+      }
+    },
+    {
+      "seller_id": "TEST_CN_AUKEY",
+      "label": "test_2pass",
+      "elapsed_sec": 4.07,
+      "error": null,
+      "cost_usd": 0.001951,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 192,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 209,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "TEST_CN_AUKEY",
+        "marketplace": null,
+        "business_name": "Shenzhen AUKEY E-Business Co Ltd",
+        "business_address": "5/F Building B Block 1 Phase 1, Zhongguan Honghualing Industrial South Area, Liuxian 1st Road, Taoyuan, Nanshan, Shenzhen, China",
+        "country": "CN",
+        "vat": null,
+        "registry_id": null,
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "AUKEY official store. WEEE-Reg.-Nr. DE 85273496. Versand durch Amazon FBA.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "TEST_CN_AUKEY",
+        "company_name": "Shenzhen AUKEY E-Business Co Ltd",
+        "legal_form": null,
+        "business_address": "5/F Building B Block 1 Phase 1, Zhongguan Honghualing Industrial South Area, Liuxian 1st Road, Taoyuan, Nanshan, Shenzhen, China",
+        "country": "CN",
+        "vat": null,
+        "registry_id": null,
+        "website": null,
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [],
+        "decision_maker_name": null,
+        "decision_maker_role": null,
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": "agency_llm",
+        "weee_number": "85273496",
+        "lucid_id": null,
+        "de_operating_signals": [
+          "weee",
+          "fba_de"
+        ],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=CN",
+        "outreach_priority": "skip",
+        "notes": [
+          "agency: WEEE registration number (DE 85273496) indicates seller operates through an Extended Producer Responsibility (EPR) representative in Germany. Seller is CN-incorporated; the WEEE-Reg reference points to a third-party compliance operator, not the seller itself.",
+          "Seller is CN-domiciled; no named officer, email, or phone available in any structured source",
+          "WEEE registration suggests use of German EPR/waste-management intermediary — verify with Stiftung Elektro-Altgeräte Register if pursuing",
+          "No VIES, Companies House, Pappers, or impressum data provided — PASS 2 web research required to identify actual seller contact"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture",
+          "weee_number": "amazon_raw"
+        },
+        "status": "agency_only"
+      }
+    },
+    {
+      "seller_id": "TEST_CN_TRONSMART",
+      "label": "test_2pass",
+      "elapsed_sec": 3.35,
+      "error": null,
+      "cost_usd": 0.001712,
+      "escalated": false,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 178,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 164,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "TEST_CN_TRONSMART",
+        "marketplace": null,
+        "business_name": "Shenzhen Tronsmart Electronics Co Ltd",
+        "business_address": "Room 1707, Building 1, Zhongkenuofeng Center, No. 4012 Longgang Avenue, Henggang Street, Longgang District, Shenzhen, China",
+        "country": "CN",
+        "vat": null,
+        "registry_id": null,
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Sold by Tronsmart Direct. EU Authorised Representative listed in compliance section.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "TEST_CN_TRONSMART",
+        "company_name": "Shenzhen Tronsmart Electronics Co Ltd",
+        "legal_form": null,
+        "business_address": "Room 1707, Building 1, Zhongkenuofeng Center, No. 4012 Longgang Avenue, Henggang Street, Longgang District, Shenzhen, China",
+        "country": "CN",
+        "vat": null,
+        "registry_id": null,
+        "website": null,
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [],
+        "decision_maker_name": null,
+        "decision_maker_role": null,
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": "agency_llm",
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=CN",
+        "outreach_priority": "skip",
+        "notes": [
+          "agency: Raw text explicitly states 'EU Authorised Representative listed in compliance section' — seller uses external EU representative for regulatory compliance, not direct contact.",
+          "Seller is CN-incorporated (Shenzhen); no direct contact data available",
+          "EU Authorised Representative pattern identified; outreach to the agency contact is unproductive",
+          "No VIES, Companies House, Pappers, or impressum records provided — cannot identify agency operator or decision-maker",
+          "PASS 2 web research required to locate actual representative details if outreach is necessary"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture"
+        },
+        "status": "agency_only"
+      }
+    },
+    {
+      "seller_id": "TEST_CN_EMEET",
+      "label": "test_2pass",
+      "elapsed_sec": 26.04,
+      "error": null,
+      "cost_usd": 0.275278,
+      "escalated": true,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 157,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 151,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        },
+        {
+          "model": "claude-sonnet-4-6",
+          "input_tokens": 630,
+          "cache_creation_input_tokens": 50397,
+          "cache_read_input_tokens": 74995,
+          "output_tokens": 685,
+          "server_tool_use": {
+            "web_search_requests": 5
+          },
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "TEST_CN_EMEET",
+        "marketplace": null,
+        "business_name": "EMEET Technology Limited",
+        "business_address": "Building B, Yousong Industrial Park, Longhua District, Shenzhen, Guangdong, China",
+        "country": "CN",
+        "vat": null,
+        "registry_id": null,
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "EMEET official store on amazon.de. WEEE-Reg.-Nr. DE 28361472.",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "TEST_CN_EMEET",
+        "company_name": "EMEET Technology Limited",
+        "legal_form": null,
+        "business_address": "Building B, Yousong Industrial Park, Longhua District, Shenzhen, Guangdong, China",
+        "country": "CN",
+        "vat": null,
+        "registry_id": null,
+        "website": null,
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [],
+        "decision_maker_name": null,
+        "decision_maker_role": null,
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": null,
+        "weee_number": "28361472",
+        "lucid_id": null,
+        "de_operating_signals": [
+          "weee"
+        ],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=CN",
+        "outreach_priority": "review",
+        "notes": [
+          "CN-incorporated seller (Shenzhen); no impressum, VIES, or registry data available in structured sources",
+          "Official website confirmed: emeet.com; support contact is support@emeet.com (generic, not usable for B2B outreach)",
+          "Wyman Chen identified as Founder/CEO across Tracxn, CBInsights, Prospeo — consistent across multiple third-party databases",
+          "Email domain for EMEET executives confirmed as @emeet.com (Prospeo); most common format is {first initial}.{last name} — pattern would be w.chen@emeet.com, but this is unverified and must NOT be used without verification",
+          "RocketReach partially surfaces w******@emeet.ai as Wyman Chen email — alternative domain emeet.ai unverified; withheld to avoid fabrication",
+          "WEEE-Reg.-Nr. DE 28361472 present in raw text; CN seller without DE presence must use an authorised WEEE representative — the WEEE number is registered to the brand/rep, not an individual contact",
+          "Stiftung EAR public register lookup for DE 28361472 was not accessible via web search; manual portal check recommended to identify the registered WEEE authorised representative and their contact",
+          "No phone number surfaced for any named individual; support@emeet.com is the only publicly available contact; confidence capped at 22",
+          "Recommended next step: manually look up DE 28361472 at ear-system.de public search to find the registered contact person"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture",
+          "weee_number": "amazon_raw"
+        },
+        "status": "enriched_failed"
+      }
+    },
+    {
+      "seller_id": "TEST_UK_NEEWER",
+      "label": "test_2pass",
+      "elapsed_sec": 29.28,
+      "error": null,
+      "cost_usd": 0.190646,
+      "escalated": true,
+      "llm_metas": [
+        {
+          "model": "claude-haiku-4-5",
+          "input_tokens": 152,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 7140,
+          "output_tokens": 175,
+          "server_tool_use": null,
+          "stop_reason": "end_turn"
+        },
+        {
+          "model": "claude-sonnet-4-6",
+          "input_tokens": 650,
+          "cache_creation_input_tokens": 25744,
+          "cache_read_input_tokens": 66683,
+          "output_tokens": 694,
+          "server_tool_use": {
+            "web_search_requests": 6
+          },
+          "stop_reason": "end_turn"
+        }
+      ],
+      "input": {
+        "seller_id": "TEST_UK_NEEWER",
+        "marketplace": null,
+        "business_name": "Neewer Photographic Equipment Co Ltd",
+        "business_address": "Unit 24 The Westbrook Centre, Milton Road, Cambridge, CB4 1YG",
+        "country": "GB",
+        "vat": null,
+        "registry_id": null,
+        "phone_raw": null,
+        "email_raw": null,
+        "representative_name": null,
+        "street": null,
+        "city": null,
+        "postal_code": null,
+        "weee_number": null,
+        "phone_alt": null,
+        "email_alt": null,
+        "raw_text": "Sold by Neewer Direct. Officially registered UK Ltd selling photography gear on amazon.de",
+        "gpsr_raw": null
+      },
+      "result": {
+        "seller_id": "TEST_UK_NEEWER",
+        "company_name": "Neewer Photographic Equipment Co Ltd",
+        "legal_form": null,
+        "business_address": "Unit 24 The Westbrook Centre, Milton Road, Cambridge, CB4 1YG",
+        "country": "GB",
+        "vat": null,
+        "registry_id": null,
+        "website": null,
+        "other_urls": [],
+        "tech_stack": [],
+        "brands": [],
+        "other_marketplaces": [],
+        "officers": [],
+        "decision_maker_name": null,
+        "decision_maker_role": null,
+        "email": null,
+        "phone": null,
+        "candidates": [],
+        "generic_contacts": [],
+        "agency_flag": null,
+        "weee_number": null,
+        "lucid_id": null,
+        "de_operating_signals": [],
+        "jurisdiction_segment": "foreign",
+        "jurisdiction_reason": "country=GB",
+        "outreach_priority": "review",
+        "notes": [
+          "No Companies House record found for 'Neewer Photographic Equipment Co Ltd'; Companies House search returned 'NERWER LTD' (company 12460736) — possible misspelling or different registered name; manual CH lookup required",
+          "Parent entity is Shenzhen Neewer Technology Co., Ltd (CN-headquartered), with confirmed UK subsidiary — but no officer names for UK entity found in any source",
+          "Cambridge CB4 1YG address (Unit 24, Westbrook Centre, Milton Road) not corroborated by any official registry or impressum found",
+          "No VAT number available; VIES cross-check not possible",
+          "FCC filings list 'Ting Peng / Director' for Shenzhen Neewer Technology Co., Ltd — CN parent only, not the UK entity; not suitable as outreach target for this record",
+          "All public contact emails (service@neewer.com, support@neewer.com, vip-support@neewer.com) are generic department aliases at the brand level — not personal officer contacts",
+          "uk.neewer.com exists and confirms UK Amazon storefront; contact page lists only generic aliases, no named officer",
+          "Searched: Companies House by name+address, Neewer director/CEO/founder, UK subsidiary officers, Neewer UK impressum — all dead-ends; manual CH filing lookup by company number recommended as next step"
+        ],
+        "confidence": {
+          "company": 50,
+          "email": 0,
+          "phone": 0,
+          "overall": 20
+        },
+        "sources": {
+          "company_name": "capture"
+        },
+        "status": "enriched_failed"
+      }
+    }
+  ]
+}
