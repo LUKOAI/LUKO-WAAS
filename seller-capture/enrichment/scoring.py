@@ -78,6 +78,18 @@ def compute_overall(r: EnrichmentResult) -> int:
         parts.append(c["email"] * 0.35)
     if c.get("phone"):
         parts.append(c["phone"] * 0.25)
-    if not parts:
-        return 0
-    return int(sum(parts))
+    overall = int(sum(parts)) if parts else 0
+
+    # Floor lift for registry-confirmed decision-makers. The weighted formula
+    # above is driven by company/email/phone scores and a capture-stage
+    # company_name + CH-sourced officer ends up at ~20 — operator-misleading,
+    # because we DO have a named director from an authoritative source.
+    # When DM name came from Companies House / Pappers / impressum, raise the
+    # overall floor to 65 so the row surfaces as a real candidate.
+    registry_dm_sources = ("companies_house", "pappers", "impressum")
+    if r.decision_maker_name:
+        dm_src = (r.sources or {}).get("decision_maker_name", "") or ""
+        if any(dm_src == s or dm_src.startswith(s + ":") for s in registry_dm_sources):
+            overall = max(overall, 65)
+
+    return overall
