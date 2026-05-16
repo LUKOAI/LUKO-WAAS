@@ -57,6 +57,39 @@ function enrichSelected() {
   }
 }
 
+// Bulk-enrich: process every pending seller in BQ without requiring rows to
+// be selected in the Worklist. Convenience trigger for daily batch after
+// extension captures pile up — equivalent to clicking EXECUTE in Cloud Run
+// Console, but stays inside Sheets.
+function enrichAllPending() {
+  const props = PropertiesService.getScriptProperties();
+  const projectId = props.getProperty('BQ_PROJECT_ID');
+  const dataset = props.getProperty('BQ_DATASET');
+  if (!projectId || !dataset) {
+    SpreadsheetApp.getUi().alert('BQ_PROJECT_ID / BQ_DATASET not configured');
+    return;
+  }
+  try {
+    const sql =
+      "SELECT COUNT(*) AS n FROM `" + projectId + "." + dataset + ".sellers_enriched` " +
+      "WHERE status='captured_pending_enrich'";
+    const r = BigQuery.Jobs.query({ query: sql, useLegacySql: false }, projectId);
+    const n = parseInt((r && r.rows && r.rows[0] && r.rows[0].f && r.rows[0].f[0] && r.rows[0].f[0].v) || '0', 10);
+    if (!n) {
+      SpreadsheetApp.getActive().toast('No pending captures to enrich.');
+      return;
+    }
+    const exec = _triggerEnrichmentJob_(Math.max(n, 20));
+    _logAction_('*', 'Enrich-all-pending', { result: 'queued', n: n, execution: (exec && exec.name) || '' });
+    SpreadsheetApp.getActive().toast(
+      'Enrichment kicked off for ' + n + ' pending captures. Results in ~3-10 min. ' +
+      'Click "Odśwież Worklist" later to see them.'
+    );
+  } catch (e) {
+    SpreadsheetApp.getUi().alert('Enrich-all failed: ' + (e.message || e));
+  }
+}
+
 function _dispatchAction_(action, row, lang) {
   if (action === 'AI call (Bland)') return _aiCall_('bland', row, lang);
   if (action === 'AI call (Vapi)') return _aiCall_('vapi', row, lang);
