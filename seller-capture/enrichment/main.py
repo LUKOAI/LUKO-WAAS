@@ -36,7 +36,7 @@ def _bq() -> bigquery.Client:
 
 _SELECT_FIELDS = """
   e.seller_id, e.marketplace, e.business_name, e.business_address, e.country,
-  e.vat, e.registry_id, e.phone_raw, e.email_raw,
+  e.vat_number AS vat, e.registry_id, e.phone_raw, e.email_raw,
   latest.raw_text AS raw_text, latest.gpsr_raw AS gpsr_raw
 """
 
@@ -90,7 +90,7 @@ def write_back(result: EnrichmentResult) -> None:
         legal_form = @legal_form,
         business_address = COALESCE(NULLIF(@business_address,''), business_address),
         country = COALESCE(NULLIF(@country,''), country),
-        vat = COALESCE(NULLIF(@vat,''), vat),
+        vat_number = COALESCE(NULLIF(@vat,''), vat_number),
         registry_id = COALESCE(NULLIF(@registry_id,''), registry_id),
         decision_maker_name = @dm_name,
         decision_maker_role = @dm_role,
@@ -115,12 +115,18 @@ def write_back(result: EnrichmentResult) -> None:
         confidence_phone = @c_phone,
         confidence_overall = @c_overall,
         sources = @sources,
+        overrides = @overrides,
         status = @status,
         last_enriched_at = CURRENT_TIMESTAMP()
     WHERE seller_id = @sid
     """
     p = result
     overall = compute_overall(p)
+    # Track which fields enrichment populated/changed. `p.sources` is a per-field
+    # provenance map ({"company_name": "vies", "email": "impressum", ...}); its
+    # keys are exactly the fields the enrichment touched. Store as comma-separated
+    # list so operators can see at a glance what enrichment contributed.
+    overrides_str = ",".join(sorted((p.sources or {}).keys()))
     params = [
         bigquery.ScalarQueryParameter("sid", "STRING", p.seller_id),
         bigquery.ScalarQueryParameter("company_name", "STRING", p.company_name or ""),
@@ -152,6 +158,7 @@ def write_back(result: EnrichmentResult) -> None:
         bigquery.ScalarQueryParameter("c_phone", "INT64", p.confidence.get("phone", 0)),
         bigquery.ScalarQueryParameter("c_overall", "INT64", overall),
         bigquery.ScalarQueryParameter("sources", "STRING", json.dumps(p.sources or {})),
+        bigquery.ScalarQueryParameter("overrides", "STRING", overrides_str),
         bigquery.ScalarQueryParameter("status", "STRING", p.status),
     ]
     _bq().query(sql, job_config=bigquery.QueryJobConfig(query_parameters=params)).result()
