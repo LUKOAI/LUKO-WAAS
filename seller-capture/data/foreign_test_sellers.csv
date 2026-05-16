@@ -1,0 +1,7 @@
+seller_id,country,vat,business_name,business_address,registry_id,raw_text
+TEST_CN_ANKER,CN,,Anker Innovations Limited,"Room 1318-19 Hollywood Plaza, 610 Nathan Road, Mongkok, Hong Kong",,"Sold by Anker Direct on amazon.de. WEEE-Reg.-Nr. DE 79556430. Lucid-Reg.-Nr. DE2810855093872. Vertreten durch: Anker Innovations Deutschland GmbH"
+TEST_CN_UGREEN,CN,,UGREEN Group Limited,"Room 305, Building 4, Tongfuyu Industrial Estate, Aiqun Road, Liaobu Village, Liaobu Town, Dongguan, Guangdong, China",,"Sold by UGREEN GROUP LIMITED. GPSR Bevollmaechtigter / EU Authorised Representative on file. Versand durch Amazon."
+TEST_CN_AUKEY,CN,,Shenzhen AUKEY E-Business Co Ltd,"5/F Building B Block 1 Phase 1, Zhongguan Honghualing Industrial South Area, Liuxian 1st Road, Taoyuan, Nanshan, Shenzhen, China",,"AUKEY official store. WEEE-Reg.-Nr. DE 85273496. Versand durch Amazon FBA."
+TEST_CN_TRONSMART,CN,,Shenzhen Tronsmart Electronics Co Ltd,"Room 1707, Building 1, Zhongkenuofeng Center, No. 4012 Longgang Avenue, Henggang Street, Longgang District, Shenzhen, China",,"Sold by Tronsmart Direct. EU Authorised Representative listed in compliance section."
+TEST_CN_EMEET,CN,,EMEET Technology Limited,"Building B, Yousong Industrial Park, Longhua District, Shenzhen, Guangdong, China",,"EMEET official store on amazon.de. WEEE-Reg.-Nr. DE 28361472."
+TEST_UK_NEEWER,GB,,Neewer Photographic Equipment Co Ltd,"Unit 24 The Westbrook Centre, Milton Road, Cambridge, CB4 1YG",,"Sold by Neewer Direct. Officially registered UK Ltd selling photography gear on amazon.de"
