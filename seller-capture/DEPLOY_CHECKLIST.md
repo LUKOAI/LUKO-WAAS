@@ -200,9 +200,15 @@ gcloud logging read "resource.type=cloud_scheduler_job" --limit=5 --freshness=2h
 
 ## 4. Estymowany monthly cost — 100 sellers/dzień (3000/m)
 
-Na podstawie real-data run z bugfixami (B.1+B.2) na 29 fixturze:
+Na podstawie real-data run z bugfixami + precision fixami (B.1+B.2 + slug
+strict + team-alias rejection x2) na 29 fixturze:
 
-- **Avg cost/seller**: $0.021 (2-pass tuned, threshold=50, registry-officer early-exit)
+- **Avg cost/seller**: $0.020 (2-pass tuned, threshold=50, registry-officer
+  early-exit, post-precision)
+- **Real DM hit-rate**: 18/29 = 62% (alias FPs zero — wszystkie nazwy to
+  prawdziwi ludzie, głównie CH-confirmed directors)
+- **Email hit-rate**: 13-16/29 = 45-55% (zmienna z powodu transient impressum
+  HTTP errors; mediana ~50%)
 - **Mix**: ~60% UK Ltd (skip PASS 2 via registry rule, ~$0.003/seller), ~17% DE
   (skipped_de, $0), ~17% CN (mix agency-skip/escalate, $0.002-$0.30), ~6% other
 
