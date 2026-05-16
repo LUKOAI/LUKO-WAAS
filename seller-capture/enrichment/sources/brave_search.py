@@ -192,6 +192,33 @@ def _brand_query_tokens(name: str) -> str | None:
     return " ".join(keep[:2])
 
 
+def _host_matches_slug(host: str, slug: str) -> bool:
+    """Strict slug-to-host match. Rejects substring-anywhere matches that
+    caused FPs in the v1 implementation (slug "wickham" matched
+    "westwickhamgardener.co.uk", slug "alps" matched "vip-chalets.com",
+    slug "crafts" matched "guildcrafts.org.uk").
+
+    Accepts when:
+      A) base hostname == slug                     (anker.com  vs "anker")
+      B) base hostname starts with slug            (moletamunro.com vs "moleta")
+      C) slug appears as a hyphen-separated token  (tp-link.com vs "link",
+         anker-solix.com vs "anker")
+
+    `base` here means the leftmost dot-separated label, with leading "www."
+    stripped. So "www.tp-link.com" -> base="tp-link".
+    """
+    if not slug:
+        return False
+    base = (host[4:] if host.startswith("www.") else host).split(".")[0]
+    if base == slug:
+        return True
+    if base.startswith(slug):
+        return True
+    if slug in base.split("-"):
+        return True
+    return False
+
+
 def find_company_website(name: str, country: str | None = None) -> Optional[str]:
     """Returns the site root (scheme://host) of the most likely seller-owned website,
     or None when nothing usable comes back. Drop-in replacement for
@@ -204,8 +231,10 @@ def find_company_website(name: str, country: str | None = None) -> Optional[str]
       Q2 — fall back to the formal-name + legal-notice variants (legacy).
 
       Across both query result sets, two-tier ranking:
-        1. Prefer non-blocklisted hosts whose base domain contains the brand
-           slug (anker.com beats marketscreener.com for "Anker Innovations").
+        1. Prefer non-blocklisted hosts whose base domain matches the brand
+           slug (strict: equal / starts-with / hyphen-token), so anker.com
+           beats marketscreener.com for "Anker Innovations" but
+           westwickhamgardener.co.uk no longer wins for "Wickham Gardeneers".
         2. Otherwise fall back to the first non-blocklisted result.
     """
     name = (name or "").strip()
@@ -247,12 +276,10 @@ def find_company_website(name: str, country: str | None = None) -> Optional[str]
     if not ordered_candidates:
         return None
 
-    # Tier 1: slug-match wins, even if it's not the top-ranked Brave result.
+    # Tier 1: strict slug match wins, even if it's not the top-ranked Brave result.
     if slug:
         for host, url in ordered_candidates:
-            base = (host[4:] if host.startswith("www.") else host).split(".")[0]
-            # slug "anker" hits anker.com / anker-uk.co.uk / ankersolix.com
-            if slug in base or base in slug:
+            if _host_matches_slug(host, slug):
                 return url
 
     # Tier 2: legacy first-non-blocklisted fallback.
