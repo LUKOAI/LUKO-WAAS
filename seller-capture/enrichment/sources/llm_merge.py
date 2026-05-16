@@ -24,12 +24,71 @@ import anthropic
 
 log = logging.getLogger(__name__)
 
-MODEL = "claude-haiku-4-5"
-MAX_TOKENS = 2048  # output cap; the JSON we expect is far smaller
+MODEL = "claude-sonnet-4-6"  # was haiku-4-5 — Sonnet has stronger multi-step
+                              # reasoning needed for the agentic research loop below.
+                              # Cost ~10x Haiku per token but gives real contacts
+                              # (CEO names + personal emails) instead of "info@" placeholders.
+MAX_TOKENS = 4096  # output cap. Higher than before because Sonnet's research
+                   # may include intermediate reasoning + multi-paragraph notes
+                   # justifying the decision-maker pick.
 PAYLOAD_CHAR_LIMIT = 200_000  # truncate huge raw-text dumps before sending
 
+# Anthropic server-side tools enabled below give the LLM live web search and
+# URL fetch capability — so it can actually go look for the CEO's email instead
+# of guessing from the impressum data we passed in.
+WEB_SEARCH_TOOL = {
+    "type": "web_search_20250305",
+    "name": "web_search",
+    "max_uses": 8,  # cap searches per seller — keeps cost bounded
+}
 
-SYSTEM_PROMPT = """You are a B2B contact-research analyst specialising in cross-jurisdictional
+RESEARCH_PROMPT_PREFIX = """## RESEARCH MANDATE (READ FIRST)
+
+You have a live `web_search` tool. USE IT AGGRESSIVELY. The operator-visible
+output of this enrichment is only as good as the contacts you surface. A
+single "info@company.com" / "amazon-eu@brand.com" / "support@" entry is
+WORTHLESS for B2B outreach — those go to support tickets, not decision makers.
+
+For every foreign-segment seller (UK / NL / US / CN / etc.), do at minimum:
+
+1. **Find the real company website**. Search `"<company_name>" official site`
+   or `<company_name> imprint`. Don't assume Amazon URL is their site.
+2. **Identify executives**. Search:
+     `"<company_name>" CEO`,
+     `"<company_name>" Geschäftsführer`,
+     `"<company_name>" director`,
+     `"<company_name>" founder`,
+     `"<company_name>" linkedin`,
+     `"<company_name>" sales manager OR ecommerce manager OR head of marketing`.
+   Names from a registry trump names from LinkedIn (which can be stale).
+3. **Reach the decision maker's PERSONAL email**, not a department alias.
+   - Try common patterns at the company's domain:
+     `first.last@`, `first_last@`, `flast@`, `firstl@`, `first@`.
+   - If their website lists a team page or imprint email, prefer that.
+   - VERIFY the email's domain matches the company website domain, not a
+     reseller / 3PL / Amazon storefront domain.
+4. **Cross-check against eBay / other marketplaces** if the seller is also
+   listed there — sometimes the contact info is fresher on the smaller
+   platform.
+5. **Check LUCID / EAR / national EPR registries** for German Verpackungs- or
+   WEEE-registered brands; the registered point of contact may be the right
+   person.
+6. **Phone**: if the seller has a switchboard, search for
+   `"<company_name>" +<country code>` to find direct lines published in
+   trade press, press releases, sales decks (PDFs).
+7. **If you can't beat "info@<domain>"**, return confidence < 30 and put a
+   2-3 sentence note in `notes` explaining exactly which searches you tried
+   and what the dead-ends were. Do not fabricate. Do not return a department
+   alias as `email` if confidence < 50.
+
+You may make up to 8 web searches per seller. Use them. The user is paying
+for thorough research; budget is not an issue.
+
+---
+
+"""
+
+SYSTEM_PROMPT = RESEARCH_PROMPT_PREFIX + """You are a B2B contact-research analyst specialising in cross-jurisdictional
 seller enrichment for the European Amazon marketplaces (primarily amazon.de).
 Your job is to consolidate evidence from official company registries (VIES,
 UK Companies House, French Pappers), website impressum / legal-notice scrapes,
@@ -638,6 +697,7 @@ def consolidate(sources: dict) -> Optional[dict]:
         response = client.messages.create(
             model=MODEL,
             max_tokens=MAX_TOKENS,
+            tools=[WEB_SEARCH_TOOL],
             system=[
                 {
                     "type": "text",
