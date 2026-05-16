@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from typing import Optional
 
 import anthropic
@@ -724,6 +725,82 @@ OUTPUT_SCHEMA = {
 }
 
 
+# Tokens that, when standing alone or paired with a geographic qualifier
+# inside a "decision_maker.name", betray a team alias rather than a real
+# person. The LLM prompt already says to reject these, but observed
+# compliance is partial (PASS 2 still returned "Support India" and
+# "Sales Usa" on the post-bugfix run) so we enforce the rule in code too.
+_TEAM_ALIAS_TOKENS = {
+    "sales", "support", "service", "info", "contact", "office", "team",
+    "staff", "admin", "press", "pr", "media", "marketing", "hr", "help",
+    "helpdesk", "customer", "customercare", "customerservice", "wholesale",
+    "affiliate", "partner", "partners", "reviews", "dtc", "b2b", "b2c",
+    "verkauf", "vertrieb", "kontakt", "buchhaltung", "empfang",
+    "réception", "reception", "atención", "atencion", "servicio",
+    "equipo", "vendite",
+}
+
+# Geographic / pluralisers commonly appended to the alias above
+# ("Sales USA", "Support India", "Team UK"). They mask the alias from a
+# naive "is it a one-word generic" check, so they're treated as filler.
+_ALIAS_QUALIFIER_TOKENS = {
+    "usa", "us", "uk", "eu", "de", "fr", "es", "it", "nl", "pl",
+    "india", "china", "japan", "global", "international", "worldwide",
+    "europe", "asia", "america", "online", "shop", "store", "direct",
+    "team", "group",
+}
+
+
+def _looks_like_team_alias(name: str) -> bool:
+    """True when `name` looks like a department / team inbox masquerading
+    as a person ("DTC Sales", "Support India", "Customer Care").
+
+    Heuristic: split on whitespace + punctuation, lowercase, drop
+    qualifier filler. If every remaining token is a known team-alias
+    token, it's an alias. A real human name has at least one token that
+    isn't on either list.
+    """
+    if not name:
+        return False
+    tokens = [t for t in re.split(r"[\s,.\-_/]+", name.lower()) if t]
+    if not tokens:
+        return False
+    meaningful = [t for t in tokens if t not in _ALIAS_QUALIFIER_TOKENS]
+    if not meaningful:
+        # all-qualifier names are aliases too ("Global Team", "USA EU")
+        return True
+    # If every meaningful token is a known alias token, it's an alias.
+    return all(t in _TEAM_ALIAS_TOKENS for t in meaningful)
+
+
+def _sanitize_team_aliases(parsed: dict) -> dict:
+    """Post-process the LLM's parsed result: null out decision_maker.name
+    when it's a team alias, downgrade confidence accordingly, and record
+    the override in `notes` so the operator sees what happened.
+
+    Email and phone are LEFT IN PLACE — they're still a reachable channel,
+    just not a personal one. Pipeline downstream picks up the registry
+    director (CH / Pappers officers) for the name slot instead.
+    """
+    dm = parsed.get("consolidated_decision_maker") or {}
+    name = dm.get("name")
+    if not name or not _looks_like_team_alias(name):
+        return parsed
+    original = name
+    dm["name"] = None
+    if (dm.get("confidence") or 0) > 30:
+        # alias-only contact is at best confidence 30 (reachable inbox, no person)
+        dm["confidence"] = 30
+    parsed["consolidated_decision_maker"] = dm
+    notes = list(parsed.get("notes") or [])
+    notes.append(
+        f"post-processing: rejected team alias {original!r} as decision_maker.name; "
+        f"no named individual identified, email/phone retained as inbox channel"
+    )
+    parsed["notes"] = notes
+    return parsed
+
+
 _client: Optional[anthropic.Anthropic] = None
 
 
@@ -837,6 +914,10 @@ def _call_pass(
         if getattr(block, "type", None) == "text":
             try:
                 parsed = json.loads(block.text)
+                # Deterministic post-processing: reject team-alias names that
+                # slipped past the prompt rule. Done before _meta is attached
+                # so the meta on the returned dict is unaffected.
+                parsed = _sanitize_team_aliases(parsed)
                 parsed["_meta"] = meta
                 return parsed
             except json.JSONDecodeError:
