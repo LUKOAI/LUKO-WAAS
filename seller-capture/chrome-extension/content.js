@@ -128,17 +128,24 @@
       // Find ancestor row div
       const labelRow = span.closest("div.a-row") || span.parentElement;
       if (!labelRow) continue;
-      // Collect following sibling divs that contain address lines
+      // Collect following sibling divs that contain address lines.
+      // Stop conditions (any one of):
+      //   - bold label in next sibling (= next section starts)
+      //   - text > 200 chars (= narrative paragraph, e.g. Amazon disclaimer)
+      //   - text starts with known disclaimer / legal phrases
+      //   - 6 lines collected (max sensible address depth)
+      const DISCLAIMER_RE = /^(Dieser\s+Verk[äa]ufer|This\s+seller|Ce\s+vendeur|Este\s+vendedor|Questo\s+venditore|Bei\s+Fragen|Falls\s+nicht|Amazon\s+ist)/i;
       const lines = [];
       let next = labelRow.nextElementSibling;
       while (next && lines.length < 6) {
-        // Stop if this div has a bold label inside (= next section starts)
         const hasNextLabel = next.querySelector && next.querySelector(
           "span.a-text-bold, span[class*='bold'], b, strong"
         );
         if (hasNextLabel) break;
         const text = (next.textContent || "").replace(/\s+/g, " ").trim();
         if (!text) { next = next.nextElementSibling; continue; }
+        if (text.length > 200) break;
+        if (DISCLAIMER_RE.test(text)) break;
         lines.push(text);
         next = next.nextElementSibling;
       }
@@ -264,14 +271,17 @@
     }
 
     // 2. Postal code (possibly with city on same line)
+    //    \d{2,6} covers:
+    //      DE/PL/US 5-digit (12345), PL 5-digit total but with dash split 2+3 (63-507),
+    //      US ZIP+4 (12345-6789), CN 6-digit (518000), shorter European (1234)
     const POSTAL_WITH_CITY = [
       /^([A-Z]{1,2}\d[A-Z\d]?\s+\d[A-Z]{2})\s+(.+)$/i,    // UK: "WD17 1JA City"
-      /^(\d{4,5}(?:-\d{3,4})?)\s+(.+)$/,                   // DE/PL/US: "12345 City"
+      /^(\d{2,6}(?:-\d{2,4})?)\s+(.+)$/,                   // DE/PL/US/CN: "12345 City" / "63-507 City"
       /^(\d{4}\s*[A-Z]{2})\s+(.+)$/i,                      // NL: "1234AB City" or "1234 AB City"
     ];
     const POSTAL_ALONE = [
       /^([A-Z]{1,2}\d[A-Z\d]?\s+\d[A-Z]{2})$/i,            // UK alone
-      /^(\d{4,5}(?:-\d{3,4})?)$/,                          // DE/PL/US alone
+      /^(\d{2,6}(?:-\d{2,4})?)$/,                          // DE/PL/US/CN alone
       /^(\d{4}\s*[A-Z]{2})$/i,                             // NL alone
     ];
     let postalIdx = -1;
@@ -378,9 +388,17 @@
       const stopRe = /\n\s*\n|\n\s*(?:Gesch[äa]ftsadresse|Kundendienst[-\s]?adresse|Customer\s+service\s+address|Business\s+address|Impressum|Datenschutz(?:erkl[äa]rung)?|Versandinformationen|Telefonnummer|Telefon|Telefax|Fax|E-?Mail|UStID|USt-?IdNr|WEEE|Handelsregister|Gesch[äa]ftsart|Gesch[äa]ftsname|Brand|Marke|Alternative\s+Streitbeilegung|Plattform\s+der\s+EU)\s*[:.]/i;
       const stop = stopRe.exec(tail);
       const chunk = stop ? tail.slice(0, stop.index) : tail;
-      const lines = chunk.split(/\n/).map(s => s.trim()).filter(Boolean).slice(0, 6);
-      if (lines.length === 0) continue;
-      const parsed = parseAddressLines(lines);
+      const DISCLAIMER_RE = /^(Dieser\s+Verk[äa]ufer|This\s+seller|Ce\s+vendeur|Este\s+vendedor|Questo\s+venditore|Bei\s+Fragen|Falls\s+nicht|Amazon\s+ist)/i;
+      const cleanedLines = [];
+      for (const ln of chunk.split(/\n/).map(s => s.trim())) {
+        if (!ln) continue;
+        if (ln.length > 200) break;
+        if (DISCLAIMER_RE.test(ln)) break;
+        cleanedLines.push(ln);
+        if (cleanedLines.length >= 6) break;
+      }
+      if (cleanedLines.length === 0) continue;
+      const parsed = parseAddressLines(cleanedLines);
       // Sanity check: address must have at least one of postal_code OR country to count
       if (parsed.postal_code || parsed.country) return parsed;
     }
