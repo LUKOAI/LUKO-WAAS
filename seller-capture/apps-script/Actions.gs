@@ -38,21 +38,23 @@ function runSelectedActions() {
 
 function enrichSelected() {
   const rows = _getSelectedRows_();
+  const t = _i18n(_operatorLang_());
   if (!rows.length) {
-    SpreadsheetApp.getActive().toast(_i18n(_operatorLang_()).msgNoSelection);
-    return;
-  }
-  const url = PropertiesService.getScriptProperties().getProperty('ENRICH_QUEUE_URL');
-  if (!url) {
-    SpreadsheetApp.getUi().alert('ENRICH_QUEUE_URL not configured');
+    SpreadsheetApp.getActive().toast(t.msgNoSelection);
     return;
   }
   const ids = rows.map(r => r.seller_id).filter(Boolean);
-  const resp = _signedPost_(url, { seller_ids: ids, force: true });
-  for (const r of rows) {
-    _logAction_(r.seller_id, 'Re-enrich', resp);
+  if (!ids.length) return;
+  try {
+    _flipToPending_(ids);
+    const exec = _triggerEnrichmentJob_(Math.max(ids.length, 20));
+    for (const r of rows) {
+      _logAction_(r.seller_id, 'Re-enrich', { result: 'queued', execution: (exec && exec.name) || '' });
+    }
+    SpreadsheetApp.getActive().toast(`Enrichment kicked off for ${ids.length} sellers. Results in ~1-5 min.`);
+  } catch (e) {
+    SpreadsheetApp.getUi().alert('Enrichment trigger failed: ' + (e.message || e));
   }
-  SpreadsheetApp.getActive().toast(`Enrichment queued: ${ids.length}`);
 }
 
 function _dispatchAction_(action, row, lang) {
@@ -63,8 +65,9 @@ function _dispatchAction_(action, row, lang) {
   if (action === 'Push to SitePatron (converted)') return _pushSitePatron_(row);
   if (action === 'Mark dead') return { result: 'marked_dead' };
   if (action === 'Re-enrich') {
-    const url = PropertiesService.getScriptProperties().getProperty('ENRICH_QUEUE_URL');
-    return _signedPost_(url, { seller_ids: [row.seller_id], force: true });
+    _flipToPending_([row.seller_id]);
+    const exec = _triggerEnrichmentJob_(20);
+    return { result: 'queued', execution: (exec && exec.name) || '' };
   }
   return { result: 'unknown_action' };
 }
@@ -248,4 +251,61 @@ function _logAction_(seller_id, action, result) {
       }
     }]
   }, projectId, dataset, 'action_log');
+}
+
+// ─── Cloud Run Job trigger helpers ─────────────────────────────────────────
+//
+// Re-enrich flow:
+//   1) flip selected sellers' status back to 'captured_pending_enrich' in BQ
+//   2) trigger luko-enrichment-worker Cloud Run Job — it pulls pending rows,
+//      enriches via the source pipeline, writes back enriched fields.
+// Defaults match deploy: region=europe-west1, job name=luko-enrichment-worker.
+// Override via Script Properties if you ever redeploy elsewhere.
+
+function _flipToPending_(sellerIds) {
+  const props = PropertiesService.getScriptProperties();
+  const projectId = props.getProperty('BQ_PROJECT_ID');
+  const dataset = props.getProperty('BQ_DATASET');
+  if (!projectId || !dataset) {
+    throw new Error('BQ_PROJECT_ID / BQ_DATASET not configured in Script Properties');
+  }
+  // Build IN-list with single-quote escaping for SQL safety.
+  const inList = sellerIds.map(s => "'" + String(s).replace(/'/g, "''") + "'").join(',');
+  const sql =
+    'UPDATE `' + projectId + '.' + dataset + '.sellers_enriched` ' +
+    "SET status='captured_pending_enrich' " +
+    'WHERE seller_id IN (' + inList + ')';
+  const job = BigQuery.Jobs.query({ query: sql, useLegacySql: false }, projectId);
+  return job;
+}
+
+function _triggerEnrichmentJob_(limit) {
+  const props = PropertiesService.getScriptProperties();
+  const projectId = props.getProperty('BQ_PROJECT_ID');
+  const region = props.getProperty('CLOUD_RUN_REGION') || 'europe-west1';
+  const jobName = props.getProperty('CLOUD_RUN_JOB_NAME') || 'luko-enrichment-worker';
+  if (!projectId) throw new Error('BQ_PROJECT_ID not configured (used as GCP project)');
+
+  const url = 'https://run.googleapis.com/v2/projects/' + projectId +
+              '/locations/' + region + '/jobs/' + jobName + ':run';
+  const token = ScriptApp.getOAuthToken();
+  const body = {
+    overrides: {
+      containerOverrides: [{
+        args: ['pending', '--limit=' + String(Math.max(parseInt(limit, 10) || 20, 1))]
+      }]
+    }
+  };
+  const resp = UrlFetchApp.fetch(url, {
+    method: 'post',
+    headers: { 'Authorization': 'Bearer ' + token },
+    contentType: 'application/json',
+    payload: JSON.stringify(body),
+    muteHttpExceptions: true
+  });
+  if (resp.getResponseCode() >= 300) {
+    throw new Error('Cloud Run jobs.run failed (' + resp.getResponseCode() + '): ' +
+                    resp.getContentText().slice(0, 300));
+  }
+  return JSON.parse(resp.getContentText());
 }
