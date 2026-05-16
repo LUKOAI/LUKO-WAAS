@@ -46,6 +46,7 @@ function onOpen() {
     .addItem(t.refresh, 'refreshWorklist')
     .addItem(t.runSelected, 'runSelectedActions')
     .addItem(t.enrichSelected, 'enrichSelected')
+    .addItem(t.enrichAllPending, 'enrichAllPending')
     .addSeparator()
     .addItem(t.openInbox, 'openInbox')
     .addItem(t.setup, 'setupWorklistSheet')
@@ -59,6 +60,7 @@ function _i18n(lang) {
     refresh: '🔄 Refresh Worklist from BigQuery',
     runSelected: '▶️ Run selected actions',
     enrichSelected: '🔬 Re-enrich selected sellers',
+    enrichAllPending: '🌱 Enrich all new (pending) captures',
     openInbox: '📥 Open Capture inbox',
     setup: '⚙️ Setup / repair sheet',
     setLang: '🌐 Language (EN/PL)',
@@ -72,6 +74,7 @@ function _i18n(lang) {
     refresh: '🔄 Odśwież Worklist z BigQuery',
     runSelected: '▶️ Wykonaj zaznaczone akcje',
     enrichSelected: '🔬 Ponów enrichment dla zaznaczonych',
+    enrichAllPending: '🌱 Wzbogać wszystkie nowe (pending)',
     openInbox: '📥 Otwórz Capture inbox',
     setup: '⚙️ Konfiguracja / napraw arkusz',
     setLang: '🌐 Język (EN/PL)',
