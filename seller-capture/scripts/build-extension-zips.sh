@@ -29,6 +29,7 @@ DIST="$SCRIPT_DIR/../dist"
 
 # operator_id : file_suffix : language
 OPERATORS=(
+  "LUKO:luko:pl"
   "P1:monika:pl"
   "P2:maria:pl"
   "P3:honesty:en"
