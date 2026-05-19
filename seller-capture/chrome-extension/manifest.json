@@ -34,6 +34,10 @@
     "capture": {
       "suggested_key": { "default": "Alt+S" },
       "description": "Capture current Amazon seller"
+    },
+    "toggle-cluster": {
+      "suggested_key": { "default": "Alt+G" },
+      "description": "Start or end a competitor cluster (group captures together)"
     }
   },
   "content_scripts": [

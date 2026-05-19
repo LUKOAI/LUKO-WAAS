@@ -36,6 +36,22 @@ function doPost(e) {
     const dataset = props.getProperty('BQ_DATASET');
     if (!sheetId) return _json({ ok: false, error: 'CAPTURE_SHEET_ID not configured' });
 
+    // Slug-aware dedupe: if this (seller_id, cluster_anchor) combo was already
+    // captured, skip the writes and tell the extension to suppress its toast.
+    // Without an anchor we fall through to per-seller_id behaviour (existing).
+    if (projectId && dataset && payload.cluster_anchor) {
+      const slugDup = _bqCheckClusterDupe(projectId, dataset, payload.seller_id, payload.cluster_anchor);
+      if (slugDup && slugDup.exists) {
+        return _json({
+          ok: true,
+          deduped: true,
+          reason: 'already_captured_in_cluster',
+          cluster_anchor: payload.cluster_anchor,
+          previous_captured_at: slugDup.captured_at
+        });
+      }
+    }
+
     const ss = SpreadsheetApp.openById(sheetId);
     const dupCheck = projectId && dataset ? _bqLookupExisting(projectId, dataset, payload.seller_id) : null;
 
@@ -152,7 +168,12 @@ function _flattenParsed(p) {
     gpsr_raw: p.gpsr_raw || '',
     screenshot_drive_id: p.screenshot && p.screenshot.drive_id || '',
     screenshot_link: p.screenshot && p.screenshot.link || '',
-    raw_text: p.raw_text || ''
+    raw_text: p.raw_text || '',
+
+    // Cluster context (sent by extension when Alt+G mode is active or URL has
+    // #luko_slug=X fragment). Empty for ad-hoc captures.
+    cluster_id: p.cluster_id || '',
+    cluster_anchor: p.cluster_anchor || ''
   };
 }
 
@@ -332,6 +353,31 @@ function _bqLookupExisting(projectId, dataset, sellerId) {
   return row;
 }
 
+// Returns { exists: bool, captured_at?: string } for a (seller_id, cluster_anchor)
+// pair. Hits sellers_raw because that's append-only — sellers_enriched only
+// keeps the last cluster_anchor seen, so we'd miss prior captures under
+// different clusters there.
+function _bqCheckClusterDupe(projectId, dataset, sellerId, clusterAnchor) {
+  if (!sellerId || !clusterAnchor) return { exists: false };
+  const sql = `
+    SELECT MAX(captured_at) AS captured_at
+    FROM \`${projectId}.${dataset}.${RAW_TABLE}\`
+    WHERE seller_id = @sid AND cluster_anchor = @anchor
+  `;
+  const job = BigQuery.Jobs.query({
+    query: sql,
+    useLegacySql: false,
+    queryParameters: [
+      { name: 'sid', parameterType: { type: 'STRING' }, parameterValue: { value: sellerId } },
+      { name: 'anchor', parameterType: { type: 'STRING' }, parameterValue: { value: clusterAnchor } }
+    ]
+  }, projectId);
+  const rows = job.rows || [];
+  if (!rows.length) return { exists: false };
+  const ts = rows[0].f && rows[0].f[0] && rows[0].f[0].v;
+  return ts ? { exists: true, captured_at: ts } : { exists: false };
+}
+
 function _bqInsertRaw(projectId, dataset, payload, flat) {
   BigQuery.Tabledata.insertAll({
     rows: [{
@@ -345,7 +391,9 @@ function _bqInsertRaw(projectId, dataset, payload, flat) {
         raw_text: payload.raw_text || '',
         gpsr_raw: payload.gpsr_raw || '',
         screenshot_drive_id: flat.screenshot_drive_id || '',
-        url: flat.url
+        url: flat.url,
+        cluster_id: flat.cluster_id || null,
+        cluster_anchor: flat.cluster_anchor || null
       }
     }]
   }, projectId, dataset, RAW_TABLE);
@@ -389,6 +437,8 @@ function _bqUpsertEnriched(projectId, dataset, flat, existing) {
       registry_id          = COALESCE(NULLIF(@registry,''),             T.registry_id),
       other_id             = COALESCE(NULLIF(@other_id,''),             T.other_id),
       agency_flag          = NULLIF(@agency,''),
+      cluster_id           = COALESCE(NULLIF(@cluster_id,''),       T.cluster_id),
+      cluster_anchor       = COALESCE(NULLIF(@cluster_anchor,''),   T.cluster_anchor),
       last_captured_at     = CURRENT_TIMESTAMP()
     WHEN NOT MATCHED THEN INSERT (
       seller_id, marketplace, asin_example, seller_name, brand,
@@ -397,7 +447,7 @@ function _bqUpsertEnriched(projectId, dataset, flat, existing) {
       cs_street, cs_postal_code, cs_city, cs_region, cs_country, cs_differs,
       phone_raw, phone_alt, email_raw, email_alt,
       vat_number, weee_number, epr_id, registry_id, other_id,
-      agency_flag, status, last_captured_at
+      agency_flag, cluster_id, cluster_anchor, status, last_captured_at
     ) VALUES (
       @sid, @marketplace, @asin, @seller_name, @brand,
       @business_name, @business_type, @representative_name,
@@ -405,7 +455,8 @@ function _bqUpsertEnriched(projectId, dataset, flat, existing) {
       @cs_street, @cs_postal_code, @cs_city, @cs_region, @cs_country, @cs_differs,
       @phone, @phone_alt, @email, @email_alt,
       @vat, @weee, @epr, @registry, @other_id,
-      NULLIF(@agency,''), 'captured_pending_enrich', CURRENT_TIMESTAMP()
+      NULLIF(@agency,''), NULLIF(@cluster_id,''), NULLIF(@cluster_anchor,''),
+      'captured_pending_enrich', CURRENT_TIMESTAMP()
     )
   `;
   const businessAddressBlob = [flat.street, flat.address_line_2, flat.postal_code + ' ' + flat.city, flat.region, flat.country]
@@ -441,7 +492,9 @@ function _bqUpsertEnriched(projectId, dataset, flat, existing) {
     { name: 'epr', type: 'STRING', value: flat.epr_id },
     { name: 'registry', type: 'STRING', value: flat.trade_register_number },
     { name: 'other_id', type: 'STRING', value: flat.other_id },
-    { name: 'agency', type: 'STRING', value: flat.agency_flag }
+    { name: 'agency', type: 'STRING', value: flat.agency_flag },
+    { name: 'cluster_id', type: 'STRING', value: flat.cluster_id },
+    { name: 'cluster_anchor', type: 'STRING', value: flat.cluster_anchor }
   ];
   const queryRequest = {
     query: merge,

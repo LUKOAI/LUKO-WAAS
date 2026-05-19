@@ -11,8 +11,14 @@
   .secondary{background:#e5e7eb;color:#111}
   .msg{margin-top:8px;font-size:12px}
   .ok{color:#16a34a}.err{color:#dc2626}
+  .cluster{background:#ecfdf5;border:1px solid #1f9d55;color:#0b6b3a;padding:8px 10px;border-radius:6px;margin-bottom:10px;font-size:12px}
+  .cluster.idle{background:#f3f4f6;border-color:#d1d5db;color:#6b7280}
+  .cluster b{font-weight:600}
+  .cluster button{margin-top:6px;padding:4px 8px;font-size:11px;background:#dc2626;color:#fff;border:0;border-radius:4px;cursor:pointer}
 </style></head>
 <body>
+  <div id="clusterStatus" class="cluster idle">No active cluster. Press <b>Alt+G</b> on a slug-tagged link or an ASIN page to start one.</div>
+
   <label data-i18n="popup_endpoint"></label>
   <input id="endpoint" type="url" placeholder="https://script.google.com/macros/s/.../exec"/>
   <div class="help" data-i18n="popup_endpoint_help"></div>

@@ -73,6 +73,90 @@ async function postToEndpoint(endpoint, payload, sharedSecret) {
 const _recentCaptures = new Map();  // seller_id -> last capture timestamp (ms)
 const CAPTURE_DEBOUNCE_MS = 5000;
 
+// ─── Cluster (competitor-group) state ────────────────────────────────────
+//
+// A cluster groups multiple captures around the same anchor — either:
+//   • a search slug ("stichsaegeblaetter-holz") if the URL we capture from
+//     carries  #luko_slug=...  in its fragment (auto-mode, comes from the
+//     LUKO_Domain_Slug_Finder workbook), or
+//   • an Amazon ASIN if the operator pressed Alt+G on an Amazon ASIN page
+//     (manual mode).
+//
+// Active cluster lives in chrome.storage.local:
+//   { activeCluster: { id: "C-ABC1234", anchor: "stichsaegeblaetter-holz",
+//                      anchorKind: "slug"|"asin", startedAt: 1234567890,
+//                      count: 3 } }
+//
+// auto-mode rule: when a CAPTURE arrives with a slug fragment, we compare
+// against the active cluster — same anchor → keep cluster_id; different
+// anchor → silently rotate (end old, start new with the new slug).
+
+const CLUSTER_KEY = 'activeCluster';
+
+function _generateClusterId() {
+  // Format: C-<5 base36 chars from random + ms suffix> → 7-9 chars total
+  const r = Math.random().toString(36).slice(2, 7).toUpperCase();
+  const t = Date.now().toString(36).slice(-3).toUpperCase();
+  return 'C-' + r + t;
+}
+
+async function getActiveCluster() {
+  const { [CLUSTER_KEY]: ac } = await chrome.storage.local.get([CLUSTER_KEY]);
+  return ac || null;
+}
+
+async function setActiveCluster(cluster) {
+  if (cluster) {
+    await chrome.storage.local.set({ [CLUSTER_KEY]: cluster });
+  } else {
+    await chrome.storage.local.remove([CLUSTER_KEY]);
+  }
+  await _updateBadge(cluster);
+}
+
+async function _updateBadge(cluster) {
+  if (cluster) {
+    await chrome.action.setBadgeText({ text: String(cluster.count || 0) });
+    await chrome.action.setBadgeBackgroundColor({ color: '#1f9d55' });  // green
+    await chrome.action.setTitle({ title: `Cluster ${cluster.id} (${cluster.anchorKind}=${cluster.anchor}) — ${cluster.count} captures. Alt+G to end.` });
+  } else {
+    await chrome.action.setBadgeText({ text: '' });
+    await chrome.action.setTitle({ title: 'Capture seller (Alt+S). Alt+G starts a cluster.' });
+  }
+}
+
+// Extract a slug from a tab URL's #luko_slug=… fragment (or ?luko_slug=… query
+// param as a fallback for environments that strip fragments).
+function _slugFromUrl(url) {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    const q = u.searchParams.get('luko_slug');
+    if (q) return decodeURIComponent(q);
+    if (u.hash) {
+      const m = u.hash.match(/(?:^#|[#&])luko_slug=([^&]+)/);
+      if (m) return decodeURIComponent(m[1]);
+    }
+  } catch (_) { /* malformed URL — give up silently */ }
+  return null;
+}
+
+// Extract the ASIN from an Amazon URL (matches /dp/ASIN, /gp/product/ASIN,
+// /sp?...&asin=ASIN). Used as the cluster anchor in Alt+G manual mode.
+function _asinFromUrl(url) {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    // Try /dp/<asin> or /gp/product/<asin>
+    const m = u.pathname.match(/\/(?:dp|gp\/product|gp\/aw\/d)\/([A-Z0-9]{10})/);
+    if (m) return m[1];
+    // Try ?asin=<asin> (seller storefront URLs)
+    const qa = u.searchParams.get('asin');
+    if (qa && /^[A-Z0-9]{10}$/.test(qa)) return qa;
+  } catch (_) {}
+  return null;
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type !== "CAPTURE") return false;
   const sid = msg.payload && msg.payload.seller_id;
@@ -98,6 +182,34 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (!cfg.endpoint) throw new Error("Endpoint URL not configured (open extension popup)");
       const tabId = sender.tab?.id;
       const p = msg.payload;
+
+      // Cluster resolution: prefer URL fragment (slug-anchored auto mode), fall
+      // back to currently-active manual cluster (Alt+G). If a slug fragment is
+      // present but differs from the active cluster's anchor, silently rotate.
+      try {
+        const tabUrl = sender.tab?.url || '';
+        const slug = _slugFromUrl(tabUrl);
+        let active = await getActiveCluster();
+        if (slug) {
+          if (!active || active.anchor !== slug) {
+            active = {
+              id: _generateClusterId(),
+              anchor: slug,
+              anchorKind: 'slug',
+              startedAt: Date.now(),
+              count: 0
+            };
+          }
+        }
+        if (active) {
+          p.cluster_id = active.id;
+          p.cluster_anchor = active.anchor;
+          active.count = (active.count || 0) + 1;
+          await setActiveCluster(active);
+        }
+      } catch (e) {
+        console.warn('[Luko Capture] cluster resolution failed:', e);
+      }
       if (cfg.marketplaceOverride) p.marketplace = cfg.marketplaceOverride;
       p.operator_id = cfg.operatorId || "unknown";
 
@@ -126,11 +238,52 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 chrome.commands.onCommand.addListener(async (cmd) => {
-  if (cmd !== "capture") return;
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab) return;
-  await chrome.tabs.sendMessage(tab.id, { type: "TRIGGER_CAPTURE" });
+
+  if (cmd === "capture") {
+    await chrome.tabs.sendMessage(tab.id, { type: "TRIGGER_CAPTURE" });
+    return;
+  }
+
+  if (cmd === "toggle-cluster") {
+    const active = await getActiveCluster();
+    if (active) {
+      // End cluster: stash a snapshot for the popup to display, then clear.
+      await setActiveCluster(null);
+      await _toastInTab(tab.id, 'ok',
+        `Cluster ended: ${active.id} (${active.anchorKind}=${active.anchor}) — ${active.count} captures.`);
+      return;
+    }
+    // Start cluster: prefer slug fragment, fall back to ASIN from URL.
+    const slug = _slugFromUrl(tab.url);
+    const asin = _asinFromUrl(tab.url);
+    if (!slug && !asin) {
+      await _toastInTab(tab.id, 'err',
+        'Cannot start cluster: no slug (#luko_slug=) and no ASIN found on this page. Open an Amazon ASIN page or a slug-tagged link first.');
+      return;
+    }
+    const cluster = {
+      id: _generateClusterId(),
+      anchor: slug || asin,
+      anchorKind: slug ? 'slug' : 'asin',
+      startedAt: Date.now(),
+      count: 0
+    };
+    await setActiveCluster(cluster);
+    await _toastInTab(tab.id, 'info',
+      `Cluster started: ${cluster.id} (${cluster.anchorKind}=${cluster.anchor}). Alt+S to add sellers, Alt+G to end.`);
+    return;
+  }
 });
+
+async function _toastInTab(tabId, level, text) {
+  try {
+    await chrome.tabs.sendMessage(tabId, { type: "TOAST", level: level, text: text });
+  } catch (_) {
+    // Content script not loaded on this tab (e.g. chrome://) — silent fail.
+  }
+}
 
 chrome.action.onClicked.addListener(async (tab) => {
   if (!tab?.id) return;

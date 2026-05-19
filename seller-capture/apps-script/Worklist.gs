@@ -22,7 +22,7 @@ const TAB_OPS = '_operators';
 const TAB_CONFIG = '_config';
 
 const WORKLIST_HEADERS = [
-  '☑', 'seller_id', 'marketplace', 'country', 'company_name',
+  '☑', 'cluster_id', 'cluster_anchor', 'seller_id', 'marketplace', 'country', 'company_name',
   'decision_maker_name', 'decision_maker_role',
   'email', 'phone', 'website',
   'agency_flag', 'confidence', 'status',
@@ -210,10 +210,15 @@ function refreshWorklist() {
            decision_maker_name, decision_maker_role,
            email, phone, website,
            agency_flag, confidence_overall, status,
-           last_action_at
+           last_action_at,
+           cluster_id, cluster_anchor
     FROM \`${projectId}.${dataset}.sellers_enriched\`
     ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-    ORDER BY confidence_overall DESC NULLS LAST, last_captured_at DESC
+    ORDER BY
+      cluster_id NULLS LAST,
+      cluster_anchor NULLS LAST,
+      confidence_overall DESC NULLS LAST,
+      last_captured_at DESC
     LIMIT @lim
   `;
   const job = BigQuery.Jobs.query({
@@ -235,6 +240,8 @@ function refreshWorklist() {
     r.f.forEach((cell, i) => cells[fields[i]] = cell.v);
     out.push([
       false,
+      cells.cluster_id || '',
+      cells.cluster_anchor || '',
       cells.seller_id || '',
       cells.marketplace || '',
       cells.country || '',

@@ -41,9 +41,37 @@ async function test() {
   }
 }
 
+async function renderCluster() {
+  const box = document.getElementById('clusterStatus');
+  if (!box) return;
+  const { activeCluster: ac } = await chrome.storage.local.get(['activeCluster']);
+  if (ac) {
+    box.className = 'cluster';
+    const anchorKind = ac.anchorKind || 'anchor';
+    const anchor = ac.anchor || '?';
+    const count = ac.count || 0;
+    box.innerHTML =
+      `<b>Active cluster:</b> ${ac.id}<br>` +
+      `${anchorKind}: <b>${anchor}</b> · captures: <b>${count}</b><br>` +
+      `<button id="endClusterBtn">End cluster</button>`;
+    const btn = document.getElementById('endClusterBtn');
+    if (btn) {
+      btn.addEventListener('click', async () => {
+        await chrome.storage.local.remove(['activeCluster']);
+        try { await chrome.action.setBadgeText({ text: '' }); } catch (_) {}
+        await renderCluster();
+      });
+    }
+  } else {
+    box.className = 'cluster idle';
+    box.innerHTML = 'No active cluster. Press <b>Alt+G</b> on a slug-tagged link or an ASIN page to start one.';
+  }
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   await load();
   await applyI18n();
+  await renderCluster();
   document.getElementById("save").addEventListener("click", save);
   document.getElementById("test").addEventListener("click", test);
   document.getElementById("lang").addEventListener("change", async (e) => {
