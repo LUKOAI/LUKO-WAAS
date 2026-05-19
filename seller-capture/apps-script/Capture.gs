@@ -443,7 +443,7 @@ function _bqUpsertEnriched(projectId, dataset, flat, existing) {
     { name: 'other_id', type: 'STRING', value: flat.other_id },
     { name: 'agency', type: 'STRING', value: flat.agency_flag }
   ];
-  BigQuery.Jobs.query({
+  const queryRequest = {
     query: merge,
     useLegacySql: false,
     queryParameters: params.map(p => ({
@@ -451,5 +451,25 @@ function _bqUpsertEnriched(projectId, dataset, flat, existing) {
       parameterType: { type: p.type },
       parameterValue: p.value == null ? { value: null } : { value: String(p.value) }
     }))
-  }, projectId);
+  };
+  // BigQuery serialises DML per row, so two captures of the same seller back-to-back
+  // (or capture racing with the Cloud Run enrichment worker's write-back) collide
+  // with "Could not serialize access to table ... due to concurrent update". That
+  // error is transient and retry-safe — the MERGE is idempotent (only fills
+  // non-empty fields, never blanks). Try up to 4 times with exponential backoff.
+  let lastErr;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      BigQuery.Jobs.query(queryRequest, projectId);
+      return;
+    } catch (e) {
+      lastErr = e;
+      const msg = String((e && e.message) || e || '');
+      if (msg.indexOf('serialize') < 0 && msg.indexOf('concurrent update') < 0) {
+        throw e;
+      }
+      Utilities.sleep(500 * Math.pow(2, attempt));  // 0.5s, 1s, 2s, 4s
+    }
+  }
+  throw lastErr;
 }
