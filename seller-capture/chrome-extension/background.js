@@ -66,8 +66,32 @@ async function postToEndpoint(endpoint, payload, sharedSecret) {
   return json;
 }
 
+// Per-seller debounce: even after fixing the content-script multi-inject
+// (see content.js __lukoCaptureLoaded guard), keep this safety net so that
+// double Alt+S taps / popup-button clicks / SPA navigations can't produce
+// duplicate captures of the same seller. Window: 5 seconds.
+const _recentCaptures = new Map();  // seller_id -> last capture timestamp (ms)
+const CAPTURE_DEBOUNCE_MS = 5000;
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type !== "CAPTURE") return false;
+  const sid = msg.payload && msg.payload.seller_id;
+  if (sid) {
+    const now = Date.now();
+    const last = _recentCaptures.get(sid) || 0;
+    if (now - last < CAPTURE_DEBOUNCE_MS) {
+      sendResponse({ ok: true, deduped: true, error: null });
+      return true;
+    }
+    _recentCaptures.set(sid, now);
+    // Lazy cleanup of stale entries (keep map small over a long session).
+    if (_recentCaptures.size > 100) {
+      const cutoff = now - CAPTURE_DEBOUNCE_MS * 10;
+      for (const [k, v] of _recentCaptures) {
+        if (v < cutoff) _recentCaptures.delete(k);
+      }
+    }
+  }
   (async () => {
     try {
       const cfg = await getConfig();

@@ -11,6 +11,14 @@
  *
  * Output (`parsed`) is fully structured — no monolithic address blob.
  */
+// Amazon's SPA navigation occasionally causes Chrome to re-inject content
+// scripts into the same document. Without this guard each re-injection
+// registers its own onMessage listener, so one Alt+S triggers 5-6 captures
+// in parallel — visible as a swarm of toasts plus duplicate rows in BQ.
+if (window.__lukoCaptureLoaded) {
+  // Already initialized on this page; let the original instance handle events.
+} else {
+  window.__lukoCaptureLoaded = true;
 (async function () {
   const { t } = window.__lukoI18n;
   const { show } = window.__lukoToast;
@@ -696,3 +704,4 @@
   });
   window.__lukoCapture = capture;
 })();
+}  // end of __lukoCaptureLoaded guard
