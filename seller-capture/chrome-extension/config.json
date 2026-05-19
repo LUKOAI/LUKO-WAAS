@@ -1,0 +1,8 @@
+{
+  "endpoint": "PLACEHOLDER_doPost_URL",
+  "driveFolderId": "PLACEHOLDER_DRIVE_FOLDER_ID",
+  "operatorId": "PLACEHOLDER_OPERATOR_ID",
+  "lang": "pl",
+  "marketplaceOverride": "",
+  "sharedSecret": "PLACEHOLDER_SHARED_SECRET"
+}

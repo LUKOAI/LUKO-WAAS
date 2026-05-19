@@ -112,3 +112,33 @@ chrome.action.onClicked.addListener(async (tab) => {
   if (!tab?.id) return;
   await chrome.tabs.sendMessage(tab.id, { type: "TRIGGER_CAPTURE" });
 });
+
+// First-time install / update: load defaults from config.json so a freshly
+// unpacked extension is fully configured without making the operator fill
+// 6 fields in the popup. Values starting with "PLACEHOLDER_" are skipped
+// (treated as not-yet-set), so the popup will still show empties for them.
+// Existing storage values are NEVER overwritten — long-time users keep
+// whatever they configured manually.
+chrome.runtime.onInstalled.addListener(async (details) => {
+  try {
+    const resp = await fetch(chrome.runtime.getURL("config.json"));
+    if (!resp.ok) return;
+    const defaults = await resp.json();
+    const keys = Object.keys(defaults);
+    const existing = await chrome.storage.sync.get(keys);
+    const toSet = {};
+    for (const k of keys) {
+      const v = defaults[k];
+      if (typeof v === "string" && v.startsWith("PLACEHOLDER_")) continue;
+      if (existing[k] === undefined || existing[k] === null || existing[k] === "") {
+        toSet[k] = v;
+      }
+    }
+    if (Object.keys(toSet).length) {
+      await chrome.storage.sync.set(toSet);
+      console.log("[Luko Capture] Loaded defaults from config.json:", Object.keys(toSet));
+    }
+  } catch (e) {
+    console.warn("[Luko Capture] Failed to load config.json:", e);
+  }
+});
