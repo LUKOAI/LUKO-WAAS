@@ -683,21 +683,12 @@ if (window.__lukoCaptureLoaded) {
         show("err", await t("toast_error", { message: (resp && resp.error) || "no response" }), 10000);
         return;
       }
-      // Two layers of dedupe response:
-      //   1) Background-side per-seller debounce → resp.deduped (no server hit).
-      //   2) Server-side per-(seller, cluster_anchor) dedupe → resp.result.deduped.
+      // Background-side per-seller debounce → resp.deduped (no server hit).
       if (resp.deduped) {
         show("info", "Already captured a moment ago — skipped.", 3500);
         return;
       }
       const r = resp.result || {};
-      if (r.deduped && r.reason === 'already_captured_in_cluster') {
-        const anchor = r.cluster_anchor || 'this cluster';
-        show("info",
-          `Already captured for "${anchor}" (on ${(r.previous_captured_at || '').slice(0, 10)}) — skipped.`,
-          6000);
-        return;
-      }
       if (r.is_duplicate) {
         show("warn", await t("toast_duplicate", { row: r.row, status: r.status || "?", date: r.last_seen || "?" }), 8000);
       } else if (r.missing && r.missing.length) {

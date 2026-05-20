@@ -36,22 +36,6 @@ function doPost(e) {
     const dataset = props.getProperty('BQ_DATASET');
     if (!sheetId) return _json({ ok: false, error: 'CAPTURE_SHEET_ID not configured' });
 
-    // Slug-aware dedupe: if this (seller_id, cluster_anchor) combo was already
-    // captured, skip the writes and tell the extension to suppress its toast.
-    // Without an anchor we fall through to per-seller_id behaviour (existing).
-    if (projectId && dataset && payload.cluster_anchor) {
-      const slugDup = _bqCheckClusterDupe(projectId, dataset, payload.seller_id, payload.cluster_anchor);
-      if (slugDup && slugDup.exists) {
-        return _json({
-          ok: true,
-          deduped: true,
-          reason: 'already_captured_in_cluster',
-          cluster_anchor: payload.cluster_anchor,
-          previous_captured_at: slugDup.captured_at
-        });
-      }
-    }
-
     const ss = SpreadsheetApp.openById(sheetId);
     const dupCheck = projectId && dataset ? _bqLookupExisting(projectId, dataset, payload.seller_id) : null;
 
@@ -351,38 +335,6 @@ function _bqLookupExisting(projectId, dataset, sellerId) {
   const row = {};
   rows[0].f.forEach((cell, i) => row[fields[i].name] = cell.v);
   return row;
-}
-
-// Returns { exists: bool, captured_at?: string } for a (seller_id, cluster_anchor)
-// pair. Hits sellers_enriched (DML / MERGE — visible immediately after write),
-// not sellers_raw (streaming insert — sits in BQ's stream buffer ~1-2 min
-// before becoming queryable, defeating same-session dedupe).
-//
-// Trade-off: sellers_enriched only stores the LATEST cluster_anchor per seller.
-// If a seller is captured under slug A, then slug B, then slug A again, the
-// third capture won't be deduped (anchor is now B in the table). That's a
-// rare cross-slug ping-pong; the common case (re-clicking the same row in
-// the same slug session within minutes) is what we actually need to block.
-function _bqCheckClusterDupe(projectId, dataset, sellerId, clusterAnchor) {
-  if (!sellerId || !clusterAnchor) return { exists: false };
-  const sql = `
-    SELECT last_captured_at AS captured_at
-    FROM \`${projectId}.${dataset}.${ENRICHED_TABLE}\`
-    WHERE seller_id = @sid AND cluster_anchor = @anchor
-    LIMIT 1
-  `;
-  const job = BigQuery.Jobs.query({
-    query: sql,
-    useLegacySql: false,
-    queryParameters: [
-      { name: 'sid', parameterType: { type: 'STRING' }, parameterValue: { value: sellerId } },
-      { name: 'anchor', parameterType: { type: 'STRING' }, parameterValue: { value: clusterAnchor } }
-    ]
-  }, projectId);
-  const rows = job.rows || [];
-  if (!rows.length) return { exists: false };
-  const ts = rows[0].f && rows[0].f[0] && rows[0].f[0].v;
-  return ts ? { exists: true, captured_at: ts } : { exists: false };
 }
 
 function _bqInsertRaw(projectId, dataset, payload, flat) {
