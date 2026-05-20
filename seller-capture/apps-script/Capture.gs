@@ -354,15 +354,22 @@ function _bqLookupExisting(projectId, dataset, sellerId) {
 }
 
 // Returns { exists: bool, captured_at?: string } for a (seller_id, cluster_anchor)
-// pair. Hits sellers_raw because that's append-only — sellers_enriched only
-// keeps the last cluster_anchor seen, so we'd miss prior captures under
-// different clusters there.
+// pair. Hits sellers_enriched (DML / MERGE — visible immediately after write),
+// not sellers_raw (streaming insert — sits in BQ's stream buffer ~1-2 min
+// before becoming queryable, defeating same-session dedupe).
+//
+// Trade-off: sellers_enriched only stores the LATEST cluster_anchor per seller.
+// If a seller is captured under slug A, then slug B, then slug A again, the
+// third capture won't be deduped (anchor is now B in the table). That's a
+// rare cross-slug ping-pong; the common case (re-clicking the same row in
+// the same slug session within minutes) is what we actually need to block.
 function _bqCheckClusterDupe(projectId, dataset, sellerId, clusterAnchor) {
   if (!sellerId || !clusterAnchor) return { exists: false };
   const sql = `
-    SELECT MAX(captured_at) AS captured_at
-    FROM \`${projectId}.${dataset}.${RAW_TABLE}\`
+    SELECT last_captured_at AS captured_at
+    FROM \`${projectId}.${dataset}.${ENRICHED_TABLE}\`
     WHERE seller_id = @sid AND cluster_anchor = @anchor
+    LIMIT 1
   `;
   const job = BigQuery.Jobs.query({
     query: sql,
