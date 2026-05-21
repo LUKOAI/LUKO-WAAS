@@ -57,16 +57,16 @@ def classify_jurisdiction(s: SellerInput, vies_country: Optional[str] = None) ->
     vies_norm = _norm_country(vies_country)
     if vies_norm:
         if vies_norm in _DE_COUNTRY_TOKENS:
-            return "DE", f"vies_country={vies_norm} (no country)"
+            return "unknown", f"vies_country=DE without captured country — could be foreign fiscal-rep VAT"
         if vies_norm in _PL_COUNTRY_TOKENS:
-            return "PL", f"vies_country={vies_norm} (no country)"
+            return "unknown", f"vies_country=PL without captured country — could be foreign fiscal-rep VAT"
         return "foreign", f"vies_country={vies_norm} (no country)"
 
     vat_pfx = _vat_prefix(s.vat)
     if vat_pfx == "DE":
-        return "DE", "vat_prefix=DE (no country)"
+        return "unknown", "vat_prefix=DE without captured country — could be foreign fiscal-rep VAT"
     if vat_pfx == "PL":
-        return "PL", "vat_prefix=PL (no country)"
+        return "unknown", "vat_prefix=PL without captured country — could be foreign fiscal-rep VAT"
     if vat_pfx:
         return "foreign", f"vat_prefix={vat_pfx} (no country)"
 
