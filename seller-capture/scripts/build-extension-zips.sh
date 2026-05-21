@@ -27,6 +27,26 @@ DIST="$SCRIPT_DIR/../dist"
 : "${LUKO_DRIVE_FOLDER_ID:?LUKO_DRIVE_FOLDER_ID not set.}"
 : "${LUKO_SHARED_SECRET:?LUKO_SHARED_SECRET not set.}"
 
+# Sanity-check the shape of each value so that placeholders like "...", "TODO",
+# or a copy-pasted command snippet are caught before we ship a broken extension.
+if ! [[ "$LUKO_ENDPOINT" =~ ^https://script\.google\.com/macros/s/[A-Za-z0-9_-]{20,}/exec$ ]]; then
+  echo "✗ LUKO_ENDPOINT doesn't look like a real Apps Script Web App URL." >&2
+  echo "  Expected: https://script.google.com/macros/s/AKfycb.../exec" >&2
+  echo "  Got:      $LUKO_ENDPOINT" >&2
+  exit 1
+fi
+if ! [[ "$LUKO_DRIVE_FOLDER_ID" =~ ^[A-Za-z0-9_-]{20,}$ ]]; then
+  echo "✗ LUKO_DRIVE_FOLDER_ID doesn't look like a real Drive folder ID." >&2
+  echo "  Expected: ~33-char alphanumeric (e.g. 1AbCdEfGhIj...)." >&2
+  echo "  Got:      $LUKO_DRIVE_FOLDER_ID" >&2
+  exit 1
+fi
+if (( ${#LUKO_SHARED_SECRET} < 32 )); then
+  echo "✗ LUKO_SHARED_SECRET is too short (got ${#LUKO_SHARED_SECRET} chars, need >= 32)." >&2
+  echo "  This should match CAPTURE_SHARED_SECRET from Apps Script Script Properties." >&2
+  exit 1
+fi
+
 # operator_id : file_suffix : language
 OPERATORS=(
   "LUKO:luko:pl"

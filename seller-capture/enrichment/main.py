@@ -129,7 +129,7 @@ def write_back(result: EnrichmentResult) -> None:
         sources = @sources,
         overrides = @overrides,
         status = @status,
-        enrichment_changes = @changes,
+        enrichment_changes = COALESCE(NULLIF(@changes,''), enrichment_changes),
         last_enriched_at = CURRENT_TIMESTAMP()
     WHERE seller_id = @sid
     """
