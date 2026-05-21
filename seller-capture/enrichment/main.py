@@ -13,6 +13,7 @@ import argparse
 import json
 import logging
 import os
+from datetime import datetime, timezone
 import sys
 from dataclasses import asdict
 from typing import Iterable
@@ -90,6 +91,11 @@ def write_back(result: EnrichmentResult) -> None:
     # This is critical for fields the operator can see (company_name, decision_maker,
     # email, phone) — when enrichment has no improvement we don't want to blank
     # the capture data that the Chrome extension wrote.
+    p = result
+    overall = compute_overall(p)
+    # Snapshot BEFORE we overwrite so we can show the operator what changed in
+    # this run ("was X, now Y"). Single-cell-friendly string per spec.
+    changes_str = _compute_enrichment_changes(p, overall)
     sql = f"""
     UPDATE `{PROJECT}.{DATASET}.sellers_enriched`
     SET company_name = COALESCE(NULLIF(@company_name,''), company_name),
@@ -123,11 +129,10 @@ def write_back(result: EnrichmentResult) -> None:
         sources = @sources,
         overrides = @overrides,
         status = @status,
+        enrichment_changes = @changes,
         last_enriched_at = CURRENT_TIMESTAMP()
     WHERE seller_id = @sid
     """
-    p = result
-    overall = compute_overall(p)
     # Track per-field provenance: which field got its value from which source.
     # `p.sources` maps {"company_name": "vies", "email": "capture", ...}.
     # Store as "field=source" pairs, comma-separated, so operator sees in one
@@ -166,8 +171,70 @@ def write_back(result: EnrichmentResult) -> None:
         bigquery.ScalarQueryParameter("sources", "STRING", json.dumps(p.sources or {})),
         bigquery.ScalarQueryParameter("overrides", "STRING", overrides_str),
         bigquery.ScalarQueryParameter("status", "STRING", p.status),
+        bigquery.ScalarQueryParameter("changes", "STRING", changes_str),
     ]
     _bq().query(sql, job_config=bigquery.QueryJobConfig(query_parameters=params)).result()
+
+
+# Fields included in the "wynik ubogacenia" diff. Tuples of (BQ column, accessor
+# from EnrichmentResult). Order here is the order they appear in the diff string.
+_DIFF_FIELDS: list[tuple[str, callable]] = [
+    ('company_name',         lambda r, o: r.company_name or ''),
+    ('decision_maker_name',  lambda r, o: r.decision_maker_name or ''),
+    ('decision_maker_role',  lambda r, o: r.decision_maker_role or ''),
+    ('email',                lambda r, o: r.email or ''),
+    ('phone',                lambda r, o: r.phone or ''),
+    ('website',              lambda r, o: r.website or ''),
+    ('agency_flag',          lambda r, o: r.agency_flag or ''),
+    ('status',               lambda r, o: r.status or ''),
+    ('confidence_overall',   lambda r, o: str(o)),
+]
+
+
+def _compute_enrichment_changes(p: EnrichmentResult, overall: int) -> str:
+    """Return a single-cell diff between the current sellers_enriched row and
+    the EnrichmentResult about to be written. Empty string if the row doesn't
+    exist yet (first enrichment) or nothing tracked actually changed.
+
+    Format: "2026-05-21 19:30 | dm_name: ∅ → 'Ales Kylar' | email: 'a@x' → 'b@y'"
+    """
+    cols = [c for c, _ in _DIFF_FIELDS]
+    sql = (
+        f"SELECT {', '.join(cols)} "
+        f"FROM `{PROJECT}.{DATASET}.sellers_enriched` "
+        f"WHERE seller_id = @sid LIMIT 1"
+    )
+    try:
+        job = _bq().query(sql, job_config=bigquery.QueryJobConfig(
+            query_parameters=[bigquery.ScalarQueryParameter('sid', 'STRING', p.seller_id)]
+        ))
+        old_row = next(iter(job.result()), None)
+    except Exception:
+        log.exception('diff fetch failed for %s', p.seller_id)
+        return ''
+    if not old_row:
+        return ''  # first enrichment, nothing to diff against
+
+    def fmt(v: str) -> str:
+        if not v:
+            return '∅'
+        s = v[:80]
+        return f"'{s}'"
+
+    changes: list[str] = []
+    for col, accessor in _DIFF_FIELDS:
+        old_val = old_row.get(col)
+        old_str = '' if old_val is None else str(old_val)
+        new_str = accessor(p, overall)
+        # COALESCE-empty semantics: empty new value means "keep old", so no change.
+        if not new_str and old_str:
+            continue
+        if old_str != new_str:
+            changes.append(f"{col}: {fmt(old_str)} → {fmt(new_str)}")
+    if not changes:
+        return ''
+    ts = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')
+    return f"{ts} | " + ' | '.join(changes)
 
 
 def run_batch(sellers: Iterable[SellerInput]) -> None:
