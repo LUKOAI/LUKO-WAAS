@@ -186,8 +186,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       // Cluster resolution: prefer URL fragment (slug-anchored auto mode), fall
       // back to currently-active manual cluster (Alt+G). If a slug fragment is
       // present but differs from the active cluster's anchor, silently rotate.
+      //
+      // IMPORTANT: read the URL from msg.payload.url (content.js captured it
+      // via window.location.href, fragment intact) instead of sender.tab.url
+      // (Chrome MV3 sometimes strips #fragments from sender.tab.url).
       try {
-        const tabUrl = sender.tab?.url || '';
+        const tabUrl = (p && p.url) || sender.tab?.url || '';
         const slug = _slugFromUrl(tabUrl);
         let active = await getActiveCluster();
         if (slug) {
