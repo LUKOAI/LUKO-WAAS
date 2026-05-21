@@ -192,13 +192,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       // (Chrome MV3 sometimes strips #fragments from sender.tab.url).
       try {
         const tabUrl = (p && p.url) || sender.tab?.url || '';
-        console.log('[Luko Cluster DEBUG] tabUrl =', tabUrl);
-        console.log('[Luko Cluster DEBUG] p.url =', p && p.url);
-        console.log('[Luko Cluster DEBUG] sender.tab.url =', sender.tab && sender.tab.url);
         const slug = _slugFromUrl(tabUrl);
-        console.log('[Luko Cluster DEBUG] extracted slug =', slug);
         let active = await getActiveCluster();
-        console.log('[Luko Cluster DEBUG] active cluster BEFORE =', JSON.stringify(active));
         if (slug) {
           if (!active || active.anchor !== slug) {
             active = {
@@ -216,8 +211,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           active.count = (active.count || 0) + 1;
           await setActiveCluster(active);
         }
-        console.log('[Luko Cluster DEBUG] active cluster AFTER =', JSON.stringify(active));
-        console.log('[Luko Cluster DEBUG] p.cluster_anchor SET TO =', p.cluster_anchor);
       } catch (e) {
         console.warn('[Luko Capture] cluster resolution failed:', e);
       }
