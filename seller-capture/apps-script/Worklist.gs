@@ -275,30 +275,39 @@ const CLUSTER_PALETTE = [
 ];
 
 function _applyClusterColors_(wl, out) {
-  // out[0] is header row, out[1..n] are data. cluster_id column is index 1.
+  // out[0] is header row, out[1..n] are data. We group by cluster_id when
+  // present, falling back to cluster_anchor — older captures (pre-cluster_id
+  // backfill) carry only the anchor, but rows sharing the same anchor still
+  // belong to the same group visually.
   if (!out || out.length < 2) return;
   const dataRows = out.length - 1;
   const cidCol = WORKLIST_HEADERS.indexOf('cluster_id');
-  if (cidCol < 0) return;
+  const cacCol = WORKLIST_HEADERS.indexOf('cluster_anchor');
+  if (cidCol < 0 && cacCol < 0) return;
 
-  // Assign each unique cluster_id the next palette color in order encountered.
-  const colorByCluster = {};
+  function keyFor(row) {
+    const id = cidCol >= 0 ? String(row[cidCol] || '').trim() : '';
+    if (id) return 'id:' + id;
+    const anc = cacCol >= 0 ? String(row[cacCol] || '').trim() : '';
+    return anc ? 'a:' + anc : '';
+  }
+
+  // Assign each unique cluster key the next palette color in order encountered.
+  const colorByKey = {};
   let nextIdx = 0;
   for (let r = 1; r < out.length; r++) {
-    const cid = String(out[r][cidCol] || '').trim();
-    if (cid && !(cid in colorByCluster)) {
-      colorByCluster[cid] = CLUSTER_PALETTE[nextIdx % CLUSTER_PALETTE.length];
+    const k = keyFor(out[r]);
+    if (k && !(k in colorByKey)) {
+      colorByKey[k] = CLUSTER_PALETTE[nextIdx % CLUSTER_PALETTE.length];
       nextIdx++;
     }
   }
-  if (nextIdx === 0) return;  // nothing to color
+  if (nextIdx === 0) return;
 
-  // Build a 2D background array for the data range (skip header row).
   const ncols = WORKLIST_HEADERS.length;
   const bgs = new Array(dataRows);
   for (let r = 0; r < dataRows; r++) {
-    const cid = String(out[r + 1][cidCol] || '').trim();
-    const color = cid ? (colorByCluster[cid] || null) : null;
+    const color = colorByKey[keyFor(out[r + 1])] || null;
     const row = new Array(ncols);
     for (let c = 0; c < ncols; c++) row[c] = color;
     bgs[r] = row;
