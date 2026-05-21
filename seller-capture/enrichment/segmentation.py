@@ -42,19 +42,27 @@ def _vat_prefix(vat: Optional[str]) -> Optional[str]:
 def classify_jurisdiction(s: SellerInput, vies_country: Optional[str] = None) -> tuple[str, str]:
     """Returns (segment, reason). segment ∈ {'DE','PL','foreign','unknown'}.
 
-    Country of incorporation is the truth signal. VAT prefix is a fallback only —
-    a Chinese seller can hold a DE VAT through a fiscal representative and is still 'foreign'.
+    Country of incorporation is the truth signal. VIES country (= VAT registration
+    country, essentially the VAT prefix) is a fallback only — a US/CN seller can
+    hold a DE VAT through a fiscal representative and is still 'foreign'.
     """
-    country_norm = _norm_country(vies_country) or _norm_country(s.country)
+    captured = _norm_country(s.country)
+    if captured:
+        if captured in _DE_COUNTRY_TOKENS:
+            return "DE", f"country={captured}"
+        if captured in _PL_COUNTRY_TOKENS:
+            return "PL", f"country={captured}"
+        return "foreign", f"country={captured}"
+
+    vies_norm = _norm_country(vies_country)
+    if vies_norm:
+        if vies_norm in _DE_COUNTRY_TOKENS:
+            return "DE", f"vies_country={vies_norm} (no country)"
+        if vies_norm in _PL_COUNTRY_TOKENS:
+            return "PL", f"vies_country={vies_norm} (no country)"
+        return "foreign", f"vies_country={vies_norm} (no country)"
+
     vat_pfx = _vat_prefix(s.vat)
-
-    if country_norm:
-        if country_norm in _DE_COUNTRY_TOKENS:
-            return "DE", f"country={country_norm}"
-        if country_norm in _PL_COUNTRY_TOKENS:
-            return "PL", f"country={country_norm}"
-        return "foreign", f"country={country_norm}"
-
     if vat_pfx == "DE":
         return "DE", "vat_prefix=DE (no country)"
     if vat_pfx == "PL":
