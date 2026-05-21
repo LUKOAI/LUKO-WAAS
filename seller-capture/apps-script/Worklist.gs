@@ -262,8 +262,48 @@ function refreshWorklist() {
   wl.getRange(1, 1, out.length, WORKLIST_HEADERS.length).setValues(out);
   wl.setFrozenRows(1);
   setupWorklistSheet();
+  _applyClusterColors_(wl, out);
   const t = _i18n(_operatorLang_());
   SpreadsheetApp.getActive().toast(_fmt(t.msgRefreshOk, { n: rows.length }));
+}
+
+// Pastel-ish palette — distinct enough on white background, soft enough not
+// to fight foreground text. Cycles via modulo for clusters #11+.
+const CLUSTER_PALETTE = [
+  '#fde2e2', '#fff4d6', '#e0f3df', '#d6e9ff', '#ead4f0',
+  '#ffe5cc', '#d5f0ee', '#f9d6e6', '#e8e8d6', '#dde6e8'
+];
+
+function _applyClusterColors_(wl, out) {
+  // out[0] is header row, out[1..n] are data. cluster_id column is index 1.
+  if (!out || out.length < 2) return;
+  const dataRows = out.length - 1;
+  const cidCol = WORKLIST_HEADERS.indexOf('cluster_id');
+  if (cidCol < 0) return;
+
+  // Assign each unique cluster_id the next palette color in order encountered.
+  const colorByCluster = {};
+  let nextIdx = 0;
+  for (let r = 1; r < out.length; r++) {
+    const cid = String(out[r][cidCol] || '').trim();
+    if (cid && !(cid in colorByCluster)) {
+      colorByCluster[cid] = CLUSTER_PALETTE[nextIdx % CLUSTER_PALETTE.length];
+      nextIdx++;
+    }
+  }
+  if (nextIdx === 0) return;  // nothing to color
+
+  // Build a 2D background array for the data range (skip header row).
+  const ncols = WORKLIST_HEADERS.length;
+  const bgs = new Array(dataRows);
+  for (let r = 0; r < dataRows; r++) {
+    const cid = String(out[r + 1][cidCol] || '').trim();
+    const color = cid ? (colorByCluster[cid] || null) : null;
+    const row = new Array(ncols);
+    for (let c = 0; c < ncols; c++) row[c] = color;
+    bgs[r] = row;
+  }
+  wl.getRange(2, 1, dataRows, ncols).setBackgrounds(bgs);
 }
 
 function _getSelectedRows_() {
