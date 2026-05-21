@@ -26,6 +26,7 @@ const WORKLIST_HEADERS = [
   'decision_maker_name', 'decision_maker_role',
   'email', 'phone', 'website',
   'agency_flag', 'confidence', 'status',
+  'enrichment_changes',
   'last_action', 'last_action_at', 'last_action_result',
   'kartra_pushed_at', 'notes', 'action'
 ];
@@ -210,6 +211,7 @@ function refreshWorklist() {
            decision_maker_name, decision_maker_role,
            email, phone, website,
            agency_flag, confidence_overall, status,
+           enrichment_changes,
            last_action_at,
            cluster_id, cluster_anchor
     FROM \`${projectId}.${dataset}.sellers_enriched\`
@@ -254,6 +256,7 @@ function refreshWorklist() {
       cells.agency_flag || '',
       cells.confidence_overall || 0,
       cells.status || '',
+      cells.enrichment_changes || '',
       '', cells.last_action_at || '', '',
       '', '', ''
     ]);
