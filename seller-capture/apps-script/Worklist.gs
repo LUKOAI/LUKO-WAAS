@@ -170,6 +170,7 @@ function setupWorklistSheet() {
     cfg.appendRow(['worklist_exclude_agency', 'TRUE']);
     cfg.appendRow(['worklist_exclude_customers', 'TRUE']);
   }
+  _installWorklistEditTrigger_();
   SpreadsheetApp.getActive().toast('Setup OK');
 }
 
@@ -207,7 +208,9 @@ function refreshWorklist() {
   if (excludeCustomers) where.push("status != 'is_customer'");
 
   const sql = `
-    SELECT seller_id, marketplace, country, company_name,
+    SELECT seller_id, marketplace,
+           COALESCE(NULLIF(country_override,''), country) AS country,
+           company_name,
            decision_maker_name, decision_maker_role,
            email, phone, website,
            agency_flag, confidence_overall, status,
@@ -340,4 +343,64 @@ function openInbox() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sh = ss.getSheetByName(TAB_INBOX);
   if (sh) ss.setActiveSheet(sh);
+}
+
+// Map: Worklist column header → BigQuery column name to write the override into.
+// The display column reads COALESCE(<override>, <base>), so the edit sticks across
+// re-captures and re-enrichments without blocking future updates to the base field.
+const EDITABLE_COLUMNS_WRITEBACK = {
+  'country': 'country_override',
+};
+
+function _onEditWorklist_(e) {
+  if (!e || !e.range) return;
+  const sheet = e.range.getSheet();
+  if (sheet.getName() !== TAB_WORKLIST) return;
+  const row = e.range.getRow();
+  if (row < 2) return;
+  const col = e.range.getColumn();
+  const colName = WORKLIST_HEADERS[col - 1];
+  const bqCol = EDITABLE_COLUMNS_WRITEBACK[colName];
+  if (!bqCol) return;
+
+  const sidCol = WORKLIST_HEADERS.indexOf('seller_id') + 1;
+  const sellerId = String(sheet.getRange(row, sidCol).getValue() || '').trim();
+  if (!sellerId) return;
+
+  const newValue = String(e.value == null ? '' : e.value).trim();
+  const projectId = PropertiesService.getScriptProperties().getProperty('BQ_PROJECT_ID');
+  const dataset = PropertiesService.getScriptProperties().getProperty('BQ_DATASET');
+  if (!projectId || !dataset) {
+    SpreadsheetApp.getActive().toast('BQ_PROJECT_ID / BQ_DATASET not set; edit not synced.');
+    return;
+  }
+
+  const sql = `UPDATE \`${projectId}.${dataset}.sellers_enriched\`
+               SET ${bqCol} = NULLIF(@val, '')
+               WHERE seller_id = @sid`;
+  try {
+    BigQuery.Jobs.query({
+      query: sql,
+      useLegacySql: false,
+      queryParameters: [
+        { name: 'val', parameterType: { type: 'STRING' }, parameterValue: { value: newValue } },
+        { name: 'sid', parameterType: { type: 'STRING' }, parameterValue: { value: sellerId } }
+      ]
+    }, projectId);
+    const verb = newValue ? `→ '${newValue}'` : '(cleared)';
+    SpreadsheetApp.getActive().toast(`${colName} ${verb} synced for ${sellerId}`);
+  } catch (err) {
+    SpreadsheetApp.getActive().toast(`BQ sync failed: ${err && err.message || err}`);
+  }
+}
+
+// Installable onEdit trigger — needed because simple triggers can't call
+// authenticated services like BigQuery. Idempotent: removes any prior
+// instance before re-creating.
+function _installWorklistEditTrigger_() {
+  const ss = SpreadsheetApp.getActive();
+  ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === '_onEditWorklist_')
+    .forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('_onEditWorklist_').forSpreadsheet(ss).onEdit().create();
 }

@@ -36,7 +36,8 @@ def _bq() -> bigquery.Client:
 
 
 _SELECT_FIELDS = """
-  e.seller_id, e.marketplace, e.business_name, e.business_address, e.country,
+  e.seller_id, e.marketplace, e.business_name, e.business_address,
+  COALESCE(NULLIF(e.country_override,''), e.country) AS country,
   e.vat_number AS vat, e.registry_id, e.phone_raw, e.email_raw,
   e.representative_name, e.street, e.city, e.postal_code,
   e.weee_number, e.phone_alt, e.email_alt,
