@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Luko Seller Capture",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Capture Amazon seller profile data into Luko BigQuery + Sheet pipeline.",
   "permissions": [
     "activeTab",
@@ -26,9 +26,21 @@
     "https://script.googleusercontent.com/*"
   ],
   "background": { "service_worker": "background.js" },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
   "action": {
     "default_title": "Capture seller (Alt+S)",
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
   },
   "commands": {
     "capture": {

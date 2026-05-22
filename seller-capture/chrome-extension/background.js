@@ -125,6 +125,70 @@ async function _updateBadge(cluster) {
   }
 }
 
+// ─── Per-tab icon state: "already captured" indicator ───────────────────
+//
+// We render two icon variants:
+//   icons/icon-{16,32,48,128}.png            — default, full-color fox
+//   icons/icon-captured-{16,32,48,128}.png   — desaturated fox + red ✓
+//
+// On every tab URL change, we extract the Amazon seller_id from the URL
+// (if any) and check chrome.storage.local["capturedSellers"]. If the seller
+// has been captured before (any operator on this Chrome profile), we swap
+// to the captured-variant icon for that tab. After a successful Alt+S we
+// mark the seller and refresh the icon so the operator sees the state flip
+// immediately without reloading.
+//
+// Storage: { capturedSellers: { "AXXXXX": <ms since epoch>, ... } }
+
+const _CAPTURED_KEY = 'capturedSellers';
+
+const _ICON_DEFAULT = {
+  16: 'icons/icon-16.png',
+  32: 'icons/icon-32.png',
+  48: 'icons/icon-48.png',
+  128: 'icons/icon-128.png',
+};
+const _ICON_CAPTURED = {
+  16: 'icons/icon-captured-16.png',
+  32: 'icons/icon-captured-32.png',
+  48: 'icons/icon-captured-48.png',
+  128: 'icons/icon-captured-128.png',
+};
+
+function _sellerIdFromUrl(url) {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    if (!/amazon\./.test(u.hostname)) return null;
+    const q = u.searchParams.get('seller') || u.searchParams.get('marketplaceID');
+    if (q && /^[A-Z0-9]{10,14}$/.test(q)) return q;
+    const m = u.pathname.match(/\/sp(?:\/|\?)?([A-Z0-9]{10,14})?/);
+    if (m && m[1]) return m[1];
+    return null;
+  } catch (_) { return null; }
+}
+
+async function _isCapturedSeller(sellerId) {
+  const { [_CAPTURED_KEY]: set = {} } = await chrome.storage.local.get([_CAPTURED_KEY]);
+  return !!set[sellerId];
+}
+
+async function _markCaptured(sellerId) {
+  if (!sellerId) return;
+  const { [_CAPTURED_KEY]: set = {} } = await chrome.storage.local.get([_CAPTURED_KEY]);
+  set[sellerId] = Date.now();
+  await chrome.storage.local.set({ [_CAPTURED_KEY]: set });
+}
+
+async function _refreshIconForTab(tabId, url) {
+  if (!tabId) return;
+  try {
+    const sellerId = _sellerIdFromUrl(url);
+    const path = (sellerId && await _isCapturedSeller(sellerId)) ? _ICON_CAPTURED : _ICON_DEFAULT;
+    await chrome.action.setIcon({ tabId, path });
+  } catch (_) { /* tab gone, ignore */ }
+}
+
 // Extract a slug from a tab URL's #luko_slug=… fragment (or ?luko_slug=… query
 // param as a fallback for environments that strip fragments).
 function _slugFromUrl(url) {
@@ -233,6 +297,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       p.screenshot = screenshot;
 
       const result = await postToEndpoint(cfg.endpoint, p, cfg.sharedSecret);
+      if (result && result.ok) {
+        await _markCaptured(p.seller_id);
+        await _refreshIconForTab(tabId, p.url || sender.tab?.url);
+      }
       sendResponse({ ok: !!result.ok, result, error: result.error });
     } catch (e) {
       sendResponse({ ok: false, error: e.message || String(e) });
@@ -292,6 +360,22 @@ async function _toastInTab(tabId, level, text) {
 chrome.action.onClicked.addListener(async (tab) => {
   if (!tab?.id) return;
   await chrome.tabs.sendMessage(tab.id, { type: "TRIGGER_CAPTURE" });
+});
+
+// Per-tab icon refresh: keep the action icon in sync with whether the
+// currently-viewed seller has been captured before. We listen to both
+// URL changes (history.pushState on Amazon SPA navigations fires onUpdated
+// with info.url) and tab activations.
+chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
+  if (info.url || info.status === 'complete') {
+    _refreshIconForTab(tabId, tab && tab.url).catch(() => {});
+  }
+});
+chrome.tabs.onActivated.addListener(async ({ tabId }) => {
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    await _refreshIconForTab(tabId, tab.url);
+  } catch (_) {}
 });
 
 // First-time install / update: load defaults from config.json so a freshly
