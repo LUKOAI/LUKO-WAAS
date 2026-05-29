@@ -1,28 +1,31 @@
 #!/usr/bin/env python3
 # =============================================================================
 # placeholder-replace.py  <subdom> [--dry-run]
-# WAAS Faza B - skrypt #2
+# WAAS Faza B - skrypt #2 (v1.1)
 #
-# Odczytuje wiersz z arkusza Sites, sklada pary [PLACEHOLDER]->wartosc
-# (11 placeholderow template-standard, 18 par po rozwinieciu CATEGORY_1..6
-# i FOOTER_CAT_1..4) i POST-uje do mu-pluginu waas-niche-replace.php na
-# wskazanej subdomenie.
+# v1.1 (29.05): po pierwszym realnym biegu na outdoor-sitzkissen w treści
+# kanonu zostały placeholdery pisane lowercase ([patron_brand], 6 wystapien).
+# plugin str_replace jest case-sensitive -> dorabiamy aliasy lowercase dla
+# kazdej pary. Stara para [PATRON_BRAND] zostaje, dodatkowo idzie [patron_brand]
+# z ta sama wartoscia. Bez ryzyka: dwa rozne stringi w bazie, kazdy idzie swoim
+# torem. [HERO_H1] (1x w drafcie 1112 "Template Produkt V2 GEO") - poza nasza
+# lista 11, zostaje do mechanizmu #3.
+#
+# Reszta opisu jak w v1.0:
+# Odczytuje wiersz z Sites, sklada pary [PLACEHOLDER]->wartosc (11 placeholderow,
+# 18 par po rozwinieciu CATEGORY_1..6 i FOOTER_CAT_1..4, +18 aliasow lower =
+# 36 par realnie wysylanych) i POST-uje do mu-pluginu waas-niche-replace.php.
 #
 # Endpoint:  POST https://<subdom>.lk24.shop/wp-json/waas-niche/v1/replace
 # Auth:      HTTP Basic z App Password (kolumny "Admin Username" + "App Password"
 #            w Sites). Plugin sprawdza current_user_can('manage_options').
-# Payload:   {"pairs":[{"old":"[PLACEHOLDER]","new":"wartosc"},...],
-#             "dry_run": bool}
+# Payload:   {"pairs":[{"old":"[X]","new":"Y"},...], "dry_run": bool}
 #
-# Sekwencja zalozeniowa:
-#   1. clone-template.sh <subdom>           (skrypt #1 - klon DB+uploads)
-#   2. recznie: zaloguj sie do wp-admin celu (uzytkownik=template-admin po klonie),
-#      utworz nowe App Password, wklej w kolumne "App Password" w Sites.
-#   3. placeholder-replace.sh <subdom> --dry-run     (zlicz hity, zero zmian)
-#   4. placeholder-replace.sh <subdom>               (realny zapis)
-#
-# Bez --dry-run skrypt MODYFIKUJE BAZE celu. Robi pre-check /ping aby uniknac
-# blednego biegu na zlej auth.
+# Sekwencja:
+#   1. clone-template.sh <subdom>
+#   2. recznie odswiez App Password celu -> wklej w Sites
+#   3. placeholder-replace.sh <subdom> --dry-run
+#   4. placeholder-replace.sh <subdom>
 # =============================================================================
 
 import sys
@@ -38,21 +41,15 @@ except ImportError as e:
           f"(scripts/placeholder-replace.sh robi to za Ciebie).", file=sys.stderr)
     sys.exit(1)
 
-# ---- konfiguracja -----------------------------------------------------------
 SHEET_ID = "1O5IcgueiXtQ0vtwQAKUs_JGbjmsZenwpfDhe1rCEHl8"
 SA_JSON  = "/home/lukoai/TaxDocumentProcessor/google_sheets_credentials.json"
 SHEET_TAB = "Sites"
 DOMAIN_SUFFIX = ".lk24.shop"
 PLUGIN_BASE_TPL = "https://{domain}/wp-json/waas-niche/v1"
-POST_TIMEOUT = 480     # s - timeout pojedynczej proby POST /replace
+POST_TIMEOUT = 480
 PING_TIMEOUT = 30
-MAX_ATTEMPTS = 3       # retry POST z backoff 2/4/8 s; pluginu str_replace JEST idempotentny:
-                       # po pierwszym udanym zapisie placeholderow juz w DB nie ma -> retry = 0 hits.
+MAX_ATTEMPTS = 3
 
-# Mapowanie 11 placeholderow template-standard -> kolumny Sites (rozwiniete = 18 par).
-# Typy:
-#   ("col",      "ColumnName")                     - bezposrednio z kolumny
-#   ("compose",  ["ColA","ColB"], " ")             - polacz kilka kolumn separatorem
 PLACEHOLDERS = [
     ("[SITE_NAME]",          ("compose", ["Brand Display Name", "Site Name"], " ")),
     ("[SITE_DOMAIN]",        ("col", "Domain")),
@@ -106,7 +103,11 @@ def read_sites_row(full_domain):
 
 
 def build_pairs(row):
-    pairs, missing = [], []
+    """
+    Buduje pary [PLACEHOLDER]->wartosc i dorzuca aliasy lowercase
+    (kanon czasem ma case-mismatch, np. [patron_brand]).
+    """
+    base_pairs, missing = [], []
     for placeholder, spec in PLACEHOLDERS:
         kind = spec[0]
         if kind == "col":
@@ -115,14 +116,14 @@ def build_pairs(row):
             if not val:
                 missing.append((placeholder, colname))
                 continue
-            pairs.append({"old": placeholder, "new": val})
+            base_pairs.append({"old": placeholder, "new": val})
         elif kind == "compose":
             cols, sep = spec[1], spec[2]
             parts = [(row.get(c) or "").strip() for c in cols]
             if not all(parts):
                 missing.append((placeholder, " + ".join(cols)))
                 continue
-            pairs.append({"old": placeholder, "new": sep.join(parts)})
+            base_pairs.append({"old": placeholder, "new": sep.join(parts)})
         else:
             die(f"nieznany typ spec: {kind}")
     if missing:
@@ -130,7 +131,16 @@ def build_pairs(row):
         for p, src in missing:
             print(f"   {p:25} <- {src}", file=sys.stderr)
         sys.exit(1)
-    return pairs
+
+    # dorzuc aliasy lowercase (np. [PATRON_BRAND] -> [patron_brand])
+    seen = {p["old"] for p in base_pairs}
+    alias_pairs = []
+    for p in base_pairs:
+        low = p["old"].lower()
+        if low != p["old"] and low not in seen:
+            alias_pairs.append({"old": low, "new": p["new"]})
+            seen.add(low)
+    return base_pairs, alias_pairs
 
 
 def get_auth(row):
@@ -158,18 +168,22 @@ def ping(base, auth):
     print(f"   plugin v{data.get('version','?')} OK (czas serwera: {data.get('time','?')})")
 
 
-def show_pairs(pairs, dry_run):
-    print(">> [3] pary do podmiany:")
-    for p in pairs:
+def show_pairs(base_pairs, alias_pairs, dry_run):
+    print(">> [3] pary do podmiany (wlasciwe):")
+    for p in base_pairs:
         v = p["new"] if len(p["new"]) <= 60 else p["new"][:57] + "..."
         print(f"   {p['old']:25} -> {v}")
+    if alias_pairs:
+        print(f"   + aliasy lowercase: {len(alias_pairs)} par (case-mismatch w kanonie)")
+        for p in alias_pairs:
+            print(f"     {p['old']:25} -> (jak wyzej)")
     print(f"   tryb: {'DRY-RUN (zero zmian)' if dry_run else 'REAL (zapis do DB)'}")
 
 
-def post_replace(base, auth, pairs, dry_run):
+def post_replace(base, auth, all_pairs, dry_run):
     url = f"{base}/replace"
-    payload = {"pairs": pairs, "dry_run": dry_run}
-    print(f">> [4] POST {url}  (timeout {POST_TIMEOUT}s, max prob: {MAX_ATTEMPTS})")
+    payload = {"pairs": all_pairs, "dry_run": dry_run}
+    print(f">> [4] POST {url}  (timeout {POST_TIMEOUT}s, max prob: {MAX_ATTEMPTS}, par={len(all_pairs)})")
     last_err = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
@@ -181,7 +195,6 @@ def post_replace(base, auth, pairs, dry_run):
                     die(f"odpowiedz nie-JSON: {r.text[:500]}")
             else:
                 last_err = f"HTTP {r.status_code}: {r.text[:300]}"
-                # 4xx (auth/walidacja) - bez sensu retry
                 if 400 <= r.status_code < 500:
                     die(last_err)
         except requests.RequestException as e:
@@ -222,12 +235,13 @@ def main():
     subdom, dry_run = parse_args(sys.argv)
     full_domain = f"{subdom}{DOMAIN_SUFFIX}"
     row  = read_sites_row(full_domain)
-    pairs = build_pairs(row)
+    base_pairs, alias_pairs = build_pairs(row)
+    all_pairs = base_pairs + alias_pairs
     auth = get_auth(row)
     base = PLUGIN_BASE_TPL.format(domain=full_domain)
     ping(base, auth)
-    show_pairs(pairs, dry_run)
-    data = post_replace(base, auth, pairs, dry_run)
+    show_pairs(base_pairs, alias_pairs, dry_run)
+    data = post_replace(base, auth, all_pairs, dry_run)
     show_result(data, dry_run, full_domain)
 
 
